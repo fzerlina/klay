@@ -87,7 +87,11 @@ export function getActiveAccounts() {
   return KLAY_COA_TREE.filter((node) => Boolean(node.code) && node.active !== false);
 }
 
-const statusCycle = ["Posted", "Draft", "Pending", "Void"];
+// ~65% Posted, 20% Draft, 10% Pending, 5% Void
+const statusCycle = [
+  "Posted","Posted","Posted","Posted","Posted","Posted","Posted","Posted","Posted","Posted",
+  "Posted","Posted","Posted","Draft","Draft","Draft","Draft","Pending","Pending","Void",
+];
 const memoCycle = [
   "Accrual adjustment",
   "Monthly depreciation",
