@@ -24,11 +24,15 @@ const ANOMALIES_KEYS = ANOMALY_FLAGS;
 const KURS_DATA = KURS;
 const JE_DIM = JE_DIMENSIONS;
 
+// Anomaly is auto-anchored by the JE generator to a specific je_number — read
+// it back at module load so hardcoded strings don't drift when the seed regens.
+const ANOMALY_JE_ID = Object.keys(ANOMALY_FLAGS)[0] || null;
+
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 function getDisplayRef(je) {
-  if (je.refType === "invoice" || je.refType === "invoice_payment") return INV_REFS[je.refId] || je.id;
-  if (je.refType === "bill"    || je.refType === "bill_payment")    return BILL_REFS[je.refId] || je.id;
-  return je.id;
+  if (je.reference_type === "invoice" || je.reference_type === "invoice_payment") return INV_REFS[je.reference_id] || je.je_number;
+  if (je.reference_type === "bill"    || je.reference_type === "bill_payment")    return BILL_REFS[je.reference_id] || je.je_number;
+  return je.je_number;
 }
 function mapRefType(t) {
   if (t === "invoice" || t === "invoice_payment") return "inv";
@@ -36,24 +40,24 @@ function mapRefType(t) {
   return "je";
 }
 function buildGLRows() {
-  const sorted = [...JE_DATA].sort((a, b) => a.date.localeCompare(b.date));
+  const sorted = [...JE_DATA].sort((a, b) => a.je_date.localeCompare(b.je_date));
   const rows = [];
   let runBal = 500000000;
   sorted.forEach(je => {
     const displayRef = getDisplayRef(je);
-    const refType    = mapRefType(je.refType);
-    const isAnomaly  = !!ANOMALIES_KEYS[je.id];
+    const refType    = mapRefType(je.reference_type);
+    const isAnomaly  = !!ANOMALIES_KEYS[je.je_number];
     if (isAnomaly) {
       const pl = je.lines.find(l => l.debit > 0) || je.lines[0];
       const netEffect = je.lines.reduce((s, l) => s + (l.debit || 0) - (l.credit || 0), 0);
       runBal += netEffect;
-      rows.push({ id:je.id+"-L0", jeId:je.id, date:je.date, dateLabel:formatDate(je.date), ref:displayRef, refType, refId:je.refId, acct:pl.acct, acctName:pl.acctName, desc:je.memo, debit:pl.debit||0, credit:pl.credit||0, balance:runBal, jeData:je });
+      rows.push({ id:je.je_number+"-L0", jeId:je.je_number, date:je.je_date, dateLabel:formatDate(je.je_date), ref:displayRef, refType, refId:je.reference_id, acct:pl.account_code, acctName:pl.account_name, desc:je.memo, debit:pl.debit||0, credit:pl.credit||0, balance:runBal, jeData:je });
     } else {
       je.lines.forEach((l, idx) => {
         const debit  = l.debit  > 0 ? l.debit  : 0;
         const credit = l.credit > 0 ? l.credit : 0;
         runBal += debit - credit;
-        rows.push({ id:je.id+"-L"+idx, jeId:je.id, date:je.date, dateLabel:formatDate(je.date), ref:displayRef, refType, refId:je.refId, acct:l.acct, acctName:l.acctName, desc:l.desc||je.memo, debit, credit, balance:runBal, jeData:je });
+        rows.push({ id:je.je_number+"-L"+idx, jeId:je.je_number, date:je.je_date, dateLabel:formatDate(je.je_date), ref:displayRef, refType, refId:je.reference_id, acct:l.account_code, acctName:l.account_name, desc:l.description||je.memo, debit, credit, balance:runBal, jeData:je });
       });
     }
   });
@@ -179,7 +183,7 @@ export default function GeneralLedgerPage() {
     setAiOpen(true);
     if (!aiInited) {
       setAiInited(true);
-      setAiMsgs([{ role:"ai", text:"GL seimbang dan saldo berjalan <strong>Rp 616,6jt</strong>. Tapi ada <strong>3 JE pending approval</strong> dan <strong>1 anomali</strong> yang perlu diselesaikan sebelum Jan 2025 bisa dikunci — dan closing window tinggal <strong>7 hari</strong>.", chips:true }]);
+      setAiMsgs([{ role:"ai", text:"The GL is balanced for the period. But a <strong>payroll accrual anomaly</strong> and <strong>several pending JE approvals</strong> still need to clear before Apr 2025 can lock — closing window is <strong>7 days</strong>.", chips:true }]);
       setAiMsgCount(1);
     }
   }
@@ -217,7 +221,7 @@ export default function GeneralLedgerPage() {
   }
   function openAnomalyFromCard() {
     resetCustomFilter(); setFilterType("all"); setPage(1);
-    setTimeout(() => { openDrawer("JE-2025-0001"); scrollToTable(); }, 100);
+    setTimeout(() => { if (ANOMALY_JE_ID) openDrawer(ANOMALY_JE_ID); scrollToTable(); }, 100);
   }
 
   function scrollToTable() {
@@ -251,7 +255,7 @@ export default function GeneralLedgerPage() {
     a.click();
   }
 
-  const selectedJe = selectedJeId ? JE_DATA.find(j => j.id === selectedJeId) : null;
+  const selectedJe = selectedJeId ? JE_DATA.find(j => j.je_number === selectedJeId) : null;
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -381,7 +385,7 @@ export default function GeneralLedgerPage() {
                         {[
                           {ic:"ok",  title:"GL seimbang",                 sub:"Total debit = kredit",                  btn:"Trial balance →",  onClick:()=>{}                                               },
                           {ic:"ok",  title:"Rekonsiliasi 76%",             sub:"38 dari 50 matched",                    btn:"Lanjutkan →",       onClick:filterUnmatched                                      },
-                          {ic:"warn",title:"Anomali belum diselesaikan",   sub:"JE-2025-0001 perlu review",             btn:"Lihat anomali →",   onClick:openAnomalyFromCard                                  },
+                          {ic:"warn",title:"Anomali belum diselesaikan",   sub:`${ANOMALY_JE_ID || "—"} perlu review`,  btn:"Lihat anomali →",   onClick:openAnomalyFromCard                                  },
                           {ic:"err", title:"3 JE belum di-post",           sub:"Menunggu approval finance manager",     btn:"Tinjau JE →",       onClick:()=>{setTypeFilter("je");scrollToTable();}           },
                           {ic:"err", title:"Periode belum dikunci",        sub:"Selesaikan semua item di atas dulu",    btn:"Kunci Jan 2025",    onClick:()=>{},                    disabled:true             },
                         ].map((item,i)=>(
@@ -404,7 +408,7 @@ export default function GeneralLedgerPage() {
                         {[
                           {warn:false, text:"Auto-rekonsiliasi bank — 38 transaksi matched berdasarkan nominal + tanggal ±1 hari, confidence 97%",             ts:"08:02"},
                           {warn:false, text:"Klasifikasi otomatis — 21 entri baru, model v2.1, akurasi rata-rata 96%",                                           ts:"10:14"},
-                          {warn:true,  text:"Anomali terdeteksi — JE-2025-0001 Beban Gaji Rp 85,5jt, +16.9% dari rata-rata historis 3 bulan (Rp 73,1jt)",        ts:"11:30"},
+                          {warn:true,  text:`Anomali terdeteksi — ${ANOMALY_JE_ID || "(none)"} Payroll Accrual unusually high, +17% vs trailing 3-month average`,  ts:"11:30"},
                           {warn:false, text:"Running balance diperbarui setelah 5 entri baru di-post",                                                            ts:"14:07"},
                         ].map((item,i)=>(
                           <div key={i} className="gl-ncl-log-item">
@@ -755,9 +759,9 @@ export default function GeneralLedgerPage() {
 
 // ─── DRAWER SUB-COMPONENTS ───────────────────────────────────────────────────
 function DrawerDetail({ je, anom, onMarkValid, onClose }) {
-  const dim = JE_DIM[je.id] || null;
-  const refLabel = { manual:"Jurnal Entry Manual", bill:"Bill", bill_payment:"Pembayaran Bill", invoice:"Invoice", invoice_payment:"Pembayaran Invoice" }[je.refType] || "Jurnal Entry Manual";
-  const hasRef = je.refType.includes("invoice") || je.refType.includes("bill");
+  const dim = JE_DIM[je.je_number] || null;
+  const refLabel = { manual:"Jurnal Entry Manual", bill:"Bill", bill_payment:"Pembayaran Bill", invoice:"Invoice", invoice_payment:"Pembayaran Invoice" }[je.reference_type] || "Jurnal Entry Manual";
+  const hasRef = je.reference_type.includes("invoice") || je.reference_type.includes("bill");
   return (
     <div>
       {anom && (
@@ -776,7 +780,7 @@ function DrawerDetail({ je, anom, onMarkValid, onClose }) {
             ))}
           </div>
           <div style={{display:"flex",gap:6}}>
-            <button onClick={()=>{onMarkValid(je.id);onClose();}} style={{flex:1,fontFamily:"var(--font-sans)",fontSize:11,fontWeight:600,padding:"6px 10px",borderRadius:"var(--radius-sm)",border:"1px solid var(--warning-border)",background:"#fff",color:"var(--warning-text)",cursor:"pointer"}}>Tandai valid</button>
+            <button onClick={()=>{onMarkValid(je.je_number);onClose();}} style={{flex:1,fontFamily:"var(--font-sans)",fontSize:11,fontWeight:600,padding:"6px 10px",borderRadius:"var(--radius-sm)",border:"1px solid var(--warning-border)",background:"#fff",color:"var(--warning-text)",cursor:"pointer"}}>Tandai valid</button>
             <button style={{flex:1.5,fontFamily:"var(--font-sans)",fontSize:11,fontWeight:600,padding:"6px 10px",borderRadius:"var(--radius-sm)",border:"none",background:"var(--color-action)",color:"#fff",cursor:"pointer"}}>Lihat di Jurnal Entry</button>
           </div>
         </div>
@@ -784,12 +788,12 @@ function DrawerDetail({ je, anom, onMarkValid, onClose }) {
       {hasRef && (
         <div className="gl-d-open-link">
           <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-          Buka {je.refId}
+          Buka {je.reference_id}
         </div>
       )}
       <div className="gl-dsec">
         <div className="gl-dlbl">Informasi Transaksi</div>
-        {[["Referensi",getDisplayRef(je)],["No. JE",je.id],["Tipe",refLabel],["Tanggal",formatDate(je.date)],["Keterangan",je.memo],["Dibuat oleh",je.createdBy],["Posted oleh",je.postedBy],["Tanggal post",formatDate(je.postedDate)]].map(([lbl,val])=>(
+        {[["Referensi",getDisplayRef(je)],["No. JE",je.je_number],["Tipe",refLabel],["Tanggal",formatDate(je.je_date)],["Keterangan",je.memo],["Dibuat oleh",je.created_by],["Posted oleh",je.posted_by],["Tanggal post",formatDate(je.posted_date)]].map(([lbl,val])=>(
           <div key={lbl} className="gl-info-row"><label>{lbl}</label><span>{val}</span></div>
         ))}
       </div>
@@ -818,7 +822,7 @@ function DrawerLines({ je }) {
         <tbody>
           {je.lines.map((l,i)=>(
             <tr key={i}>
-              <td><div style={{fontWeight:600,color:"var(--color-text-primary)"}}>{l.acctName}</div><div className="gl-li-sub">{l.acct} · {l.desc}</div></td>
+              <td><div style={{fontWeight:600,color:"var(--color-text-primary)"}}>{l.account_name}</div><div className="gl-li-sub">{l.account_code} · {l.description}</div></td>
               <td className="gl-r" style={{color:l.debit?"#A02020":"var(--color-text-tertiary)"}}>{l.debit?formatRupiah(l.debit):"–"}</td>
               <td className="gl-r" style={{color:l.credit?"#166638":"var(--color-text-tertiary)"}}>{l.credit?formatRupiah(l.credit):"–"}</td>
             </tr>
@@ -840,11 +844,11 @@ function DrawerAudit({ je }) {
       <div className="gl-audit-list">
         <div className="gl-audit-item">
           <div className="gl-audit-dot posted"><svg viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/></svg></div>
-          <div><div className="gl-audit-action">Posted</div><div className="gl-audit-meta">oleh <strong>{je.postedBy}</strong> · {formatDate(je.postedDate)}</div></div>
+          <div><div className="gl-audit-action">Posted</div><div className="gl-audit-meta">oleh <strong>{je.posted_by}</strong> · {formatDate(je.posted_date)}</div></div>
         </div>
         <div className="gl-audit-item">
           <div className="gl-audit-dot created"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" fill="currentColor"/></svg></div>
-          <div><div className="gl-audit-action">Dibuat</div><div className="gl-audit-meta">oleh <strong>{je.createdBy}</strong> · {formatDate(je.createdDate)}</div></div>
+          <div><div className="gl-audit-action">Dibuat</div><div className="gl-audit-meta">oleh <strong>{je.created_by}</strong> · {formatDate(je.created_date)}</div></div>
         </div>
       </div>
     </div>

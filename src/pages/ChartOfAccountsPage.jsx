@@ -3,16 +3,32 @@ import { COA } from "../data/seed/coa";
 
 // ── helpers ─────────────────────────────────────────────────────
 const TYPE_CLS = {
-  Asset:     "asset",
-  Liability: "liability",
-  Equity:    "equity",
-  Revenue:   "revenue",
-  Expense:   "expense",
+  asset:           "asset",
+  contra_asset:    "asset",
+  liability:       "liability",
+  equity:          "equity",
+  revenue:         "revenue",
+  contra_revenue:  "revenue",
+  expense:         "expense",
+};
+const TYPE_LABEL = {
+  asset:           "Asset",
+  contra_asset:    "Contra Asset",
+  liability:       "Liability",
+  equity:          "Equity",
+  revenue:         "Revenue",
+  contra_revenue:  "Contra Revenue",
+  expense:         "Expense",
 };
 
 function TypeBadge({ type }) {
   const cls = TYPE_CLS[type] || "asset";
-  return <span className={`type-badge-coa ${cls}`}>{type}</span>;
+  const label = TYPE_LABEL[type] || type;
+  return <span className={`type-badge-coa ${cls}`}>{label}</span>;
+}
+
+function titleCase(s) {
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : "";
 }
 
 function Toggle({ on, onChange }) {
@@ -50,6 +66,9 @@ function levelCls(level) {
 }
 
 // ── FS Mapping tab ───────────────────────────────────────────────
+// NOTE: this table uses old account codes that no longer exist in the new
+// CoA. It's an informational mapping reference — not driven by COA — and
+// should be regenerated against the new chart in a follow-up.
 const FS_GROUPS = [
   {
     label: "Balance Sheet",
@@ -91,7 +110,7 @@ export default function ChartOfAccountsPage() {
   const [collapsed, setCollapsed] = useState(new Set());
   const [activeMap, setActiveMap] = useState(() => {
     const m = {};
-    COA.forEach((n) => { if (n.code) m[n.id] = n.active !== false; });
+    COA.forEach((n) => { if (n.code) m[n.id] = n.is_active !== false; });
     return m;
   });
 
@@ -215,7 +234,7 @@ export default function ChartOfAccountsPage() {
                             <td style={{ fontWeight: 500 }}>{node.name}</td>
                             <td><TypeBadge type={node.type} /></td>
                             <td style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>{node.fs}</td>
-                            <td style={{ fontSize: 12, color: "var(--color-text-tertiary)" }}>{node.bal}</td>
+                            <td style={{ fontSize: 12, color: "var(--color-text-tertiary)" }}>{titleCase(node.normal_balance)}</td>
                             <td><Toggle on={activeMap[node.id]} onChange={() => toggleActive(node.id)} /></td>
                             <td><button className="row-action-btn">Edit</button></td>
                           </tr>
@@ -256,7 +275,7 @@ export default function ChartOfAccountsPage() {
                         </td>
                         <td><TypeBadge type={node.type} /></td>
                         <td style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>{node.fs}</td>
-                        <td style={{ fontSize: 12, color: "var(--color-text-tertiary)" }}>{node.bal}</td>
+                        <td style={{ fontSize: 12, color: "var(--color-text-tertiary)" }}>{titleCase(node.normal_balance)}</td>
                         <td><Toggle on={activeMap[node.id] !== false} onChange={() => toggleActive(node.id)} /></td>
                         <td><button className="row-action-btn">Edit</button></td>
                       </tr>
@@ -312,7 +331,7 @@ export default function ChartOfAccountsPage() {
                           <td style={row.indent ? { paddingLeft: 28, color: "var(--color-text-secondary)" } : undefined}>{row.name}</td>
                           <td className="cell-muted">{row.stmt}</td>
                           <td className="cell-muted">{row.line}</td>
-                          <td className="cell-muted">{row.sec}</td>
+                          <td className="cell-muted">{row.section}</td>
                         </tr>
                       ))}
                     </>

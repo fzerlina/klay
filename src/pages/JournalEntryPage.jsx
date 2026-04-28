@@ -1,8 +1,30 @@
 import { useState, useMemo } from "react";
-import { generateJournalEntries } from "../data/klayData";
+import { JOURNAL_ENTRIES } from "../data/seed/journalEntries";
 import { formatRupiah } from "../lib/format";
 
 const PAGE_SIZE_DEFAULT = 20;
+
+// JOURNAL_ENTRIES uses snake_case + lowercase status. The list page below was
+// originally written against synthetic camelCase rows with Title-case status,
+// so we adapt the seed shape into the row shape this page expects.
+function adaptToRow(je) {
+  const debit  = je.lines.reduce((s, l) => s + (l.debit  || 0), 0);
+  const credit = je.lines.reduce((s, l) => s + (l.credit || 0), 0);
+  const statusTitle =
+    je.status === "posted"  ? "Posted"  :
+    je.status === "draft"   ? "Draft"   :
+    je.status === "pending" ? "Pending" :
+    je.status === "void"    ? "Void"    : je.status;
+  return {
+    reference: je.je_number,
+    date: je.je_date,
+    memo: je.memo,
+    lines: je.lines.length,
+    debit: debit.toLocaleString("en-US"),
+    credit: credit.toLocaleString("en-US"),
+    status: statusTitle,
+  };
+}
 
 function StatusBadge({ status }) {
   const cls = { Posted: "posted", Draft: "draft", Void: "void", Pending: "pending" }[status] || "draft";
@@ -38,7 +60,7 @@ const AI_LOG = [
 ];
 
 export default function JournalEntryPage() {
-  const allRows = useMemo(() => generateJournalEntries(320), []);
+  const allRows = useMemo(() => JOURNAL_ENTRIES.map(adaptToRow), []);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
