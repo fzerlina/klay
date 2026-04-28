@@ -16,11 +16,14 @@ export const PPH_LABELS = {
   pph21: 'PPh 21 — individu',
 };
 
+// Vendor "default account" labels — should mirror leaf accounts in seed/coa.js.
+// Kept here so the vendor dropdown stays a fixed shortlist; pages render
+// arbitrary account labels via COA_BY_CODE lookup.
 export const ACCT_LABELS = {
-  '6-1000': '6-1000 · Biaya Pokok Penjualan',
-  '5-1000': '5-1000 · Beban Operasional',
-  '5-1070': '5-1070 · Biaya Konsultan',
-  '1-2100': '1-2100 · Aset Tetap',
+  '1-3100': '1-3100 · Raw Materials',
+  '6-2300': '6-2300 · Office Rent',
+  '6-2700': '6-2700 · Professional Services',
+  '1-6300': '1-6300 · Office Equipment',
 };
 
 export const DEFTAX_LABELS = {

@@ -150,12 +150,16 @@ function detectAnomalies(tb) {
   const byCode = {};
   tb.forEach((r) => { byCode[r.code] = r; });
 
+  // Closing balances are computed in each account's normal direction (positive
+  // = balance is on the normal side). For a contra_asset (credit-normal), a
+  // positive closing_balance is the expected accumulation; a negative one
+  // means a JE pushed it the wrong way and is the actual anomaly.
   tb.filter((r) => r.type === "contra_asset").forEach((r) => {
-    if (r.closing_balance > 0) {
+    if (r.closing_balance < 0) {
       out.push({
         severity: "critical", code: r.code, name: r.name,
-        title: "Saldo kontra aset positif — tidak wajar",
-        desc: `${r.name} memiliki saldo akhir +${rp(r.closing_balance)}, seharusnya negatif atau nol untuk akun kontra aset. Kemungkinan entri jurnal terbalik.`,
+        title: "Saldo kontra aset bergerak ke arah debit — tidak wajar",
+        desc: `${r.name} memiliki saldo akhir ${rp(r.closing_balance)}, seharusnya bersaldo kredit untuk akun kontra aset. Kemungkinan entri jurnal terbalik.`,
         action: "Periksa JE yang memengaruhi akun ini dan koreksi jika diperlukan.",
       });
     }
