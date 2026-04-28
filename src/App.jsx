@@ -9,6 +9,7 @@ import InvoicesPage from "./pages/InvoicesPage";
 import VendorsPage from "./pages/VendorsPage";
 import CustomersPage from "./pages/CustomersPage";
 import GeneralLedgerPage from "./pages/GeneralLedgerPage";
+import TrialBalancePage from "./pages/TrialBalancePage";
 
 function ComingSoon({ title }) {
   return (
@@ -32,6 +33,7 @@ export default function App() {
           <Route path="/invoices" element={<InvoicesPage />} />
           <Route path="/vendors" element={<VendorsPage />} />
           <Route path="/customers" element={<CustomersPage />} />
+          <Route path="/trial-balance" element={<TrialBalancePage />} />
           <Route path="*" element={<Navigate to="/journal-entry" replace />} />
         </Route>
       </Routes>
