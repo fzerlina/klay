@@ -8,6 +8,7 @@ import BillsPage from "./pages/BillsPage";
 import InvoicesPage from "./pages/InvoicesPage";
 import VendorsPage from "./pages/VendorsPage";
 import CustomersPage from "./pages/CustomersPage";
+import GeneralLedgerPage from "./pages/GeneralLedgerPage";
 
 function ComingSoon({ title }) {
   return (
@@ -23,7 +24,7 @@ export default function App() {
       <Routes>
         <Route element={<Layout />}>
           <Route index element={<Navigate to="/journal-entry" replace />} />
-          <Route path="/general-ledger" element={<ComingSoon title="General Ledger" />} />
+          <Route path="/general-ledger" element={<GeneralLedgerPage />} />
           <Route path="/journal-entry" element={<JournalEntryPage />} />
           <Route path="/chart-of-accounts" element={<ChartOfAccountsPage />} />
           <Route path="/dimensions" element={<DimensionsPage />} />
