@@ -1,15 +1,57 @@
-// Canned demo responses for the GL "Klay AI" co-pilot. Cycled by message count
-// for generic queries; keyed-match for the suggestion chips.
+// Canned demo responses for the GL "Klay AI" co-pilot.
 //
-// Numbers are illustrative — they don't recompute when the JE seed changes.
-// Re-anchor when the demo narrative shifts.
+// AI_RESPONSES is the round-robin pool used for free-text queries; numbers
+// are computed at module load from the live JE seed so they don't lie.
+// SUGGESTION_RESPONSES is keyed-match for the suggestion chips — kept as
+// rich HTML strings since they're long.
+
+import { JOURNAL_ENTRIES } from "./journalEntries.js";
+import { INVOICES } from "./invoices.js";
+import { BILLS } from "./bills.js";
+
+// ── Live stats computed from the JE seed ─────────────────────────────────
+const stats = (() => {
+  let totalDr = 0;
+  const acctActivity = {}; // code → { tx, gross }
+  let vatIn = 0;
+  let vatOut = 0;
+  for (const je of JOURNAL_ENTRIES) {
+    if (je.status !== "posted") continue;
+    for (const l of je.lines) {
+      const amt = (l.debit || 0) + (l.credit || 0);
+      totalDr += l.debit || 0;
+      const a = (acctActivity[l.account_code] ||= { tx: 0, gross: 0, name: l.account_name });
+      a.tx += 1;
+      a.gross += amt;
+      if (l.account_code === "1-5100") vatIn += l.debit || 0;
+      if (l.account_code === "2-2100") vatOut += l.credit || 0;
+    }
+  }
+  const topAcct = Object.entries(acctActivity)
+    .map(([code, v]) => ({ code, ...v }))
+    .sort((a, b) => b.gross - a.gross)[0];
+  return { totalDr, topAcct, vatIn, vatOut };
+})();
+
+const openInvoice = INVOICES.find((i) => i.payStatus === "overdue");
+const openBill = BILLS.find((b) => b.pay === "overdue" || b.pay === "unpaid");
+
+const fmtRp = (n) => "Rp " + Math.round(n).toLocaleString("id-ID");
+const fmtRpJt = (n) => "Rp " + (n / 1_000_000).toFixed(1).replace(".0", "") + "jt";
+const fmtRpM = (n) => "Rp " + (n / 1_000_000_000).toFixed(2).replace(/\.?0+$/, "") + " milyar";
 
 export const AI_RESPONSES = [
-  "Across Jan–Apr 2025, total debits and credits both reach Rp 11,7 milyar — the GL is balanced.",
-  "Most active account: Bank — BCA Operating (1-1300) with 47 transactions netting Rp 2,1 milyar of activity.",
-  "1 customer invoice still outstanding (INV005 — Rp 48,4jt) and 1 vendor bill still due (BILL005 — Rp 13,75jt).",
-  "VAT Input (1-5100) accumulated Rp 286jt this quarter. Confirm it nets correctly against VAT Output (2-2100) before the SPT masa filing.",
-  "Operating margin is healthy through March; April activity is light because closing is still in progress.",
+  `Across Jan–Apr 2025, posted journal entries total ${fmtRpM(stats.totalDr)} on each side — the GL is balanced.`,
+  stats.topAcct
+    ? `Most active account: ${stats.topAcct.name} (${stats.topAcct.code}) with ${stats.topAcct.tx} posted lines totalling ${fmtRpM(stats.topAcct.gross)} of activity.`
+    : `No posted activity found in the period.`,
+  openInvoice && openBill
+    ? `1 customer invoice still outstanding (${openInvoice.id} — ${fmtRpJt(openInvoice.total)}) and 1 vendor bill still due (${openBill.id} — ${fmtRpJt(openBill.total)}).`
+    : `Outstanding AR/AP queue is currently empty.`,
+  stats.vatIn > 0
+    ? `VAT Input (1-5100) accumulated ${fmtRpJt(stats.vatIn)} this period vs VAT Output (2-2100) at ${fmtRpJt(stats.vatOut)}. Confirm the net is filed correctly on the SPT masa.`
+    : `No VAT activity yet — confirm input/output bookings before SPT masa.`,
+  `Operating margin is healthy through March; April activity is light because closing is still in progress.`,
 ];
 
 export const SUGGESTION_RESPONSES = {

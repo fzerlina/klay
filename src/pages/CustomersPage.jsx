@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useApp } from "../context/AppContext";
-import { formatRupiah, daysSince, initials } from "../lib/format";
+import { formatRupiah, formatDate, daysSince, initials } from "../lib/format";
 import "./modules.css";
 
 export default function CustomersPage() {
@@ -76,7 +76,7 @@ export default function CustomersPage() {
                             </div>
                             <div className="wb-item-ref">{c.code}</div>
                             <div className="wb-item-name">{c.name}</div>
-                            <div className="wb-item-desc">{c.contacts[0]?.name} · {c.lastInv}</div>
+                            <div className="wb-item-desc">{c.contacts[0]?.name} · {formatDate(c.lastInv)}</div>
                             <div className="wb-item-foot">
                               <div className="wb-item-actions">
                                 <button className="wb-btn-primary" onClick={() => { setSelectedId(c.id); setDrawerTab("invoices"); }}>Lihat Invoice</button>
@@ -170,7 +170,7 @@ export default function CustomersPage() {
                           : <span style={{ color: "var(--color-text-tertiary)", opacity: .5 }}>—</span>}
                       </td>
                       <td style={{ fontSize: 11, color: stale ? "var(--danger-text)" : "var(--color-text-tertiary)", fontWeight: stale ? 600 : 400 }}>
-                        {c.lastInv}
+                        {formatDate(c.lastInv)}
                       </td>
                       <td><span className={`status-badge ${c.active ? "active" : "inactive"}`}>{c.active ? "Aktif" : "Non-aktif"}</span></td>
                     </tr>
@@ -241,7 +241,7 @@ export default function CustomersPage() {
                       ["Alamat", selected.address],
                       ["Terms", selected.top],
                       ["Credit Limit", selected.creditLimit > 0 ? formatRupiah(selected.creditLimit) : "—"],
-                      ["Invoice Terakhir", selected.lastInv || "—"],
+                      ["Invoice Terakhir", formatDate(selected.lastInv) || "—"],
                     ].map(([label, value]) => (
                       <div key={label} className="drawer-row">
                         <div className="drawer-label">{label}</div>

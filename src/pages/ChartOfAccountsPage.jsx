@@ -66,42 +66,30 @@ function levelCls(level) {
 }
 
 // ── FS Mapping tab ───────────────────────────────────────────────
-// NOTE: this table uses old account codes that no longer exist in the new
-// CoA. It's an informational mapping reference — not driven by COA — and
-// should be regenerated against the new chart in a follow-up.
-const FS_GROUPS = [
-  {
-    label: "Balance Sheet",
-    rows: [
-      { code: "1-1000", name: "Cash & Equivalents",      stmt: "Balance Sheet", line: "Cash and cash equivalents",     sec: "Current assets" },
-      { code: "1-1100", name: "— Cash on Hand",          stmt: "Balance Sheet", line: "Cash and cash equivalents",     sec: "Current assets", indent: true },
-      { code: "1-1200", name: "— Bank Accounts",         stmt: "Balance Sheet", line: "Cash and cash equivalents",     sec: "Current assets", indent: true },
-      { code: "1-2000", name: "Trade Receivables",       stmt: "Balance Sheet", line: "Trade receivables",             sec: "Current assets" },
-      { code: "1-3000", name: "Inventories",             stmt: "Balance Sheet", line: "Inventories",                   sec: "Current assets" },
-      { code: "1-4000", name: "Prepaid Expenses",        stmt: "Balance Sheet", line: "Prepaid & other current assets",sec: "Current assets" },
-      { code: "1-5000", name: "Property, Plant & Equip.", stmt: "Balance Sheet", line: "Property, plant & equipment",  sec: "Non-current assets" },
-      { code: "2-1000", name: "Trade Payables",          stmt: "Balance Sheet", line: "Trade payables",                sec: "Current liabilities" },
-      { code: "2-2000", name: "Tax Payables",            stmt: "Balance Sheet", line: "Tax payables",                  sec: "Current liabilities" },
-      { code: "2-6000", name: "Long-term Bank Loans",    stmt: "Balance Sheet", line: "Bank loans",                    sec: "Non-current liabilities" },
-      { code: "3-1000", name: "Paid-in Capital",         stmt: "Balance Sheet", line: "Paid-in capital",               sec: "Equity" },
-      { code: "3-2000", name: "Retained Earnings",       stmt: "Balance Sheet", line: "Retained earnings",             sec: "Equity" },
-    ],
-  },
-  {
-    label: "Profit & Loss",
-    rows: [
-      { code: "4-1000", name: "Operating Revenue",       stmt: "P&L", line: "Revenue",                sec: "Revenue" },
-      { code: "4-1100", name: "— Sales Furniture",       stmt: "P&L", line: "Revenue",                sec: "Revenue", indent: true },
-      { code: "4-1200", name: "— Sales Textile",         stmt: "P&L", line: "Revenue",                sec: "Revenue", indent: true },
-      { code: "5-1000", name: "Direct Materials",        stmt: "P&L", line: "Cost of goods sold",     sec: "COGS" },
-      { code: "5-2000", name: "Direct Labour",           stmt: "P&L", line: "Cost of goods sold",     sec: "COGS" },
-      { code: "6-2000", name: "Management Salaries",     stmt: "P&L", line: "Personnel expenses",     sec: "OpEx" },
-      { code: "6-3000", name: "Office Rent",             stmt: "P&L", line: "General & admin",        sec: "OpEx" },
-      { code: "7-1000", name: "Interest Expense",        stmt: "P&L", line: "Finance costs",          sec: "Other" },
-      { code: "8-1000", name: "Current Income Tax",      stmt: "P&L", line: "Income tax expense",     sec: "Tax" },
-    ],
-  },
-];
+// Auto-derived from COA: each leaf account is grouped by its `fs` (Balance
+// Sheet vs P&L). The `line` column is the immediate parent group's label
+// (the line item this account rolls up to in published financials); the
+// `section` column is the COA's section field.
+const FS_GROUPS = (() => {
+  const STMT = { BS: "Balance Sheet", PL: "Profit & Loss" };
+  const groupsById = Object.fromEntries(
+    COA.filter((n) => n.type === "group").map((n) => [n.id, n])
+  );
+  const buckets = { BS: [], PL: [] };
+  COA.filter((n) => n.code).forEach((acct) => {
+    const parentGroup = groupsById[acct.parent];
+    buckets[acct.fs]?.push({
+      code: acct.code,
+      name: acct.name,
+      stmt: STMT[acct.fs] || acct.fs,
+      line: parentGroup?.label || acct.section,
+      section: acct.section,
+    });
+  });
+  return Object.entries(buckets)
+    .filter(([, rows]) => rows.length > 0)
+    .map(([fs, rows]) => ({ label: STMT[fs], rows }));
+})();
 
 // ── main component ───────────────────────────────────────────────
 export default function ChartOfAccountsPage() {

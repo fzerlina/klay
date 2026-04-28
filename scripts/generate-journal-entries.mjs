@@ -354,23 +354,20 @@ function tplTaxProvision(amount) {
 // the source document.
 
 function emitBillJEs(bill) {
-  const { id, vendor, vendorName, total, dpp, date, due, items, pay, approval } = bill;
+  const { id, vendor, vendorName, total, dpp, ppn, date, due, items, pay, approval } = bill;
   if (approval === "draft") return; // unapproved drafts don't post
   const isInventory = items.some((it) => it.acct.startsWith("6-1") || it.acct.startsWith("1-3"));
   const expenseAcct = isInventory ? "1-3100" : "6-2700"; // simplified mapping
   const expenseDesc = isInventory ? "Inventory purchase from supplier" : "Service / professional fee";
-  // BILLS seed has total != dpp + ppn for some records. Derive VAT from
-  // (total - dpp) so the JE balances regardless of the stored ppn value.
-  const vatActual = Math.max(0, total - dpp);
   makeJE({
     je_date: date,
     reference_type: "bill",
     reference_id: id,
     memo: `Vendor bill received — ${vendorName}`,
     lines: [
-      { ...acct(expenseAcct), debit: dpp,        credit: 0,     description: expenseDesc },
-      { ...acct(VAT_IN),      debit: vatActual,  credit: 0,     description: "VAT input on bill" },
-      { ...acct(AP),          debit: 0,          credit: total, description: `Trade payable to ${vendorName}` },
+      { ...acct(expenseAcct), debit: dpp,   credit: 0,     description: expenseDesc },
+      { ...acct(VAT_IN),      debit: ppn,   credit: 0,     description: "VAT input 11%" },
+      { ...acct(AP),          debit: 0,     credit: total, description: `Trade payable to ${vendorName}` },
     ],
     status: "posted",
   });
