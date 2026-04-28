@@ -1,5 +1,4 @@
 @import url("https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@300;400;500;600;700&family=Inconsolata:wght@400;600&display=swap");
-@import "tailwindcss";
 
 :root{
   --color-brand:#B83D08;--color-brand-hover:#A03206;
@@ -128,11 +127,6 @@ td{padding:10px 14px;vertical-align:middle;color:var(--color-text-primary)}
 /* UTILS */
 .mt-12{margin-top:12px}
 .mt-16{margin-top:16px}
-@import "tailwindcss";
-
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
 
 :root {
   --color-brand: #b83d08;

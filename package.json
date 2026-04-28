@@ -1,5 +1,6 @@
 {
-  "homepage": "http://fzerlina.github.io/klay","name": "klay",
+  "homepage": "http://fzerlina.github.io/klay",
+  "name": "klay",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -7,8 +8,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-"predeploy": "node generate-prototypes.mjs && npm run build",
-"deploy": "gh-pages -d dist"
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d dist"
   },
   "dependencies": {
     "react": "latest",
@@ -16,13 +17,8 @@
     "react-router-dom": "latest"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.2.4",
-    "@tailwindcss/vite": "^4.2.4",
     "@vitejs/plugin-react": "latest",
-    "autoprefixer": "^10.5.0",
     "gh-pages": "^6.3.0",
-    "postcss": "^8.5.12",
-    "tailwindcss": "latest",
     "vite": "latest"
   }
 }
