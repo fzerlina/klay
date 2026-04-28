@@ -1,4 +1,4 @@
-import { KLAY_DIMS } from "../data/klayData";
+import { DIMENSIONS } from "../data/seed/dimensions";
 
 export default function DimensionsPage() {
   return (
@@ -24,7 +24,7 @@ export default function DimensionsPage() {
             </tr>
           </thead>
           <tbody>
-            {KLAY_DIMS.map((dimension, idx) => (
+            {DIMENSIONS.map((dimension, idx) => (
               <tr key={dimension.key}>
                 <td>{dimension.label}</td>
                 <td>

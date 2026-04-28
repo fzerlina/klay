@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useApp } from "../context/AppContext";
-import { fmtRp, fmtDate } from "../data/moduleData";
+import { formatRupiah, formatDate, initials } from "../lib/format";
 import "./modules.css";
 
 const APPROVAL_LABEL = { terkirim: "Terkirim", draft: "Draft" };
@@ -10,9 +10,6 @@ function payBadgeClass(payStatus) {
   if (payStatus === "lunas") return "badge-lunas";
   if (payStatus === "overdue") return "badge-overdue";
   return "badge-belumbayar";
-}
-function initials(name) {
-  return name.trim().split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase();
 }
 
 export default function InvoicesPage() {
@@ -65,7 +62,7 @@ export default function InvoicesPage() {
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <div className="inv-ar-badge">
-              Total Piutang <span className="inv-ar-amt">{fmtRp(totalAR)}</span>
+              Total Piutang <span className="inv-ar-amt">{formatRupiah(totalAR)}</span>
             </div>
             <button className="oz-btn primary" style={{ marginLeft: 4 }}>
               <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -79,7 +76,7 @@ export default function InvoicesPage() {
               <div className="inv-bc-label">{c.label}</div>
               <div className="inv-bc-count">{c.count}</div>
               <div className="inv-bc-sub">invoice</div>
-              <div className="inv-bc-amt">{fmtRp(c.amt)}</div>
+              <div className="inv-bc-amt">{formatRupiah(c.amt)}</div>
             </div>
           ))}
         </div>
@@ -130,7 +127,7 @@ export default function InvoicesPage() {
                           {initials(inv.customerName)}
                         </div>
                       </td>
-                      <td style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>{fmtDate(inv.date)}</td>
+                      <td style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>{formatDate(inv.date)}</td>
                       <td>
                         <span className="td-mono" style={{ color: "var(--color-action)", fontSize: 11 }}>
                           {inv.invNo === "—" ? <em style={{ fontStyle: "italic", color: "var(--color-text-tertiary)" }}>Draft</em> : inv.invNo}
@@ -143,9 +140,9 @@ export default function InvoicesPage() {
                       </td>
                       <td style={{ fontSize: 11, color: "var(--color-text-tertiary)", fontFamily: "var(--font-mono)" }}>{inv.custPO}</td>
                       <td style={{ fontSize: 11, color: inv.payStatus === "overdue" ? "var(--danger-text)" : "var(--color-text-tertiary)", fontWeight: inv.payStatus === "overdue" ? 600 : 400 }}>
-                        {fmtDate(inv.due)}
+                        {formatDate(inv.due)}
                       </td>
-                      <td className="r"><span className="td-mono">{fmtRp(inv.total)}</span></td>
+                      <td className="r"><span className="td-mono">{formatRupiah(inv.total)}</span></td>
                       <td><span className={`badge badge-${inv.approval}`}>{APPROVAL_LABEL[inv.approval] || inv.approval}</span></td>
                       <td><span className={`badge ${payBadgeClass(inv.payStatus)}`}>{PAY_LABEL[inv.payStatus] || inv.payStatus}</span></td>
                     </tr>
@@ -161,11 +158,11 @@ export default function InvoicesPage() {
       <div className="sticky-bar">
         <div className="sb-st"><span className="sb-st-lbl">Total</span><span className="sb-st-val">{invoices.length}</span></div>
         <div className="sb-sep" />
-        <div className="sb-st"><span className="sb-st-lbl">Total Piutang</span><span className="sb-st-val">{fmtRp(totalAR)}</span></div>
+        <div className="sb-st"><span className="sb-st-lbl">Total Piutang</span><span className="sb-st-val">{formatRupiah(totalAR)}</span></div>
         <div className="sb-sep" />
-        <div className="sb-st"><span className="sb-st-lbl">Jatuh Tempo</span><span className={`sb-st-val${overdue.length > 0 ? " danger" : ""}`}>{fmtRp(overdue.reduce((s,i)=>s+i.total,0))}</span></div>
+        <div className="sb-st"><span className="sb-st-lbl">Jatuh Tempo</span><span className={`sb-st-val${overdue.length > 0 ? " danger" : ""}`}>{formatRupiah(overdue.reduce((s,i)=>s+i.total,0))}</span></div>
         <div className="sb-sep" />
-        <div className="sb-st"><span className="sb-st-lbl">Lunas</span><span className="sb-st-val success">{fmtRp(invoices.filter(i=>i.payStatus==="lunas").reduce((s,i)=>s+i.total,0))}</span></div>
+        <div className="sb-st"><span className="sb-st-lbl">Lunas</span><span className="sb-st-val success">{formatRupiah(invoices.filter(i=>i.payStatus==="lunas").reduce((s,i)=>s+i.total,0))}</span></div>
         <div className="sb-right">
           <div className="sb-st"><span className="sb-st-lbl">Ditampilkan</span><span className="sb-st-val">{filtered.length}</span></div>
         </div>
@@ -197,7 +194,7 @@ export default function InvoicesPage() {
                   <div className="drawer-stat-row">
                     <div className="drawer-stat-card">
                       <div className="drawer-stat-lbl">Total Invoice</div>
-                      <div className="drawer-stat-val">{fmtRp(selected.total)}</div>
+                      <div className="drawer-stat-val">{formatRupiah(selected.total)}</div>
                     </div>
                     <div className="drawer-stat-card">
                       <div className="drawer-stat-lbl">Status Bayar</div>
@@ -214,8 +211,8 @@ export default function InvoicesPage() {
                       ["Customer PO", selected.custPO],
                       ["Customer", selected.customerName],
                       ["Email", selected.custEmail],
-                      ["Tanggal Dibuat", fmtDate(selected.date)],
-                      ["Jatuh Tempo", fmtDate(selected.due)],
+                      ["Tanggal Dibuat", formatDate(selected.date)],
+                      ["Jatuh Tempo", formatDate(selected.due)],
                       ["Status Invoice", APPROVAL_LABEL[selected.approval] || selected.approval],
                     ].map(([label, value]) => (
                       <div key={label} className="drawer-row">
@@ -227,8 +224,8 @@ export default function InvoicesPage() {
                   <div className="drawer-section">
                     <div className="drawer-section-title">Pajak</div>
                     {[
-                      ["DPP", fmtRp(selected.dpp)],
-                      ["PPN (11%)", fmtRp(selected.ppn)],
+                      ["DPP", formatRupiah(selected.dpp)],
+                      ["PPN (11%)", formatRupiah(selected.ppn)],
                     ].map(([label, value]) => (
                       <div key={label} className="drawer-row">
                         <div className="drawer-label">{label}</div>
@@ -257,21 +254,21 @@ export default function InvoicesPage() {
                           <td>{item.desc}</td>
                           <td className="r">{item.qty}</td>
                           <td>{item.unit}</td>
-                          <td className="r">{fmtRp(item.price)}</td>
-                          <td className="r">{fmtRp(item.subtotal)}</td>
+                          <td className="r">{formatRupiah(item.price)}</td>
+                          <td className="r">{formatRupiah(item.subtotal)}</td>
                         </tr>
                       ))}
                       <tr className="items-total-row">
                         <td colSpan={4}>DPP</td>
-                        <td className="r">{fmtRp(selected.dpp)}</td>
+                        <td className="r">{formatRupiah(selected.dpp)}</td>
                       </tr>
                       <tr>
                         <td colSpan={4} style={{ fontSize: 12, color: "var(--color-text-tertiary)" }}>PPN (11%)</td>
-                        <td className="r" style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}>{fmtRp(selected.ppn)}</td>
+                        <td className="r" style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}>{formatRupiah(selected.ppn)}</td>
                       </tr>
                       <tr className="items-total-row">
                         <td colSpan={4}>Total</td>
-                        <td className="r">{fmtRp(selected.total)}</td>
+                        <td className="r">{formatRupiah(selected.total)}</td>
                       </tr>
                     </tbody>
                   </table>

@@ -1,13 +1,16 @@
 import { createContext, useContext, useState } from "react";
-import { VENDORS_DATA, CUSTOMERS_DATA, BILLS_DATA, INVOICES_DATA } from "../data/moduleData";
+import { VENDORS } from "../data/seed/vendors";
+import { CUSTOMERS } from "../data/seed/customers";
+import { BILLS } from "../data/seed/bills";
+import { INVOICES } from "../data/seed/invoices";
 
 const AppContext = createContext(null);
 
 export function AppProvider({ children }) {
-  const [vendors, setVendors] = useState(VENDORS_DATA);
-  const [customers, setCustomers] = useState(CUSTOMERS_DATA);
-  const [bills, setBills] = useState(BILLS_DATA);
-  const [invoices, setInvoices] = useState(INVOICES_DATA);
+  const [vendors, setVendors] = useState(VENDORS);
+  const [customers, setCustomers] = useState(CUSTOMERS);
+  const [bills, setBills] = useState(BILLS);
+  const [invoices, setInvoices] = useState(INVOICES);
 
   return (
     <AppContext.Provider value={{ vendors, setVendors, customers, setCustomers, bills, setBills, invoices, setInvoices }}>

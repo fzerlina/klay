@@ -1,24 +1,7 @@
 import { useState } from "react";
 import { useApp } from "../context/AppContext";
-import { fmtRp } from "../data/moduleData";
+import { formatRupiah, daysSince, initials } from "../lib/format";
 import "./modules.css";
-
-const TODAY = new Date("2025-04-23T00:00:00");
-function daysSince(dateStr) {
-  if (!dateStr) return 9999;
-  const parts = dateStr.split(" ");
-  if (parts.length === 3) {
-    const MONTHS = { Jan:0,Feb:1,Mar:2,Apr:3,Mei:4,Jun:5,Jul:6,Agu:7,Sep:8,Okt:9,Nov:10,Des:11 };
-    return Math.floor((TODAY - new Date(+parts[2], MONTHS[parts[1]], +parts[0])) / 86400000);
-  }
-  return Math.floor((TODAY - new Date(dateStr + "T00:00:00")) / 86400000);
-}
-function initials(name) {
-  return name.trim().split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase();
-}
-function toWA(phone) {
-  return "https://wa.me/" + (phone || "").replace(/[-\s()]/g, "").replace(/^\+/, "");
-}
 
 export default function CustomersPage() {
   const { customers, invoices } = useApp();
@@ -83,7 +66,7 @@ export default function CustomersPage() {
                 <div className="wb-body">
                   {overdueCustomers.length > 0 && (
                     <div className="wb-row">
-                      <div className="wb-row-title">Piutang Jatuh Tempo · {fmtRp(overdueAR)}</div>
+                      <div className="wb-row-title">Piutang Jatuh Tempo · {formatRupiah(overdueAR)}</div>
                       <div className="wb-items">
                         {overdueCustomers.map(c => (
                           <div key={c.id} className="wb-item-card overdue">
@@ -99,7 +82,7 @@ export default function CustomersPage() {
                                 <button className="wb-btn-primary" onClick={() => { setSelectedId(c.id); setDrawerTab("invoices"); }}>Lihat Invoice</button>
                                 <button className="wb-btn-secondary" onClick={() => { setSelectedId(c.id); setDrawerTab("detail"); }}>Detail</button>
                               </div>
-                              <div className="wb-item-amt">{fmtRp(c.ar)}</div>
+                              <div className="wb-item-amt">{formatRupiah(c.ar)}</div>
                             </div>
                           </div>
                         ))}
@@ -180,10 +163,10 @@ export default function CustomersPage() {
                       </td>
                       <td><span className={`type-badge ${c.type}`}>{c.type === "perusahaan" ? "Perusahaan" : "Individu"}</span></td>
                       <td style={{ fontSize: 12, color: "var(--color-text-tertiary)" }}>{c.top}</td>
-                      <td className="r"><span className="td-mono" style={{ color: "var(--color-text-tertiary)" }}>{c.creditLimit > 0 ? fmtRp(c.creditLimit) : "—"}</span></td>
+                      <td className="r"><span className="td-mono" style={{ color: "var(--color-text-tertiary)" }}>{c.creditLimit > 0 ? formatRupiah(c.creditLimit) : "—"}</span></td>
                       <td className="r">
                         {c.ar > 0
-                          ? <span className={c.arOverdue ? "td-danger" : "td-mono"}>{fmtRp(c.ar)}</span>
+                          ? <span className={c.arOverdue ? "td-danger" : "td-mono"}>{formatRupiah(c.ar)}</span>
                           : <span style={{ color: "var(--color-text-tertiary)", opacity: .5 }}>—</span>}
                       </td>
                       <td style={{ fontSize: 11, color: stale ? "var(--danger-text)" : "var(--color-text-tertiary)", fontWeight: stale ? 600 : 400 }}>
@@ -205,9 +188,9 @@ export default function CustomersPage() {
         <div className="sb-sep" />
         <div className="sb-st"><span className="sb-st-lbl">Aktif</span><span className="sb-st-val">{activeCount}</span></div>
         <div className="sb-sep" />
-        <div className="sb-st"><span className="sb-st-lbl">Total AR</span><span className="sb-st-val">{fmtRp(totalAR)}</span></div>
+        <div className="sb-st"><span className="sb-st-lbl">Total AR</span><span className="sb-st-val">{formatRupiah(totalAR)}</span></div>
         <div className="sb-sep" />
-        <div className="sb-st"><span className="sb-st-lbl">Jatuh Tempo</span><span className={`sb-st-val${overdueAR > 0 ? " danger" : ""}`}>{fmtRp(overdueAR)}</span></div>
+        <div className="sb-st"><span className="sb-st-lbl">Jatuh Tempo</span><span className={`sb-st-val${overdueAR > 0 ? " danger" : ""}`}>{formatRupiah(overdueAR)}</span></div>
         <div className="sb-right">
           <div className="sb-st"><span className="sb-st-lbl">Ditampilkan</span><span className="sb-st-val">{filtered.length}</span></div>
         </div>
@@ -242,7 +225,7 @@ export default function CustomersPage() {
                   <div className="drawer-stat-row">
                     <div className="drawer-stat-card">
                       <div className="drawer-stat-lbl">AR Aktif</div>
-                      <div className={`drawer-stat-val${selected.arOverdue ? " danger" : ""}`}>{fmtRp(selected.ar)}</div>
+                      <div className={`drawer-stat-val${selected.arOverdue ? " danger" : ""}`}>{formatRupiah(selected.ar)}</div>
                     </div>
                     <div className="drawer-stat-card">
                       <div className="drawer-stat-lbl">Total Invoice</div>
@@ -257,7 +240,7 @@ export default function CustomersPage() {
                       ["NPWP", selected.npwp || "—"],
                       ["Alamat", selected.address],
                       ["Terms", selected.top],
-                      ["Credit Limit", selected.creditLimit > 0 ? fmtRp(selected.creditLimit) : "—"],
+                      ["Credit Limit", selected.creditLimit > 0 ? formatRupiah(selected.creditLimit) : "—"],
                       ["Invoice Terakhir", selected.lastInv || "—"],
                     ].map(([label, value]) => (
                       <div key={label} className="drawer-row">
@@ -308,7 +291,7 @@ export default function CustomersPage() {
                             <div style={{ fontSize: 11, color: "var(--color-text-tertiary)", marginTop: 2 }}>Jatuh tempo: {inv.due}</div>
                           </div>
                           <div style={{ textAlign: "right", flexShrink: 0 }}>
-                            <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700 }}>{fmtRp(inv.total)}</div>
+                            <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700 }}>{formatRupiah(inv.total)}</div>
                             <span className={`badge badge-${inv.payStatus}`} style={{ marginTop: 4, display: "inline-flex" }}>
                               {inv.payStatus === "lunas" ? "Lunas" : inv.payStatus === "overdue" ? "Jatuh Tempo" : inv.payStatus === "belumbayar" ? "Belum Bayar" : inv.payStatus}
                             </span>

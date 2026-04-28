@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { generateJournalEntries } from "../data/klayData";
+import { formatRupiah } from "../lib/format";
 
 const PAGE_SIZE_DEFAULT = 20;
 
@@ -17,16 +18,8 @@ function rowCls(status) {
   return { Draft: "row-draft", Pending: "row-pending", Void: "row-void" }[status] || "";
 }
 
-function fmtIdr(numStr) {
-  return "Rp " + numStr;
-}
-
 function sumDebit(rows) {
   return rows.reduce((s, r) => s + Number(r.debit.replace(/,/g, "")), 0);
-}
-
-function fmtTotal(n) {
-  return "Rp " + new Intl.NumberFormat("id-ID").format(n);
 }
 
 const CHECKLIST = [
@@ -344,12 +337,12 @@ export default function JournalEntryPage() {
         <div className="je-bar-sep" />
         <div className="je-bar-stat">
           <span className="je-bar-lbl">Debit</span>
-          <span className="je-bar-val debit">{fmtTotal(debitTotal)}</span>
+          <span className="je-bar-val debit">{formatRupiah(debitTotal)}</span>
         </div>
         <div className="je-bar-sep" />
         <div className="je-bar-stat">
           <span className="je-bar-lbl">Kredit</span>
-          <span className="je-bar-val credit">{fmtTotal(debitTotal)}</span>
+          <span className="je-bar-val credit">{formatRupiah(debitTotal)}</span>
         </div>
         <div className="je-bar-right">
           <div className="je-bar-stat" style={{ gap: 5 }}>

@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { KLAY_COA_TREE } from "../data/klayData";
+import { COA } from "../data/seed/coa";
 
 // ── helpers ─────────────────────────────────────────────────────
 const TYPE_CLS = {
@@ -26,12 +26,12 @@ function Toggle({ on, onChange }) {
 }
 
 // Build an id → node map for ancestor lookups
-const TREE_MAP = Object.fromEntries(KLAY_COA_TREE.map((n) => [n.id, n]));
+const TREE_MAP = Object.fromEntries(COA.map((n) => [n.id, n]));
 
 // Count direct account descendants of a group (all levels below it)
 function countAccounts(groupId) {
   let n = 0;
-  for (const node of KLAY_COA_TREE) {
+  for (const node of COA) {
     if (!node.code) continue; // skip groups
     // walk parent chain
     let cur = node;
@@ -91,11 +91,11 @@ export default function ChartOfAccountsPage() {
   const [collapsed, setCollapsed] = useState(new Set());
   const [activeMap, setActiveMap] = useState(() => {
     const m = {};
-    KLAY_COA_TREE.forEach((n) => { if (n.code) m[n.id] = n.active !== false; });
+    COA.forEach((n) => { if (n.code) m[n.id] = n.active !== false; });
     return m;
   });
 
-  const accountCount = KLAY_COA_TREE.filter((n) => n.code).length;
+  const accountCount = COA.filter((n) => n.code).length;
 
   function toggleGroup(id) {
     setCollapsed((prev) => {
@@ -107,7 +107,7 @@ export default function ChartOfAccountsPage() {
 
   function expandAll() { setCollapsed(new Set()); }
   function collapseAll() {
-    setCollapsed(new Set(KLAY_COA_TREE.filter((n) => !n.code).map((n) => n.id)));
+    setCollapsed(new Set(COA.filter((n) => !n.code).map((n) => n.id)));
   }
 
   function toggleActive(id) {
@@ -129,7 +129,7 @@ export default function ChartOfAccountsPage() {
 
   // rendered rows
   const rows = useMemo(() => {
-    return KLAY_COA_TREE.map((node) => {
+    return COA.map((node) => {
       const visible = isVisible(node);
       const searchMatch = q
         ? (node.code || "").toLowerCase().includes(q) || (node.name || node.label || "").toLowerCase().includes(q)
@@ -140,7 +140,7 @@ export default function ChartOfAccountsPage() {
 
   const groupCounts = useMemo(() => {
     const m = {};
-    KLAY_COA_TREE.filter((n) => !n.code).forEach((g) => { m[g.id] = countAccounts(g.id); });
+    COA.filter((n) => !n.code).forEach((g) => { m[g.id] = countAccounts(g.id); });
     return m;
   }, []);
 

@@ -1,18 +1,13 @@
 import { useState } from "react";
 import { useApp } from "../context/AppContext";
-import { CAT_LABELS, PPH_LABELS, ACCT_LABELS, DEFTAX_LABELS, fmtRp } from "../data/moduleData";
+import { CAT_LABELS, PPH_LABELS, ACCT_LABELS, DEFTAX_LABELS } from "../data/labels";
+import { formatRupiah, formatDate, daysSince } from "../lib/format";
 import "./modules.css";
 
-const TODAY = new Date("2025-04-23T00:00:00");
-function daysSince(dateStr) {
-  if (!dateStr) return 9999;
-  return Math.floor((TODAY - new Date(dateStr + "T00:00:00")) / 86400000);
-}
 function fmtLastTx(dateStr) {
   if (!dateStr) return { text: "Belum ada", stale: false };
   const days = daysSince(dateStr);
-  const d = new Date(dateStr + "T00:00:00");
-  const text = d.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
+  const text = formatDate(dateStr);
   return { text: days > 60 ? `${text} · ${days} hari lalu` : text, stale: days > 60 };
 }
 
@@ -85,7 +80,7 @@ export default function VendorsPage() {
                       <div className="acc-hd" onClick={() => setOverdueOpen(!overdueOpen)}>
                         <div className="acc-icon red"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
                         <div className="acc-label">Outstanding AP — {overdueVendors.length} vendor</div>
-                        <div className="acc-amt">{fmtRp(overdueVendors.reduce((s, v) => s + (AP_BALANCE[v.id] || 0), 0))}</div>
+                        <div className="acc-amt">{formatRupiah(overdueVendors.reduce((s, v) => s + (AP_BALANCE[v.id] || 0), 0))}</div>
                         <div className="acc-badge red">{overdueVendors.length}</div>
                         <svg className={`acc-chev${overdueOpen ? " open" : ""}`} viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>
                       </div>
@@ -101,7 +96,7 @@ export default function VendorsPage() {
                                   <div className="item-actions">
                                     <button className="btn-sm btn-pay" onClick={() => { setSelectedId(v.id); setDrawerTab("detail"); }}>Lihat Detail</button>
                                   </div>
-                                  <div className="item-amt">{fmtRp(AP_BALANCE[v.id] || 0)}</div>
+                                  <div className="item-amt">{formatRupiah(AP_BALANCE[v.id] || 0)}</div>
                                 </div>
                               </div>
                             ))}
@@ -195,7 +190,7 @@ export default function VendorsPage() {
                       <td><span className={`cat-badge ${v.category}`}>{CAT_LABELS[v.category] || v.category}</span></td>
                       <td style={{ color: "var(--color-text-tertiary)", fontSize: 12 }}>{v.payment_terms}</td>
                       <td className="r">
-                        {bal > 0 ? <span className="td-warn">{fmtRp(bal)}</span> : <span className="td-dim">—</span>}
+                        {bal > 0 ? <span className="td-warn">{formatRupiah(bal)}</span> : <span className="td-dim">—</span>}
                       </td>
                       <td>
                         <span className={lt.stale ? "last-tx-stale" : "last-tx-ok"} style={{ fontSize: 11 }}>{lt.text}</span>
@@ -216,7 +211,7 @@ export default function VendorsPage() {
         <div className="sb-sep" />
         <div className="sb-st"><span className="sb-st-lbl">Aktif</span><span className="sb-st-val">{activeCount}</span></div>
         <div className="sb-sep" />
-        <div className="sb-st"><span className="sb-st-lbl">Outstanding AP</span><span className={`sb-st-val${totalAP > 0 ? " danger" : ""}`}>{fmtRp(totalAP)}</span></div>
+        <div className="sb-st"><span className="sb-st-lbl">Outstanding AP</span><span className={`sb-st-val${totalAP > 0 ? " danger" : ""}`}>{formatRupiah(totalAP)}</span></div>
         <div className="sb-right">
           <div className="sb-st"><span className="sb-st-lbl">Ditampilkan</span><span className="sb-st-val">{filtered.length}</span></div>
         </div>
@@ -250,7 +245,7 @@ export default function VendorsPage() {
                   <div className="drawer-stat-row">
                     <div className="drawer-stat-card">
                       <div className="drawer-stat-lbl">AP Balance</div>
-                      <div className={`drawer-stat-val${(AP_BALANCE[selected.id] || 0) > 0 ? " danger" : ""}`}>{fmtRp(AP_BALANCE[selected.id] || 0)}</div>
+                      <div className={`drawer-stat-val${(AP_BALANCE[selected.id] || 0) > 0 ? " danger" : ""}`}>{formatRupiah(AP_BALANCE[selected.id] || 0)}</div>
                     </div>
                     <div className="drawer-stat-card">
                       <div className="drawer-stat-lbl">Terms</div>
@@ -320,7 +315,7 @@ export default function VendorsPage() {
                   </div>
                   <div className="drawer-row">
                     <div className="drawer-label">AP Saat Ini</div>
-                    <div className="drawer-value mono">{fmtRp(AP_BALANCE[selected.id] || 0)}</div>
+                    <div className="drawer-value mono">{formatRupiah(AP_BALANCE[selected.id] || 0)}</div>
                   </div>
                 </div>
               )}

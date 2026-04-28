@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useApp } from "../context/AppContext";
-import { fmtRp, fmtDate, daysOverdue } from "../data/moduleData";
+import { formatRupiah, formatDate, daysSince } from "../lib/format";
 import "./modules.css";
 
 const PAY_LABEL = { paid: "Lunas", unpaid: "Belum Bayar", overdue: "Jatuh Tempo" };
@@ -66,7 +66,7 @@ export default function BillsPage() {
         <div className="oz-top">
           <div>
             <div className="oz-title">Bills</div>
-            <div className="oz-subtitle">{totalBills} bill · Total AP {fmtRp(totalAP)}</div>
+            <div className="oz-subtitle">{totalBills} bill · Total AP {formatRupiah(totalAP)}</div>
           </div>
           <div className="oz-actions">
             <button className="oz-btn">
@@ -85,7 +85,7 @@ export default function BillsPage() {
               <div className="oz-card-label">{c.label}</div>
               <div className={`oz-card-num${c.numClass ? ` ${c.numClass}` : ""}`}>{c.num}</div>
               <div className="oz-card-sub">{c.sub}</div>
-              <div className={`oz-card-amt${c.amtClass ? ` ${c.amtClass}` : ""}`}>{fmtRp(c.amt)}</div>
+              <div className={`oz-card-amt${c.amtClass ? ` ${c.amtClass}` : ""}`}>{formatRupiah(c.amt)}</div>
             </div>
           ))}
         </div>
@@ -113,7 +113,7 @@ export default function BillsPage() {
                       <div className="child-acc-header" onClick={() => setOverdueOpen(!overdueOpen)}>
                         <div className="child-acc-icon unpaid"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
                         <div className="child-acc-title">Jatuh Tempo — {overdueBills.length} bill</div>
-                        <div className="child-acc-amount">{fmtRp(overdueAmt)}</div>
+                        <div className="child-acc-amount">{formatRupiah(overdueAmt)}</div>
                         <div className="child-acc-badge danger">{overdueBills.length}</div>
                         <div className={`child-acc-toggle${overdueOpen ? " open" : ""}`}><svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg></div>
                       </div>
@@ -125,8 +125,8 @@ export default function BillsPage() {
                                 <div className="bill-row-item-vendor">{b.vendorName}</div>
                                 <div className="bill-row-item-ref">{b.invNo}</div>
                               </div>
-                              <div className="bill-row-item-due">Lewat {daysOverdue(b.due)} hari</div>
-                              <div className="bill-row-item-amt">{fmtRp(b.sisa)}</div>
+                              <div className="bill-row-item-due">Lewat {daysSince(b.due)} hari</div>
+                              <div className="bill-row-item-amt">{formatRupiah(b.sisa)}</div>
                             </div>
                           ))}
                         </div>
@@ -138,7 +138,7 @@ export default function BillsPage() {
                       <div className="child-acc-header" onClick={() => setUnpaidOpen(!unpaidOpen)}>
                         <div className="child-acc-icon pending"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
                         <div className="child-acc-title">Belum Dibayar — {unpaidBills.length} bill</div>
-                        <div className="child-acc-amount" style={{ color: "var(--warning-text)" }}>{fmtRp(unpaidBills.reduce((s,b)=>s+b.sisa,0))}</div>
+                        <div className="child-acc-amount" style={{ color: "var(--warning-text)" }}>{formatRupiah(unpaidBills.reduce((s,b)=>s+b.sisa,0))}</div>
                         <div className="child-acc-badge warn">{unpaidBills.length}</div>
                         <div className={`child-acc-toggle${unpaidOpen ? " open" : ""}`}><svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg></div>
                       </div>
@@ -150,8 +150,8 @@ export default function BillsPage() {
                                 <div className="bill-row-item-vendor">{b.vendorName}</div>
                                 <div className="bill-row-item-ref">{b.invNo}</div>
                               </div>
-                              <div style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>Jatuh tempo: {fmtDate(b.due)}</div>
-                              <div className="bill-row-item-amt" style={{ color: "var(--warning-text)" }}>{fmtRp(b.sisa)}</div>
+                              <div style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>Jatuh tempo: {formatDate(b.due)}</div>
+                              <div className="bill-row-item-amt" style={{ color: "var(--warning-text)" }}>{formatRupiah(b.sisa)}</div>
                             </div>
                           ))}
                         </div>
@@ -174,7 +174,7 @@ export default function BillsPage() {
                                 <div className="bill-row-item-vendor">{b.vendorName}</div>
                                 <div className="bill-row-item-ref">{b.isAI ? "OCR AI Draft" : b.invNo}</div>
                               </div>
-                              <div className="bill-row-item-amt" style={{ color: "var(--color-text-tertiary)" }}>{fmtRp(b.total)}</div>
+                              <div className="bill-row-item-amt" style={{ color: "var(--color-text-tertiary)" }}>{formatRupiah(b.total)}</div>
                             </div>
                           ))}
                         </div>
@@ -231,17 +231,17 @@ export default function BillsPage() {
                       <div className="td-sub">{b.id}</div>
                     </td>
                     <td><span className="td-mono td-sub">{b.invNo === "—" ? <em style={{ fontStyle: "italic" }}>Draft</em> : b.invNo}</span></td>
-                    <td style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>{fmtDate(b.date)}</td>
+                    <td style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>{formatDate(b.date)}</td>
                     <td>
                       <span style={{ fontSize: 11, color: b.pay === "overdue" ? "var(--danger-text)" : "var(--color-text-tertiary)", fontWeight: b.pay === "overdue" ? 600 : 400 }}>
-                        {fmtDate(b.due)}{b.pay === "overdue" ? ` (+${daysOverdue(b.due)}h)` : ""}
+                        {formatDate(b.due)}{b.pay === "overdue" ? ` (+${daysSince(b.due)}h)` : ""}
                       </span>
                     </td>
                     <td><span className={`badge grn-${b.grn}`}>{GRN_LABEL[b.grn]}</span></td>
-                    <td className="r"><span className="td-mono">{fmtRp(b.total)}</span></td>
+                    <td className="r"><span className="td-mono">{formatRupiah(b.total)}</span></td>
                     <td className="r">
                       {b.sisa > 0
-                        ? <span className={b.pay === "overdue" ? "td-danger" : "td-warn"}>{fmtRp(b.sisa)}</span>
+                        ? <span className={b.pay === "overdue" ? "td-danger" : "td-warn"}>{formatRupiah(b.sisa)}</span>
                         : <span style={{ color: "var(--color-text-tertiary)", opacity: .4 }}>—</span>}
                     </td>
                     <td><span className={`badge badge-${b.approval}`}>{APPROVAL_LABEL[b.approval]}</span></td>
@@ -258,9 +258,9 @@ export default function BillsPage() {
       <div className="sticky-bar">
         <div className="sb-st"><span className="sb-st-lbl">Total Bill</span><span className="sb-st-val">{totalBills}</span></div>
         <div className="sb-sep" />
-        <div className="sb-st"><span className="sb-st-lbl">Outstanding AP</span><span className={`sb-st-val${totalAP > 0 ? " danger" : ""}`}>{fmtRp(totalAP)}</span></div>
+        <div className="sb-st"><span className="sb-st-lbl">Outstanding AP</span><span className={`sb-st-val${totalAP > 0 ? " danger" : ""}`}>{formatRupiah(totalAP)}</span></div>
         <div className="sb-sep" />
-        <div className="sb-st"><span className="sb-st-lbl">Jatuh Tempo</span><span className={`sb-st-val${overdueAmt > 0 ? " danger" : ""}`}>{fmtRp(overdueAmt)}</span></div>
+        <div className="sb-st"><span className="sb-st-lbl">Jatuh Tempo</span><span className={`sb-st-val${overdueAmt > 0 ? " danger" : ""}`}>{formatRupiah(overdueAmt)}</span></div>
         <div className="sb-right">
           <div className="sb-st"><span className="sb-st-lbl">Ditampilkan</span><span className="sb-st-val">{filtered.length}</span></div>
         </div>
@@ -292,11 +292,11 @@ export default function BillsPage() {
                   <div className="drawer-stat-row">
                     <div className="drawer-stat-card">
                       <div className="drawer-stat-lbl">Total</div>
-                      <div className="drawer-stat-val">{fmtRp(selected.total)}</div>
+                      <div className="drawer-stat-val">{formatRupiah(selected.total)}</div>
                     </div>
                     <div className="drawer-stat-card">
                       <div className="drawer-stat-lbl">Sisa Bayar</div>
-                      <div className={`drawer-stat-val${selected.sisa > 0 ? " danger" : " success"}`}>{selected.sisa > 0 ? fmtRp(selected.sisa) : "Lunas"}</div>
+                      <div className={`drawer-stat-val${selected.sisa > 0 ? " danger" : " success"}`}>{selected.sisa > 0 ? formatRupiah(selected.sisa) : "Lunas"}</div>
                     </div>
                   </div>
                   <div className="drawer-section">
@@ -305,8 +305,8 @@ export default function BillsPage() {
                       ["Bill ID", selected.id],
                       ["No. Invoice Vendor", selected.invNo],
                       ["No. PO", selected.poNo],
-                      ["Tanggal", fmtDate(selected.date)],
-                      ["Jatuh Tempo", fmtDate(selected.due)],
+                      ["Tanggal", formatDate(selected.date)],
+                      ["Jatuh Tempo", formatDate(selected.due)],
                       ["GRN", GRN_LABEL[selected.grn]],
                       ["Status Approval", APPROVAL_LABEL[selected.approval]],
                       ["Status Bayar", PAY_LABEL[selected.pay]],
@@ -326,9 +326,9 @@ export default function BillsPage() {
                   <div className="drawer-section">
                     <div className="drawer-section-title">Pajak</div>
                     {[
-                      ["DPP", fmtRp(selected.dpp)],
-                      ["PPN (11%)", fmtRp(selected.ppn)],
-                      ["PPh 23", selected.pph23 > 0 ? fmtRp(selected.pph23) : "—"],
+                      ["DPP", formatRupiah(selected.dpp)],
+                      ["PPN (11%)", formatRupiah(selected.ppn)],
+                      ["PPh 23", selected.pph23 > 0 ? formatRupiah(selected.pph23) : "—"],
                     ].map(([label, value]) => (
                       <div key={label} className="drawer-row">
                         <div className="drawer-label">{label}</div>
@@ -358,21 +358,21 @@ export default function BillsPage() {
                             <div style={{ fontSize: 10, color: "var(--color-action)", fontFamily: "var(--font-mono)" }}>{item.acct} · {item.acctName}</div>
                           </td>
                           <td className="r">{item.qty.toLocaleString("id-ID")}</td>
-                          <td className="r">{fmtRp(item.price)}</td>
-                          <td className="r">{fmtRp(item.subtotal)}</td>
+                          <td className="r">{formatRupiah(item.price)}</td>
+                          <td className="r">{formatRupiah(item.subtotal)}</td>
                         </tr>
                       ))}
                       <tr className="items-total-row">
                         <td colSpan={3}>DPP</td>
-                        <td className="r">{fmtRp(selected.dpp)}</td>
+                        <td className="r">{formatRupiah(selected.dpp)}</td>
                       </tr>
                       <tr>
                         <td colSpan={3} style={{ fontSize: 12, color: "var(--color-text-tertiary)" }}>PPN (11%)</td>
-                        <td className="r" style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}>{fmtRp(selected.ppn)}</td>
+                        <td className="r" style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}>{formatRupiah(selected.ppn)}</td>
                       </tr>
                       <tr className="items-total-row">
                         <td colSpan={3}>Total</td>
-                        <td className="r">{fmtRp(selected.total)}</td>
+                        <td className="r">{formatRupiah(selected.total)}</td>
                       </tr>
                     </tbody>
                   </table>
