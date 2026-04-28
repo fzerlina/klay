@@ -1,6 +1,39 @@
 import { Fragment, useState, useMemo, useEffect, useRef } from "react";
-import { TB_COA, TB_JE, TB_OPENING } from "../data/trialBalanceData";
+import { COA, COA_BY_CODE } from "../data/seed/coa";
+import { JOURNAL_ENTRIES } from "../data/seed/journalEntries";
+import { OPENING_BALANCES } from "../data/seed/openingBalances";
 import "./TrialBalancePage.css";
+
+// ── Source-of-truth views ──────────────────────────────────────────────────
+// Trial Balance derives from the same seed CoA / JEs / opening balances as
+// every other page. Anything reads through this page sees what the JE list
+// and General Ledger see.
+
+// CoA leaf accounts in the shape the rest of this page expects.
+const TB_COA = COA.filter((n) => n.code).map((n) => ({
+  code: n.code,
+  name: n.name,
+  type: n.type,
+  normal_balance: n.normal_balance,
+  parent: n.parent,
+  is_active: n.is_active,
+}));
+
+// JEs as-is (snake_case schema already matches what computeTB() consumes).
+const TB_JE = JOURNAL_ENTRIES;
+
+// Opening balances as a { code: oriented_amount } map. Oriented means the
+// stored value is positive when the balance matches the account's normal
+// side (a 500M credit on a credit-normal equity account stores as +500M),
+// matching the convention computeTB() expects.
+const TB_OPENING = OPENING_BALANCES.reduce((m, r) => {
+  const acct = COA_BY_CODE[r.account_code];
+  if (!acct) return m;
+  const debitNormal = acct.normal_balance === "debit";
+  const oriented = debitNormal ? r.debit - r.credit : r.credit - r.debit;
+  m[r.account_code] = (m[r.account_code] || 0) + oriented;
+  return m;
+}, {});
 
 // ── helpers ──────────────────────────────────────────────────────────────
 const PARENT_SET = new Set(TB_COA.filter(a => a.parent).map(a => a.parent));
@@ -12,15 +45,17 @@ const TYPE_LABELS = {
   liability: "LIABILITAS",
   equity: "EKUITAS",
   revenue: "PENDAPATAN",
+  contra_revenue: "KONTRA PENDAPATAN",
   expense: "BEBAN",
 };
-const TYPE_ORDER = ["asset", "contra_asset", "liability", "equity", "revenue", "expense"];
+const TYPE_ORDER = ["asset", "contra_asset", "liability", "equity", "revenue", "contra_revenue", "expense"];
 const TYPE_BADGE_CLS = {
   asset: "tb-asset",
   contra_asset: "tb-contra",
   liability: "tb-liab",
   equity: "tb-equity",
   revenue: "tb-rev",
+  contra_revenue: "tb-contra",
   expense: "tb-exp",
 };
 
@@ -126,35 +161,35 @@ function detectAnomalies(tb) {
     }
   });
 
-  const ar = byCode["1-1200"];
-  const cadangan = byCode["1-1300"];
-  if (ar && cadangan && ar.closing_balance > 0 && cadangan.closing_balance === 0) {
+  const ar = byCode["1-2100"];
+  const allowance = byCode["1-2200"];
+  if (ar && allowance && ar.closing_balance > 0 && allowance.closing_balance === 0) {
     out.push({
-      severity: "critical", code: "1-1300", name: "Cadangan Piutang Ragu",
+      severity: "critical", code: "1-2200", name: allowance.name,
       title: "Cadangan piutang ragu-ragu belum dibentuk",
-      desc: `Piutang Usaha bersaldo ${rp(ar.closing_balance)} namun Cadangan Piutang Ragu masih nol. Standar akuntansi mensyaratkan estimasi tidak tertagih.`,
+      desc: `${ar.name} bersaldo ${rp(ar.closing_balance)} namun cadangan masih nol. Standar akuntansi mensyaratkan estimasi tidak tertagih.`,
       action: "Hitung dan catat pencadangan piutang sesuai kebijakan perusahaan.",
     });
   }
 
-  const rev4010 = byCode["4-1010"];
-  const rev4020 = byCode["4-1020"];
-  const totalRev = (rev4010 ? rev4010.closing_balance : 0) + (rev4020 ? rev4020.closing_balance : 0);
+  // Total operating revenue across all product / service lines
+  const totalRev = ["4-1100", "4-1200", "4-1300", "4-1400", "4-1500"]
+    .reduce((s, c) => s + (byCode[c]?.closing_balance || 0), 0);
   if (ar && totalRev > 0 && ar.closing_balance > totalRev * 0.55) {
     out.push({
-      severity: "warn", code: "1-1200", name: "Piutang Usaha",
+      severity: "warn", code: "1-2100", name: ar.name,
       title: "Piutang usaha tinggi relatif terhadap pendapatan",
       desc: `Piutang ${rp(ar.closing_balance)} = ${Math.round(ar.closing_balance / totalRev * 100)}% dari total pendapatan. Risiko kolektibilitas meningkat jika melewati 45 hari.`,
       action: "Tinjau aging piutang dan kebijakan kredit pelanggan.",
     });
   }
 
-  const iklan = byCode["5-1030"];
-  if (iklan && iklan.opening_balance === 0 && iklan.period_debit > 15000000) {
+  const marketing = byCode["6-1200"];
+  if (marketing && marketing.opening_balance === 0 && marketing.period_debit > 15000000) {
     out.push({
-      severity: "warn", code: "5-1030", name: "Beban Iklan & Pemasaran",
+      severity: "warn", code: "6-1200", name: marketing.name,
       title: "Lonjakan beban iklan tanpa historis saldo awal",
-      desc: `Beban Iklan & Pemasaran mencatat debit ${rp(iklan.period_debit)} pada periode ini dengan saldo awal nol — peningkatan signifikan tanpa referensi historis.`,
+      desc: `${marketing.name} mencatat debit ${rp(marketing.period_debit)} pada periode ini dengan saldo awal nol — peningkatan signifikan tanpa referensi historis.`,
       action: "Konfirmasi otorisasi anggaran pemasaran dan kontrak terkait.",
     });
   }
@@ -162,29 +197,30 @@ function detectAnomalies(tb) {
   const ap = byCode["2-1100"];
   if (ap && ap.closing_balance > 80000000) {
     out.push({
-      severity: "warn", code: "2-1100", name: "Utang Usaha",
+      severity: "warn", code: "2-1100", name: ap.name,
       title: "Saldo utang usaha melebihi ambang batas",
-      desc: `Utang Usaha bersaldo ${rp(ap.closing_balance)} — melampaui threshold internal Rp 80 juta. Pastikan jadwal pembayaran vendor sudah direncanakan agar tidak terkena denda keterlambatan.`,
+      desc: `${ap.name} bersaldo ${rp(ap.closing_balance)} — melampaui threshold internal Rp 80 juta. Pastikan jadwal pembayaran vendor sudah direncanakan agar tidak terkena denda keterlambatan.`,
       action: "Tinjau aging schedule utang usaha dan prioritaskan pembayaran jatuh tempo.",
     });
   }
 
-  const konsultan = byCode["5-1070"];
-  if (konsultan && konsultan.period_debit >= 25000000) {
+  const proSvc = byCode["6-2700"];
+  if (proSvc && proSvc.period_debit >= 25000000) {
+    const txs = (proSvc.entries || []).slice(0, 4).map((e) => e.je_ref).join(", ");
     out.push({
-      severity: "warn", code: "5-1070", name: "Biaya Konsultan & Profesional",
+      severity: "warn", code: "6-2700", name: proSvc.name,
       title: "Kemungkinan tagihan ganda dari konsultan",
-      desc: `Terdapat 2 transaksi konsultan dalam periode yang sama (JE-2025-0004 & JE-2025-0018) dengan total ${rp(konsultan.period_debit)}. Verifikasi tidak ada duplikasi invoice.`,
+      desc: `Terdapat ${proSvc.entries.length} transaksi konsultan dalam periode yang sama${txs ? ` (${txs}${proSvc.entries.length > 4 ? ", …" : ""})` : ""} dengan total ${rp(proSvc.period_debit)}. Verifikasi tidak ada duplikasi invoice.`,
       action: "Cocokkan dengan kontrak dan invoice fisik dari vendor konsultan.",
     });
   }
 
-  const ppn = byCode["5-2200"];
-  if (ppn && ppn.closing_balance > 10000000) {
+  const vatIn = byCode["1-5100"];
+  if (vatIn && vatIn.closing_balance > 10000000) {
     out.push({
-      severity: "info", code: "5-2200", name: "Beban PPN Masukan",
+      severity: "info", code: "1-5100", name: vatIn.name,
       title: "PPN masukan belum dikompensasikan ke PPN keluaran",
-      desc: `Saldo PPN Masukan ${rp(ppn.closing_balance)} masih diakui sebagai beban. Periksa apakah kompensasi dengan PPN Keluaran (2-1200) sudah dilakukan untuk SPT Masa PPN.`,
+      desc: `Saldo PPN Masukan ${rp(vatIn.closing_balance)} masih ditahan sebagai aset. Periksa apakah kompensasi dengan PPN Keluaran (2-2100) sudah dilakukan untuk SPT Masa PPN.`,
       action: "Koordinasikan dengan tim pajak untuk rekonsiliasi PPN bulan berjalan.",
     });
   }
@@ -458,11 +494,13 @@ export default function TrialBalancePage() {
   }
 
   // ── spotlight ──────────────────────────────────────────────────────────
+  // Spotlight tiles use seed CoA names so a code rename / language change
+  // flows through automatically.
   const SPOTLIGHTS = [
-    { code: "1-1100", label: "Kas & Bank", barColor: null },
-    { code: "1-1200", label: "Piutang Usaha", barColor: null },
-    { code: "2-1100", label: "Utang Usaha", barColor: "var(--danger-text)" },
-    { code: "3-1200", label: "Laba Ditahan", barColor: "var(--success-text)" },
+    { code: "1-1300", label: COA_BY_CODE["1-1300"]?.name || "Bank Operating", barColor: null },
+    { code: "1-2100", label: COA_BY_CODE["1-2100"]?.name || "Trade Receivable", barColor: null },
+    { code: "2-1100", label: COA_BY_CODE["2-1100"]?.name || "Trade Payable", barColor: "var(--danger-text)" },
+    { code: "3-1300", label: COA_BY_CODE["3-1300"]?.name || "Retained Earnings", barColor: "var(--success-text)" },
   ];
   const spotByCode = useMemo(() => {
     const m = {};
