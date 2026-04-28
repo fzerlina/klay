@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useApp } from "../context/AppContext";
 import { CAT_LABELS, PPH_LABELS, ACCT_LABELS, DEFTAX_LABELS } from "../data/labels";
 import { formatRupiah, formatDate, daysSince } from "../lib/format";
@@ -11,10 +11,18 @@ function fmtLastTx(dateStr) {
   return { text: days > 60 ? `${text} · ${days} hari lalu` : text, stale: days > 60 };
 }
 
-const AP_BALANCE = { V001: 0, V002: 9435000, V003: 16650000, V004: 27500000, V005: 13750000 };
-
 export default function VendorsPage() {
-  const { vendors } = useApp();
+  const { vendors, bills } = useApp();
+  // AP balance per vendor = sum of unpaid bill `sisa` for that vendor.
+  // Computed from bills so renames / new vendors flow through automatically.
+  const AP_BALANCE = useMemo(() => {
+    const m = {};
+    for (const b of bills) {
+      if (b.pay === "paid") continue;
+      m[b.vendor] = (m[b.vendor] || 0) + b.sisa;
+    }
+    return m;
+  }, [bills]);
   const [selectedId, setSelectedId] = useState(null);
   const [drawerTab, setDrawerTab] = useState("detail");
   const [search, setSearch] = useState("");

@@ -432,9 +432,11 @@ function randomDateIn(month) {
   return new Date(t).toISOString().slice(0, 10);
 }
 
-// 1. Anchored to existing bills/invoices (~16 JEs)
-BILLS.forEach(emitBillJEs);
-INVOICES.forEach(emitInvoiceJEs);
+// 1. Anchored to the first 8 bills + 8 invoices (~16 JEs).
+// These are the hand-curated demo records; the remaining synthetic bills /
+// invoices in the seed don't need linked JEs to display in their pages.
+BILLS.slice(0, 8).forEach(emitBillJEs);
+INVOICES.slice(0, 8).forEach(emitInvoiceJEs);
 const anchoredCount = collected.length;
 
 // 2. Calendar JEs (recurring patterns)
