@@ -28,6 +28,23 @@ const JE_DIM = JE_DIMENSIONS;
 // it back at module load so hardcoded strings don't drift when the seed regens.
 const ANOMALY_JE_ID = Object.keys(ANOMALY_FLAGS)[0] || null;
 
+// Live counts computed once at module load. The closing-window narrative,
+// AI tip, checklist, and AI log read from these so the demo numbers stay
+// truthful when the JE generator re-runs with different seeds or counts.
+const POSTED_COUNT  = JOURNAL_ENTRIES.filter((j) => j.status === "posted").length;
+const PENDING_COUNT = JOURNAL_ENTRIES.filter((j) => j.status === "pending").length;
+const DRAFT_COUNT   = JOURNAL_ENTRIES.filter((j) => j.status === "draft").length;
+const ANOMALY_COUNT = Object.keys(ANOMALY_FLAGS).length;
+const MATCHED_COUNT = Object.keys(RECONCILIATION).length;
+const RECON_PCT     = POSTED_COUNT > 0 ? Math.round((MATCHED_COUNT / POSTED_COUNT) * 100) : 0;
+const UNMATCHED_COUNT = Math.max(0, POSTED_COUNT - MATCHED_COUNT);
+const RECENT_POST_COUNT = Math.min(7, POSTED_COUNT); // for "X recent posts" narrative
+// Days remaining in current month (relative to demo TODAY). Hardcoded today
+// keeps the demo deterministic; replace with `new Date()` for a live clock.
+const DEMO_TODAY = new Date("2025-04-23T00:00:00");
+const MONTH_END = new Date(DEMO_TODAY.getFullYear(), DEMO_TODAY.getMonth() + 1, 0);
+const DAYS_TO_CLOSE = Math.max(0, Math.ceil((MONTH_END - DEMO_TODAY) / 86400000));
+
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 function getDisplayRef(je) {
   if (je.reference_type === "invoice" || je.reference_type === "invoice_payment") return INV_REFS[je.reference_id] || je.je_number;
@@ -290,7 +307,7 @@ export default function GeneralLedgerPage() {
                     <div className="gl-aft-close" onClick={e=>{e.stopPropagation();setTipHidden(true);}}>
                       <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                     </div>
-                    <div className="gl-aft-body">7 hari lagi closing. GL seimbang tapi <strong style={{color:"#fff"}}>3 JE pending</strong> &amp; <strong style={{color:"#fff"}}>1 anomali</strong> masih belum selesai — rekon <strong style={{color:"#fff"}}>76%</strong>.</div>
+                    <div className="gl-aft-body">{DAYS_TO_CLOSE} hari lagi closing. GL seimbang tapi <strong style={{color:"#fff"}}>{PENDING_COUNT} JE pending</strong> &amp; <strong style={{color:"#fff"}}>{ANOMALY_COUNT} anomali</strong> masih belum selesai — rekon <strong style={{color:"#fff"}}>{RECON_PCT}%</strong>.</div>
                     <div className="gl-aft-cta" onClick={openAI}>
                       <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" fill="#fff" stroke="none"/></svg>
                       Klik untuk tanya Klay AI
@@ -347,7 +364,7 @@ export default function GeneralLedgerPage() {
               {/* Metric cards */}
               <div className="gl-metric-cards">
                 {[
-                  { accent:"neutral", onClick:openAI,         title:"Running Balance", value:<div className="gl-mc-value">616,6jt</div>,        sub:"PT Sejahtera Makmur · Jan 2025", badge:<span className="gl-mc-badge up"><svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>+28% dari periode lalu</span>, action:null },
+                  { accent:"neutral", onClick:openAI,         title:"Running Balance", value:<div className="gl-mc-value">616,6jt</div>,        sub:"PT Sejahtera Makmur · Apr 2025", badge:<span className="gl-mc-badge up"><svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>+28% dari periode lalu</span>, action:null },
                   { accent:"warn",    onClick:null,            title:"JE Pending",      value:<div className="gl-mc-count">3</div>,               sub:"pending approval",               badge:<span className="gl-mc-badge muted">Belum bisa dipost</span>,              action:<div className="gl-mc-action" style={{color:"var(--color-text-tertiary)",fontWeight:500}}>Butuh approval manager</div>, disabled:true },
                   { accent:"danger",  onClick:openAnomalyFromCard, title:"Anomali",     value:<div className="gl-mc-count">1</div>,               sub:"terdeteksi",                     badge:<span className="gl-mc-badge danger">Gaji naik 16.9%</span>,               action:<div className="gl-mc-action">Lihat di tabel <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></div> },
                   { accent:"info",    onClick:filterUnmatched, title:"Unmatched ke Bank",value:<div className="gl-mc-count">12</div>,             sub:"perlu direkonsiliasi",           badge:<span className="gl-mc-badge info">Buka rekonsiliasi</span>,               action:<div className="gl-mc-action">Filter unmatched <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></div> },
@@ -381,13 +398,13 @@ export default function GeneralLedgerPage() {
                   <div className="gl-ncl-body">
                     <div className="gl-ncl-two-col">
                       <div className="gl-ncl-checklist">
-                        <div className="gl-ncl-col-title">Closing Checklist · Jan 2025</div>
+                        <div className="gl-ncl-col-title">Closing Checklist · Apr 2025</div>
                         {[
-                          {ic:"ok",  title:"GL seimbang",                 sub:"Total debit = kredit",                  btn:"Trial balance →",  onClick:()=>{}                                               },
-                          {ic:"ok",  title:"Rekonsiliasi 76%",             sub:"38 dari 50 matched",                    btn:"Lanjutkan →",       onClick:filterUnmatched                                      },
-                          {ic:"warn",title:"Anomali belum diselesaikan",   sub:`${ANOMALY_JE_ID || "—"} perlu review`,  btn:"Lihat anomali →",   onClick:openAnomalyFromCard                                  },
-                          {ic:"err", title:"3 JE belum di-post",           sub:"Menunggu approval finance manager",     btn:"Tinjau JE →",       onClick:()=>{setTypeFilter("je");scrollToTable();}           },
-                          {ic:"err", title:"Periode belum dikunci",        sub:"Selesaikan semua item di atas dulu",    btn:"Kunci Jan 2025",    onClick:()=>{},                    disabled:true             },
+                          {ic:"ok",  title:"GL seimbang",                                  sub:"Total debit = kredit",                                            btn:"Trial balance →",   onClick:()=>{}                                               },
+                          {ic:"ok",  title:`Rekonsiliasi ${RECON_PCT}%`,                    sub:`${MATCHED_COUNT} dari ${POSTED_COUNT} JE posted matched`,         btn:"Lanjutkan →",        onClick:filterUnmatched                                      },
+                          {ic:"warn",title:"Anomali belum diselesaikan",                   sub:`${ANOMALY_JE_ID || "—"} perlu review`,                            btn:"Lihat anomali →",    onClick:openAnomalyFromCard                                  },
+                          {ic:"err", title:`${PENDING_COUNT} JE belum di-post`,             sub:"Menunggu approval finance manager",                              btn:"Tinjau JE →",        onClick:()=>{setTypeFilter("je");scrollToTable();}           },
+                          {ic:"err", title:"Periode belum dikunci",                        sub:"Selesaikan semua item di atas dulu",                              btn:"Kunci Apr 2025",    onClick:()=>{},                    disabled:true             },
                         ].map((item,i)=>(
                           <div key={i} className="gl-ncl-ci">
                             <div className={`gl-ncl-ci-icon gl-ci-${item.ic}`}>
@@ -406,10 +423,10 @@ export default function GeneralLedgerPage() {
                       <div className="gl-ncl-ailog">
                         <div className="gl-ncl-col-title">Yang Dilakukan AI Hari Ini</div>
                         {[
-                          {warn:false, text:"Auto-rekonsiliasi bank — 38 transaksi matched berdasarkan nominal + tanggal ±1 hari, confidence 97%",             ts:"08:02"},
-                          {warn:false, text:"Klasifikasi otomatis — 21 entri baru, model v2.1, akurasi rata-rata 96%",                                           ts:"10:14"},
-                          {warn:true,  text:`Anomali terdeteksi — ${ANOMALY_JE_ID || "(none)"} Payroll Accrual unusually high, +17% vs trailing 3-month average`,  ts:"11:30"},
-                          {warn:false, text:"Running balance diperbarui setelah 5 entri baru di-post",                                                            ts:"14:07"},
+                          {warn:false, text:`Auto-rekonsiliasi bank — ${MATCHED_COUNT} transaksi matched berdasarkan nominal + tanggal ±1 hari, confidence 97%`,    ts:"08:02"},
+                          {warn:false, text:`Klasifikasi otomatis — ${DRAFT_COUNT} entri draft baru, model v2.1, akurasi rata-rata 96%`,                              ts:"10:14"},
+                          {warn:true,  text:`Anomali terdeteksi — ${ANOMALY_JE_ID || "(none)"} Payroll Accrual unusually high, +17% vs trailing 3-month average`,    ts:"11:30"},
+                          {warn:false, text:`Running balance diperbarui setelah ${RECENT_POST_COUNT} entri di-post`,                                                  ts:"14:07"},
                         ].map((item,i)=>(
                           <div key={i} className="gl-ncl-log-item">
                             <div className={`gl-ncl-log-dot${item.warn?" warn":""}`}/>
@@ -576,7 +593,7 @@ export default function GeneralLedgerPage() {
                 </div>
                 <div className="gl-ai-head-text">
                   <div className="gl-ai-head-title">Klay AI Co-pilot</div>
-                  <div className="gl-ai-head-sub">● AKTIF · General Ledger Jan 2025</div>
+                  <div className="gl-ai-head-sub">● AKTIF · General Ledger Apr 2025</div>
                 </div>
                 <div className="gl-ai-head-close" onClick={()=>setAiOpen(false)}>
                   <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -585,7 +602,7 @@ export default function GeneralLedgerPage() {
               {/* Closing deadline banner */}
               <div style={{background:"var(--warning-surface)",borderBottom:"1px solid var(--warning-border)",padding:"8px 14px",display:"flex",alignItems:"flex-start",gap:8,flexShrink:0}}>
                 <svg width="13" height="13" viewBox="0 0 24 24" style={{stroke:"var(--warning-text)",fill:"none",strokeWidth:2,flexShrink:0,marginTop:1}}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                <span style={{fontSize:11,color:"var(--warning-text)",fontWeight:500,lineHeight:1.5}}><strong>7 hari lagi closing Jan 2025.</strong> Ada 4 item yang perlu diselesaikan sebelum periode bisa dikunci.</span>
+                <span style={{fontSize:11,color:"var(--warning-text)",fontWeight:500,lineHeight:1.5}}><strong>{DAYS_TO_CLOSE} hari lagi closing Apr 2025.</strong> Ada {PENDING_COUNT + ANOMALY_COUNT + (UNMATCHED_COUNT > 0 ? 1 : 0)} item yang perlu diselesaikan sebelum periode bisa dikunci.</span>
               </div>
               {/* Tabs */}
               <div className="gl-ai-tabs">
@@ -606,7 +623,7 @@ export default function GeneralLedgerPage() {
                         <div dangerouslySetInnerHTML={{__html:msg.text}}/>
                         {msg.chips&&(
                           <div style={{display:"flex",flexWrap:"wrap",gap:5,marginTop:8}}>
-                            <span className="gl-ai-chip je"   onClick={()=>{setTypeFilter("je");scrollToTable();}}>3 JE pending →</span>
+                            <span className="gl-ai-chip je"   onClick={()=>{setTypeFilter("je");scrollToTable();}}>{PENDING_COUNT} JE pending →</span>
                             <span className="gl-ai-chip warn" onClick={openAnomalyFromCard}>Anomali JE-0001 →</span>
                             <span className="gl-ai-chip muted" onClick={filterUnmatched}>12 unmatched →</span>
                           </div>
@@ -622,7 +639,7 @@ export default function GeneralLedgerPage() {
                   </div>
                   <div className="gl-ai-chat-box">
                     <div className="gl-ai-chat-inner">
-                      <textarea ref={aiInputRef} className="gl-ai-chat-ta" placeholder="Tanya tentang GL Jan 2025…" value={aiInput} rows={1}
+                      <textarea ref={aiInputRef} className="gl-ai-chat-ta" placeholder="Tanya tentang GL Apr 2025…" value={aiInput} rows={1}
                         onChange={e=>{setAiInput(e.target.value);e.target.style.height="auto";e.target.style.height=e.target.scrollHeight+"px";}}
                         onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendAI();}}}
                       />

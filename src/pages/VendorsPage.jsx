@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { useApp } from "../context/AppContext";
+import { VENDORS as vendors } from "../data/seed/vendors";
+import { BILLS as bills } from "../data/seed/bills";
 import { CAT_LABELS, PPH_LABELS, ACCT_LABELS, DEFTAX_LABELS } from "../data/labels";
 import { formatRupiah, formatDate, daysSince } from "../lib/format";
 import "./modules.css";
@@ -12,7 +13,6 @@ function fmtLastTx(dateStr) {
 }
 
 export default function VendorsPage() {
-  const { vendors, bills } = useApp();
   // AP balance per vendor = sum of unpaid bill `sisa` for that vendor.
   // Computed from bills so renames / new vendors flow through automatically.
   const AP_BALANCE = useMemo(() => {

@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { useApp } from "../context/AppContext";
+import { CUSTOMERS as customers } from "../data/seed/customers";
+import { INVOICES as invoices } from "../data/seed/invoices";
 import { formatRupiah, formatDate, daysSince, initials } from "../lib/format";
 import "./modules.css";
 
 export default function CustomersPage() {
-  const { customers, invoices } = useApp();
   const [selectedId, setSelectedId] = useState(null);
   const [drawerTab, setDrawerTab] = useState("detail");
   const [search, setSearch] = useState("");

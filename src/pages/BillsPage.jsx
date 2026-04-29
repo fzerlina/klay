@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
-import { useApp } from "../context/AppContext";
+import { VENDORS as vendors } from "../data/seed/vendors";
+import { BILLS as bills } from "../data/seed/bills";
 import { formatRupiah, formatDate, daysSince } from "../lib/format";
 import "./modules.css";
 
@@ -14,7 +15,6 @@ function payBadgeClass(pay) {
 }
 
 export default function BillsPage() {
-  const { bills, vendors } = useApp();
   const [selectedId, setSelectedId] = useState(null);
   const [drawerTab, setDrawerTab] = useState("detail");
   const [search, setSearch] = useState("");
@@ -387,7 +387,7 @@ export default function BillsPage() {
                         <div className={`audit-dot ${a.type}`} />
                         <div>
                           <div className="audit-action">{a.action}</div>
-                          <div className="audit-by">{a.by} · {a.date} {a.time}</div>
+                          <div className="audit-by">{a.by} · {formatDate(a.date)} {a.time}</div>
                         </div>
                       </div>
                     ))}

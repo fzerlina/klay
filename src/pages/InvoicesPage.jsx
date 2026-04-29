@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
-import { useApp } from "../context/AppContext";
+import { INVOICES as invoices } from "../data/seed/invoices";
+import { CUSTOMERS as customers } from "../data/seed/customers";
 import { formatRupiah, formatDate, initials } from "../lib/format";
 import "./modules.css";
 
@@ -13,7 +14,6 @@ function payBadgeClass(payStatus) {
 }
 
 export default function InvoicesPage() {
-  const { invoices, customers } = useApp();
   const [selectedId, setSelectedId] = useState(null);
   const [drawerTab, setDrawerTab] = useState("detail");
   const [search, setSearch] = useState("");
@@ -283,7 +283,7 @@ export default function InvoicesPage() {
                         <div className={`audit-dot ${a.type}`} />
                         <div>
                           <div className="audit-action">{a.action}</div>
-                          <div className="audit-by">{a.by} · {a.date} {a.time}</div>
+                          <div className="audit-by">{a.by} · {formatDate(a.date)} {a.time}</div>
                         </div>
                       </div>
                     ))}

@@ -137,11 +137,8 @@ function offsetDays(isoDate, days) {
   d.setDate(d.getDate() + days);
   return d.toISOString().slice(0, 10);
 }
-function bahasaDate(iso) {
-  const months = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
-  const d = new Date(iso + "T00:00:00");
-  return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
-}
+// Audit dates stored as ISO so they round-trip cleanly. The bills/invoices
+// pages render them via formatDate at display time.
 function emailFromCompany(name) {
   const slug = name.replace(/^(PT|CV|UD|Toko|Koperasi)\s+/i, "").trim()
     .toLowerCase().replace(/\s+/g, "").replace(/[^a-z]/g, "").slice(0, 18);
@@ -344,11 +341,11 @@ function makeBill(idx) {
       type: "created",
       action: isAI ? "Bill dibuat (Draft — OCR AI)" : "Bill dibuat",
       by: isAI ? "System (OCR Auto)" : pick(["Sarah Wijaya", "Andi Prasetyo", "Rina Kusuma"]),
-      date: bahasaDate(date),
+      date: date,
       time: `${String(between(8, 17)).padStart(2, "0")}:${String(between(0, 59)).padStart(2, "0")}`,
     }, ...(approval === "approved" ? [{
       type: "approved", action: "Disetujui", by: "Budi Santoso",
-      date: bahasaDate(offsetDays(date, between(1, 5))),
+      date: offsetDays(date, between(1, 5)),
       time: `${String(between(9, 16)).padStart(2, "0")}:${String(between(0, 59)).padStart(2, "0")}`,
     }] : [])],
   };
@@ -423,17 +420,17 @@ function makeInvoice(idx) {
       type: "created",
       action: isAI ? "Invoice dibuat otomatis oleh AI" : "Invoice dibuat",
       by: isAI ? "Klay AI System" : pick(["Sarah Wijaya", "Andi Prasetyo", "Rina Kusuma"]),
-      date: bahasaDate(date),
+      date: date,
       time: `${String(between(8, 17)).padStart(2, "0")}:${String(between(0, 59)).padStart(2, "0")}`,
     }, ...(approval === "terkirim" ? [{
       type: "sent", action: "Invoice dikirim",
       by: pick(["Sarah Wijaya", "Andi Prasetyo"]),
-      date: bahasaDate(offsetDays(date, between(0, 2))),
+      date: offsetDays(date, between(0, 2)),
       time: `${String(between(9, 16)).padStart(2, "0")}:${String(between(0, 59)).padStart(2, "0")}`,
     }] : []), ...(payStatus === "lunas" ? [{
       type: "paid", action: "Pembayaran diterima",
       by: pick(["Sarah Wijaya", "Andi Prasetyo"]),
-      date: bahasaDate(offsetDays(due, -between(1, 10))),
+      date: offsetDays(due, -between(1, 10)),
       time: `${String(between(9, 16)).padStart(2, "0")}:${String(between(0, 59)).padStart(2, "0")}`,
     }] : [])],
   };
