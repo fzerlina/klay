@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { JOURNAL_ENTRIES } from "../data/seed/journalEntries";
 import { formatRupiah } from "../lib/format";
+import "./modules.css";
 
 const PAGE_SIZE_DEFAULT = 20;
 
@@ -136,105 +137,98 @@ export default function JournalEntryPage() {
   return (
     <div className="je-view">
 
-      {/* ── COMMAND CENTER BAND ─────────────────────────────────── */}
-      <div className="cc-band">
-        {/* Top row */}
-        <div className="cc-top">
+      {/* ── ORANGE BANNER ────────────────────────────────────────── */}
+      <div className="oz-banner">
+        <div className="oz-top">
           <div>
-            <div className="cc-page-title">Journal Entry</div>
-            <div className="cc-page-sub">PT Sejahtera Makmur · Apr 2025 · {allRows.length} entries</div>
+            <div className="oz-title">Journal Entry</div>
+            <div className="oz-subtitle">PT Sejahtera Makmur · Apr 2025 · {allRows.length} entries</div>
           </div>
-          <div className="cc-spacer" />
-          <div className="cc-actions">
-            <button className="btn-klayai">
-              <span className="ai-btn-dot" />
+          <div className="oz-actions">
+            <button className="oz-btn">
+              <svg viewBox="0 0 24 24"><path d="M12 2 L13.8 8.5 L20.5 8.5 L15.2 12.5 L17.1 19 L12 15.2 L6.9 19 L8.8 12.5 L3.5 8.5 L10.2 8.5 Z"/></svg>
               Klay AI
-              <span className="ai-btn-badge">4</span>
+              <span className="ai-btn-badge" style={{ marginLeft: 2 }}>4</span>
             </button>
-            <button className="btn-cc-export">
-              <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <button className="oz-btn">
+              <svg viewBox="0 0 24 24"><polyline points="21 15 21 21 3 21 3 15"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
               Export
             </button>
-            <button className="btn btn-primary" style={{ borderRadius: "var(--radius-sm)", display: "inline-flex", alignItems: "center", gap: 5 }}>
-              <svg viewBox="0 0 24 24" style={{ width: 13, height: 13, stroke: "#fff", fill: "none", strokeWidth: 2.5 }}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            <button className="oz-btn primary">
+              <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               Buat Jurnal Baru
             </button>
           </div>
         </div>
-
-        {/* Summary tiles */}
-        <div className="cc-tiles">
-          <div className="cc-tile" onClick={() => setFilter("Draft")}>
-            <div className="ct-count ctc-r">{counts.Draft}</div>
-            <div className="ct-title">Draft</div>
-            <div className="ct-desc">Belum di-post ke GL</div>
-            <div className="ct-cta ctcta-r">Lihat draft →</div>
+        <div className="oz-cards">
+          <div className="oz-card" onClick={() => setFilter("Draft")}>
+            <div className="oz-card-label">Draft</div>
+            <div className="oz-card-num danger">{counts.Draft}</div>
+            <div className="oz-card-sub">Belum di-post ke GL</div>
           </div>
-          <div className="cc-tile" onClick={() => setFilter("Pending")}>
-            <div className="ct-count ctc-a">{counts.Pending}</div>
-            <div className="ct-title">Pending approval</div>
-            <div className="ct-desc">Menunggu keputusan</div>
-            <div className="ct-cta ctcta-a">Lihat pending →</div>
+          <div className="oz-card" onClick={() => setFilter("Pending")}>
+            <div className="oz-card-label">Pending Approval</div>
+            <div className="oz-card-num warn">{counts.Pending}</div>
+            <div className="oz-card-sub">Menunggu keputusan</div>
           </div>
-          <div className="cc-tile" onClick={() => setFilter("Posted")}>
-            <div className="ct-count ctc-b">{counts.Posted}</div>
-            <div className="ct-title">Posted</div>
-            <div className="ct-desc">Sudah di-post ke GL</div>
-            <div className="ct-cta ctcta-b">Lihat posted →</div>
+          <div className="oz-card" onClick={() => setFilter("Posted")}>
+            <div className="oz-card-label">Posted</div>
+            <div className="oz-card-num action">{counts.Posted}</div>
+            <div className="oz-card-sub">Sudah di-post ke GL</div>
           </div>
-          <div className="cc-tile" onClick={() => setFilter("Void")}>
-            <div className="ct-count ctc-n">{counts.Void}</div>
-            <div className="ct-title">Void</div>
-            <div className="ct-desc">Dibatalkan</div>
+          <div className="oz-card" onClick={() => setFilter("Void")}>
+            <div className="oz-card-label">Void</div>
+            <div className="oz-card-num muted">{counts.Void}</div>
+            <div className="oz-card-sub">Dibatalkan</div>
           </div>
         </div>
-
-        {/* Expand toggle */}
-        <div className="cc-expand" onClick={() => setExpanded((e) => !e)}>
-          <span className="cc-exp-lbl">
-            {expanded ? "Sembunyikan checklist & AI log" : "Lihat checklist & AI log"}
-          </span>
-          <svg viewBox="0 0 24 24" style={{ width: 12, height: 12, stroke: "var(--color-text-tertiary)", fill: "none", strokeWidth: 2, transform: expanded ? "rotate(180deg)" : "none", transition: "transform .2s", flexShrink: 0 }}>
-            <polyline points="6 9 12 15 18 9"/>
-          </svg>
-        </div>
-
-        {/* Expandable checklist + AI log */}
-        {expanded && (
-          <div className="cc-exp-inner">
-            <div>
-              <div className="exp-col-label">To-do · Apr 2025</div>
-              {CHECKLIST.map((item, i) => (
-                <div key={i} className="cl-item">
-                  <div className={`cl-icon ${item.icon}`}>{item.icon === "ci-ok" ? "✓" : item.icon === "ci-warn" ? "!" : "✕"}</div>
-                  <div className="cl-body">
-                    <div className="cl-title">{item.title}</div>
-                    <div className="cl-sub">{item.sub}</div>
-                  </div>
-                  {item.cta && (
-                    <button className={`cl-cta ${item.ctaCls}`} onClick={() => item.filter && setFilter(item.filter)}>
-                      {item.cta}
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-            <div>
-              <div className="exp-col-label">Yang dilakukan AI hari ini</div>
-              {AI_LOG.map((item, i) => (
-                <div key={i} className="al-item">
-                  <div className="al-dot" style={{ background: item.dot }} />
-                  <div className="al-text">{item.text}</div>
-                  <div className="al-time">{item.time}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
 
       {/* ── SCROLL AREA ──────────────────────────────────────────── */}
       <div className="je-scroll">
+
+        {/* Expandable checklist + AI log */}
+        <div style={{ background: "var(--color-surface-raised)", border: "1px solid var(--color-border-default)", borderRadius: "var(--radius-md)", marginBottom: 10, overflow: "hidden" }}>
+          <div className="cc-expand" onClick={() => setExpanded((e) => !e)} style={{ borderTop: "none", margin: 0 }}>
+            <span className="cc-exp-lbl">
+              {expanded ? "Sembunyikan checklist & AI log" : "Lihat checklist & AI log"}
+            </span>
+            <svg viewBox="0 0 24 24" style={{ width: 12, height: 12, stroke: "var(--color-text-tertiary)", fill: "none", strokeWidth: 2, transform: expanded ? "rotate(180deg)" : "none", transition: "transform .2s", flexShrink: 0 }}>
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </div>
+          {expanded && (
+            <div className="cc-exp-inner" style={{ padding: "0 14px 12px", borderTop: "1px solid var(--color-border-default)", paddingTop: 12 }}>
+              <div>
+                <div className="exp-col-label">To-do · Apr 2025</div>
+                {CHECKLIST.map((item, i) => (
+                  <div key={i} className="cl-item">
+                    <div className={`cl-icon ${item.icon}`}>{item.icon === "ci-ok" ? "✓" : item.icon === "ci-warn" ? "!" : "✕"}</div>
+                    <div className="cl-body">
+                      <div className="cl-title">{item.title}</div>
+                      <div className="cl-sub">{item.sub}</div>
+                    </div>
+                    {item.cta && (
+                      <button className={`cl-cta ${item.ctaCls}`} onClick={() => item.filter && setFilter(item.filter)}>
+                        {item.cta}
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <div>
+                <div className="exp-col-label">Yang dilakukan AI hari ini</div>
+                {AI_LOG.map((item, i) => (
+                  <div key={i} className="al-item">
+                    <div className="al-dot" style={{ background: item.dot }} />
+                    <div className="al-text">{item.text}</div>
+                    <div className="al-time">{item.time}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Filter bar */}
         <div className="filter-bar" style={{ marginBottom: 10 }}>

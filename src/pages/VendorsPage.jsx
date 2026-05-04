@@ -27,15 +27,17 @@ export default function VendorsPage() {
   const [drawerTab, setDrawerTab] = useState("detail");
   const [search, setSearch] = useState("");
   const [catFilter, setCatFilter] = useState("");
-  const [attnOpen, setAttnOpen] = useState(true);
-  const [overdueOpen, setOverdueOpen] = useState(true);
-  const [staleOpen, setStaleOpen] = useState(false);
+  const [viewFilter, setViewFilter] = useState(""); // "", "ap", "stale", "inactive"
 
   const staleVendors = vendors.filter(v => daysSince(v.lastTx) > 60 && v.status === "active");
-  const overdueVendors = vendors.filter(v => (AP_BALANCE[v.id] || 0) > 0 && daysSince(v.lastTx) > 30);
+  const apVendors = vendors.filter(v => (AP_BALANCE[v.id] || 0) > 0);
+  const inactiveVendors = vendors.filter(v => v.status === "inactive");
 
   const filtered = vendors.filter(v => {
     if (catFilter && v.category !== catFilter) return false;
+    if (viewFilter === "ap" && !((AP_BALANCE[v.id] || 0) > 0)) return false;
+    if (viewFilter === "stale" && !(daysSince(v.lastTx) > 60 && v.status === "active")) return false;
+    if (viewFilter === "inactive" && v.status !== "inactive") return false;
     const q = search.toLowerCase();
     if (q && !v.name.toLowerCase().includes(q) && !v.code.toLowerCase().includes(q)) return false;
     return true;
@@ -45,110 +47,54 @@ export default function VendorsPage() {
   const totalAP = vendors.reduce((s, v) => s + (AP_BALANCE[v.id] || 0), 0);
   const activeCount = vendors.filter(v => v.status === "active").length;
 
+  function applyView(v) { setViewFilter(viewFilter === v ? "" : v); }
+
   return (
     <div className="mod-page">
+      {/* Orange banner */}
+      <div className="oz-banner">
+        <div className="oz-top">
+          <div>
+            <div className="oz-title">Vendors</div>
+            <div className="oz-subtitle">{vendors.length} vendor · {activeCount} aktif</div>
+          </div>
+          <div className="oz-actions">
+            <button className="oz-btn">
+              <svg viewBox="0 0 24 24"><polyline points="21 15 21 21 3 21 3 15"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              Export
+            </button>
+            <button className="oz-btn primary">
+              <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Tambah Vendor
+            </button>
+          </div>
+        </div>
+        <div className="oz-cards">
+          <div className={`oz-card${viewFilter === "" ? " active" : ""}`} onClick={() => setViewFilter("")}>
+            <div className="oz-card-label">Total Vendor</div>
+            <div className="oz-card-num">{vendors.length}</div>
+            <button className="oz-card-cta" onClick={(e) => { e.stopPropagation(); setViewFilter(""); }}>Lihat semua →</button>
+          </div>
+          <div className={`oz-card${viewFilter === "ap" ? " active danger-ring" : ""}`} onClick={() => applyView("ap")}>
+            <div className="oz-card-label">Outstanding AP</div>
+            <div className="oz-card-num danger">{apVendors.length}</div>
+            <button className="oz-card-cta danger" onClick={(e) => { e.stopPropagation(); applyView("ap"); }}>Filter →</button>
+          </div>
+          <div className={`oz-card${viewFilter === "stale" ? " active warn-ring" : ""}`} onClick={() => applyView("stale")}>
+            <div className="oz-card-label">Stale 60+ Hari</div>
+            <div className="oz-card-num warn">{staleVendors.length}</div>
+            <button className="oz-card-cta warn" onClick={(e) => { e.stopPropagation(); applyView("stale"); }}>Filter →</button>
+          </div>
+          <div className={`oz-card${viewFilter === "inactive" ? " active muted-ring" : ""}`} onClick={() => applyView("inactive")}>
+            <div className="oz-card-label">Non-aktif</div>
+            <div className="oz-card-num muted">{inactiveVendors.length}</div>
+            <button className="oz-card-cta muted" onClick={(e) => { e.stopPropagation(); applyView("inactive"); }}>Filter →</button>
+          </div>
+        </div>
+      </div>
+
       <div className="mod-scroll">
         <div className="mod-inner">
-          <div className="page-head">
-            <div>
-              <div className="page-title">Vendors</div>
-              <div className="page-sub">{vendors.length} vendor · {activeCount} aktif</div>
-            </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button className="btn-ghost">
-                <svg viewBox="0 0 24 24"><polyline points="21 15 21 21 3 21 3 15"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                Export
-              </button>
-              <button className="btn-primary">
-                <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                Tambah Vendor
-              </button>
-            </div>
-          </div>
-
-          {/* Attention */}
-          {(staleVendors.length > 0 || overdueVendors.length > 0) && (
-            <div className="attn-wrap">
-              <div className="attn-hd" onClick={() => setAttnOpen(!attnOpen)}>
-                <div className="attn-hd-icon">
-                  <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                </div>
-                <div className="attn-hd-title">
-                  {overdueVendors.length + staleVendors.length} vendor perlu perhatian
-                </div>
-                <svg className={`attn-hd-chev${attnOpen ? "" : " collapsed"}`} viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>
-              </div>
-              {attnOpen && (
-                <>
-                  <div className="attn-wrap-desc">
-                    Terdapat vendor dengan outstanding AP atau tidak ada transaksi dalam 60 hari.
-                  </div>
-                  {overdueVendors.length > 0 && (
-                    <div className="acc">
-                      <div className="acc-hd" onClick={() => setOverdueOpen(!overdueOpen)}>
-                        <div className="acc-icon red"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
-                        <div className="acc-label">Outstanding AP — {overdueVendors.length} vendor</div>
-                        <div className="acc-amt">{formatRupiah(overdueVendors.reduce((s, v) => s + (AP_BALANCE[v.id] || 0), 0))}</div>
-                        <div className="acc-badge red">{overdueVendors.length}</div>
-                        <svg className={`acc-chev${overdueOpen ? " open" : ""}`} viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>
-                      </div>
-                      {overdueOpen && (
-                        <div className="acc-body">
-                          <div className="acc-body-inner">
-                            {overdueVendors.map(v => (
-                              <div key={v.id} className="item-card overdue">
-                                <div className="item-ref">{v.code}</div>
-                                <div className="item-name">{v.name}</div>
-                                <div className="item-sub">{v.contact} · {v.payment_terms}</div>
-                                <div className="item-foot">
-                                  <div className="item-actions">
-                                    <button className="btn-sm btn-pay" onClick={() => { setSelectedId(v.id); setDrawerTab("detail"); }}>Lihat Detail</button>
-                                  </div>
-                                  <div className="item-amt">{formatRupiah(AP_BALANCE[v.id] || 0)}</div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  {staleVendors.length > 0 && (
-                    <div className="acc">
-                      <div className="acc-hd" onClick={() => setStaleOpen(!staleOpen)}>
-                        <div className="acc-icon amber"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
-                        <div className="acc-label">Tidak ada transaksi 60+ hari — {staleVendors.length} vendor</div>
-                        <div className="acc-badge amber">{staleVendors.length}</div>
-                        <svg className={`acc-chev${staleOpen ? " open" : ""}`} viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>
-                      </div>
-                      {staleOpen && (
-                        <div className="acc-body">
-                          <div className="acc-body-inner">
-                            {staleVendors.map(v => {
-                              const lt = fmtLastTx(v.lastTx);
-                              return (
-                                <div key={v.id} className="item-card">
-                                  <div className="item-ref">{v.code}</div>
-                                  <div className="item-name">{v.name}</div>
-                                  <div className="item-sub">{lt.text}</div>
-                                  <div className="item-foot">
-                                    <div className="item-actions">
-                                      <button className="btn-sm btn-bill" onClick={() => { setSelectedId(v.id); setDrawerTab("detail"); }}>Lihat Vendor</button>
-                                    </div>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          )}
-
           {/* Filter bar */}
           <div className="filter-bar">
             <div className="f-search">

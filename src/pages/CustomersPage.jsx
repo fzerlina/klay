@@ -9,13 +9,17 @@ export default function CustomersPage() {
   const [drawerTab, setDrawerTab] = useState("detail");
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
-  const [bannerOpen, setBannerOpen] = useState(true);
+  const [viewFilter, setViewFilter] = useState(""); // "", "overdue", "stale", "inactive"
 
   const overdueCustomers = customers.filter(c => c.arOverdue && c.active);
   const staleCustomers = customers.filter(c => daysSince(c.lastInv) >= 60 && c.active);
+  const inactiveCustomers = customers.filter(c => !c.active);
 
   const filtered = customers.filter(c => {
     if (typeFilter && c.type !== typeFilter) return false;
+    if (viewFilter === "overdue" && !c.arOverdue) return false;
+    if (viewFilter === "stale" && !(daysSince(c.lastInv) >= 60 && c.active)) return false;
+    if (viewFilter === "inactive" && c.active) return false;
     const q = search.toLowerCase();
     if (q && !c.name.toLowerCase().includes(q) && !c.code.toLowerCase().includes(q)) return false;
     return true;
@@ -27,96 +31,54 @@ export default function CustomersPage() {
   const activeCount = customers.filter(c => c.active).length;
   const custInvoices = selected ? (invoices || []).filter(inv => inv.customer === selected.id) : [];
 
+  function applyView(v) { setViewFilter(viewFilter === v ? "" : v); }
+
   return (
     <div className="mod-page">
+      {/* Orange banner */}
+      <div className="oz-banner">
+        <div className="oz-top">
+          <div>
+            <div className="oz-title">Customers</div>
+            <div className="oz-subtitle">{customers.length} customer · {activeCount} aktif</div>
+          </div>
+          <div className="oz-actions">
+            <button className="oz-btn">
+              <svg viewBox="0 0 24 24"><polyline points="21 15 21 21 3 21 3 15"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              Export
+            </button>
+            <button className="oz-btn primary">
+              <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Tambah Customer
+            </button>
+          </div>
+        </div>
+        <div className="oz-cards">
+          <div className={`oz-card${viewFilter === "" ? " active" : ""}`} onClick={() => setViewFilter("")}>
+            <div className="oz-card-label">Total Customer</div>
+            <div className="oz-card-num">{customers.length}</div>
+            <button className="oz-card-cta" onClick={(e) => { e.stopPropagation(); setViewFilter(""); }}>Lihat semua →</button>
+          </div>
+          <div className={`oz-card${viewFilter === "overdue" ? " active danger-ring" : ""}`} onClick={() => applyView("overdue")}>
+            <div className="oz-card-label">Jatuh Tempo</div>
+            <div className="oz-card-num danger">{overdueCustomers.length}</div>
+            <button className="oz-card-cta danger" onClick={(e) => { e.stopPropagation(); applyView("overdue"); }}>Filter →</button>
+          </div>
+          <div className={`oz-card${viewFilter === "stale" ? " active warn-ring" : ""}`} onClick={() => applyView("stale")}>
+            <div className="oz-card-label">Stale 60+ Hari</div>
+            <div className="oz-card-num warn">{staleCustomers.length}</div>
+            <button className="oz-card-cta warn" onClick={(e) => { e.stopPropagation(); applyView("stale"); }}>Filter →</button>
+          </div>
+          <div className={`oz-card${viewFilter === "inactive" ? " active muted-ring" : ""}`} onClick={() => applyView("inactive")}>
+            <div className="oz-card-label">Non-aktif</div>
+            <div className="oz-card-num muted">{inactiveCustomers.length}</div>
+            <button className="oz-card-cta muted" onClick={(e) => { e.stopPropagation(); applyView("inactive"); }}>Filter →</button>
+          </div>
+        </div>
+      </div>
+
       <div className="mod-scroll">
         <div className="mod-inner">
-          <div className="page-head">
-            <div>
-              <div className="page-title">Customers</div>
-              <div className="page-sub">{customers.length} customer · {activeCount} aktif</div>
-            </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button className="btn-ghost">
-                <svg viewBox="0 0 24 24"><polyline points="21 15 21 21 3 21 3 15"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                Export
-              </button>
-              <button className="btn-primary">
-                <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                Tambah Customer
-              </button>
-            </div>
-          </div>
-
-          {/* Attention Banner */}
-          {(overdueCustomers.length > 0 || staleCustomers.length > 0) && (
-            <div className="wb">
-              <div className="wb-hd" onClick={() => setBannerOpen(!bannerOpen)}>
-                <div className="wb-hd-icon">
-                  <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                </div>
-                <div className="wb-hd-title">
-                  {overdueCustomers.length > 0 && `${overdueCustomers.length} customer jatuh tempo`}
-                  {overdueCustomers.length > 0 && staleCustomers.length > 0 && " · "}
-                  {staleCustomers.length > 0 && `${staleCustomers.length} customer tidak aktif`}
-                </div>
-                <svg className={`wb-hd-chev${bannerOpen ? " open" : ""}`} viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>
-              </div>
-              {bannerOpen && (
-                <div className="wb-body">
-                  {overdueCustomers.length > 0 && (
-                    <div className="wb-row">
-                      <div className="wb-row-title">Piutang Jatuh Tempo · {formatRupiah(overdueAR)}</div>
-                      <div className="wb-items">
-                        {overdueCustomers.map(c => (
-                          <div key={c.id} className="wb-item-card overdue">
-                            <div className="wb-item-badge overdue">
-                              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                              Jatuh tempo
-                            </div>
-                            <div className="wb-item-ref">{c.code}</div>
-                            <div className="wb-item-name">{c.name}</div>
-                            <div className="wb-item-desc">{c.contacts[0]?.name} · {formatDate(c.lastInv)}</div>
-                            <div className="wb-item-foot">
-                              <div className="wb-item-actions">
-                                <button className="wb-btn-primary" onClick={() => { setSelectedId(c.id); setDrawerTab("invoices"); }}>Lihat Invoice</button>
-                                <button className="wb-btn-secondary" onClick={() => { setSelectedId(c.id); setDrawerTab("detail"); }}>Detail</button>
-                              </div>
-                              <div className="wb-item-amt">{formatRupiah(c.ar)}</div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {staleCustomers.length > 0 && (
-                    <div className="wb-row">
-                      <div className="wb-row-title">Tidak Ada Invoice 60+ Hari</div>
-                      <div className="wb-items">
-                        {staleCustomers.map(c => (
-                          <div key={c.id} className="wb-item-card">
-                            <div className="wb-item-badge stale">
-                              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                              {daysSince(c.lastInv)} hari lalu
-                            </div>
-                            <div className="wb-item-ref">{c.code}</div>
-                            <div className="wb-item-name">{c.name}</div>
-                            <div className="wb-item-desc">{c.contacts[0]?.phone}</div>
-                            <div className="wb-item-foot">
-                              <div className="wb-item-actions">
-                                <button className="wb-btn-secondary" onClick={() => { setSelectedId(c.id); setDrawerTab("detail"); }}>Lihat Customer</button>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
           {/* Filter bar */}
           <div className="filter-bar">
             <div className="f-search">
