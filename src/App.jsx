@@ -5,10 +5,12 @@ import ChartOfAccountsPage from "./pages/ChartOfAccountsPage";
 import DimensionsPage from "./pages/DimensionsPage";
 import BillsPage from "./pages/BillsPage";
 import InvoicesPage from "./pages/InvoicesPage";
+import InvoiceCreatePage from "./pages/InvoiceCreatePage";
 import VendorsPage from "./pages/VendorsPage";
 import CustomersPage from "./pages/CustomersPage";
 import GeneralLedgerPage from "./pages/GeneralLedgerPage";
 import TrialBalancePage from "./pages/TrialBalancePage";
+import { InvoicesProvider } from "./state/InvoicesContext";
 
 function ComingSoon({ title }) {
   return (
@@ -20,20 +22,23 @@ function ComingSoon({ title }) {
 
 export default function App() {
   return (
-    <Routes>
-      <Route element={<Layout />}>
-        <Route index element={<Navigate to="/journal-entry" replace />} />
-        <Route path="/general-ledger" element={<GeneralLedgerPage />} />
-        <Route path="/journal-entry" element={<JournalEntryPage />} />
-        <Route path="/chart-of-accounts" element={<ChartOfAccountsPage />} />
-        <Route path="/dimensions" element={<DimensionsPage />} />
-        <Route path="/bills" element={<BillsPage />} />
-        <Route path="/invoices" element={<InvoicesPage />} />
-        <Route path="/vendors" element={<VendorsPage />} />
-        <Route path="/customers" element={<CustomersPage />} />
-        <Route path="/trial-balance" element={<TrialBalancePage />} />
-        <Route path="*" element={<Navigate to="/journal-entry" replace />} />
-      </Route>
-    </Routes>
+    <InvoicesProvider>
+      <Routes>
+        <Route path="/invoices/new" element={<InvoiceCreatePage />} />
+        <Route element={<Layout />}>
+          <Route index element={<Navigate to="/journal-entry" replace />} />
+          <Route path="/general-ledger" element={<GeneralLedgerPage />} />
+          <Route path="/journal-entry" element={<JournalEntryPage />} />
+          <Route path="/chart-of-accounts" element={<ChartOfAccountsPage />} />
+          <Route path="/dimensions" element={<DimensionsPage />} />
+          <Route path="/bills" element={<BillsPage />} />
+          <Route path="/invoices" element={<InvoicesPage />} />
+          <Route path="/vendors" element={<VendorsPage />} />
+          <Route path="/customers" element={<CustomersPage />} />
+          <Route path="/trial-balance" element={<TrialBalancePage />} />
+          <Route path="*" element={<Navigate to="/journal-entry" replace />} />
+        </Route>
+      </Routes>
+    </InvoicesProvider>
   );
 }
