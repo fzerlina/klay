@@ -1,0 +1,57 @@
+/* ── CUSTOMER CREATE PAGE ───────────────────────────────────────────────── */
+
+/* Entity picker (step 0) */
+.entity-step0{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--color-surface-sunken);padding:40px}
+.entity-step0 h2{font-size:20px;font-weight:700;margin-bottom:6px;letter-spacing:-.01em}
+.entity-step0 p{font-size:13px;color:var(--color-text-tertiary);margin-bottom:32px}
+.entity-cards{display:flex;gap:16px}
+.ec{width:240px;background:var(--color-surface-raised);border:2px solid var(--color-border-default);border-radius:var(--radius-xl);padding:28px 22px;cursor:pointer;transition:all var(--transition-slow);display:flex;flex-direction:column;align-items:center;text-align:center}
+.ec:hover{border-color:var(--color-action);box-shadow:0 6px 24px rgba(26,70,200,.1);transform:translateY(-2px)}
+.ec.sel{border-color:var(--color-action);background:var(--ai-surface)}
+.ec-icon{width:54px;height:54px;border-radius:var(--radius-lg);background:var(--color-surface-sunken);display:flex;align-items:center;justify-content:center;margin-bottom:14px;transition:background var(--transition-slow)}
+.ec:hover .ec-icon{background:var(--color-action)}
+.ec-icon svg{width:24px;height:24px;stroke:var(--color-text-tertiary);fill:none;stroke-width:1.5;transition:stroke var(--transition-slow)}
+.ec:hover .ec-icon svg{stroke:#fff}
+.ec-title{font-size:16px;font-weight:700;margin-bottom:5px}
+.ec-desc{font-size:12px;color:var(--color-text-tertiary);line-height:1.5;margin-bottom:6px}
+.ec-eg{font-size:11px;color:var(--color-text-tertiary);font-style:italic;opacity:.7}
+
+/* Entity pill in header */
+.entity-pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:4px 10px;border-radius:var(--radius-full);cursor:pointer;transition:opacity .12s;white-space:nowrap}
+.entity-pill:hover{opacity:.8}
+.entity-pill.perusahaan{background:var(--ai-surface);color:var(--color-action);border:1px solid var(--ai-border)}
+.entity-pill.individu{background:#F7EDE5;color:var(--color-brand);border:1px solid #EDD5C4}
+.entity-pill svg{width:9px;height:9px;stroke:currentColor;fill:none;stroke-width:2.5}
+
+/* Contact card list (reuse bank-entry shape) */
+.ct-list{display:flex;flex-direction:column;gap:8px;margin-bottom:8px}
+.ctcard{background:var(--color-surface-sunken);border:1px solid var(--color-border-default);border-radius:var(--radius-md);padding:14px}
+.ctcard-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.ctcard-lbl{font-size:11px;font-weight:700;color:var(--color-text-secondary);display:flex;align-items:center;gap:6px;text-transform:uppercase;letter-spacing:.04em}
+.ctcard-lbl svg{width:13px;height:13px;stroke:var(--color-text-tertiary);fill:none;stroke-width:1.5}
+.primary-badge{font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 8px;border-radius:var(--radius-full);background:var(--ai-surface);color:var(--color-action);border:1px solid var(--ai-border)}
+
+/* Phone row with WA checkbox */
+.phone-row{display:flex;align-items:center;gap:10px}
+.phone-row input{flex:1}
+.wa-chk{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--color-text-tertiary);white-space:nowrap;cursor:pointer}
+.wa-chk input{accent-color:var(--color-action);cursor:pointer}
+
+/* Invoice mode toggle */
+.inv-opts{display:flex;gap:10px}
+.inv-opt{flex:1;border:1.5px solid var(--color-border-default);border-radius:var(--radius-md);padding:12px;cursor:pointer;transition:all var(--transition-base);background:var(--color-surface-raised)}
+.inv-opt:hover:not(.sel){border-color:#c8c2ba;background:var(--color-surface-sunken)}
+.inv-opt.sel{border-color:var(--color-action);background:var(--ai-surface)}
+.inv-opt-title{font-size:12px;font-weight:700;color:var(--color-text-primary);display:flex;align-items:center;gap:7px;margin-bottom:3px}
+.inv-opt.sel .inv-opt-title{color:var(--color-action)}
+.inv-opt-sub{font-size:11px;color:var(--color-text-tertiary);line-height:1.4}
+.inv-opt-icon{width:20px;height:20px;border-radius:4px;background:var(--color-border-default);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background var(--transition-base)}
+.inv-opt.sel .inv-opt-icon{background:var(--color-action)}
+.inv-opt-icon svg{width:11px;height:11px;stroke:var(--color-surface-raised);fill:none;stroke-width:2;stroke-linecap:round}
+
+/* Channel chips */
+.ch-chips{display:flex;gap:6px;flex-wrap:wrap}
+.ch-chip{display:flex;align-items:center;gap:5px;padding:6px 12px;border-radius:var(--radius-full);border:1.5px solid var(--color-border-default);background:var(--color-surface-raised);font-size:11px;font-weight:500;color:var(--color-text-tertiary);cursor:pointer;transition:all var(--transition-fast)}
+.ch-chip:hover{border-color:#c8c2ba;color:var(--color-text-secondary)}
+.ch-chip.on{border-color:var(--color-action);background:var(--ai-surface);color:var(--color-action)}
+.ch-chip svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.5}

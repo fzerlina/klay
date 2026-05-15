@@ -1,8 +1,9 @@
 import { useState, useMemo, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { VENDORS as vendors } from "../data/seed/vendors";
-import { BILLS as bills } from "../data/seed/bills";
 import { TODAY, daysSince } from "../lib/clock";
 import { formatRupiah, formatDate, initials } from "../lib/format";
+import { useBills } from "../state/BillsContext";
 import AiChatDrawer, { SparkleIcon as DrawerSparkle } from "./AiChatDrawer";
 import SummaryDrawer from "./SummaryDrawer";
 import { computeBillsInsights, makeBillsAiContext } from "./ai-bills-context";
@@ -372,6 +373,8 @@ function FilterPopover({ values, onChange, vendors: vendorList, onClose }) {
 // ─── Page ───────────────────────────────────────────────────────────────────
 
 export default function BillsPage() {
+  const navigate = useNavigate();
+  const { bills } = useBills();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState({ kind: "tab", value: "jatuhtempo" });
   const [sortChoice, setSortChoice] = useState(null);
@@ -418,8 +421,8 @@ export default function BillsPage() {
     ];
   }, [monthPfx]);
 
-  const insights = useMemo(() => computeBillsInsights(bills), []);
-  const aiContext = useMemo(() => makeBillsAiContext(bills), []);
+  const insights = useMemo(() => computeBillsInsights(bills), [bills]);
+  const aiContext = useMemo(() => makeBillsAiContext(bills), [bills]);
 
   function askAi(question) {
     setSummaryOpen(false);
@@ -675,7 +678,7 @@ export default function BillsPage() {
               />
             </div>
             <div className="lg-head-actions">
-              <button className="lg-btn-brand" onClick={() => showToast("Buat Bill — coming soon")}>
+              <button className="lg-btn-brand" onClick={() => navigate("/bills/new")}>
                 <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                 Buat Bill
               </button>

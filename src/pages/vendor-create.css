@@ -1,0 +1,46 @@
+/* ── VENDOR CREATE PAGE ─────────────────────────────────────────────────── */
+
+/* Required marker */
+.vc-req{color:var(--color-danger-text);margin-left:2px}
+.vc-hint{font-size:10px;color:var(--color-text-tertiary);margin-top:2px}
+
+/* Photo upload row */
+.vc-photo{display:flex;align-items:center;gap:14px}
+.vc-photo-preview{width:56px;height:56px;border-radius:var(--radius-md);background:var(--color-surface-sunken);border:1.5px dashed var(--color-border-default);display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;cursor:pointer;transition:all var(--transition-fast)}
+.vc-photo-preview:hover{border-color:var(--color-action);background:var(--ai-surface)}
+.vc-photo-preview img{width:100%;height:100%;object-fit:cover}
+.vc-photo-preview svg{width:20px;height:20px;stroke:var(--color-border-default);fill:none;stroke-width:1.5}
+.vc-photo-info{flex:1;min-width:0}
+.vc-photo-title{font-size:12px;font-weight:600;color:var(--color-text-primary);margin-bottom:3px;display:flex;align-items:center;gap:6px}
+.vc-photo-optional{font-size:10px;font-weight:400;color:var(--color-text-tertiary)}
+.vc-photo-sub{font-size:11px;color:var(--color-text-tertiary);line-height:1.4}
+.vc-photo-btn{font-family:var(--font-sans);font-size:11px;font-weight:600;padding:6px 12px;background:var(--color-surface-sunken);color:var(--color-text-secondary);border:1px solid var(--color-border-default);border-radius:var(--radius-sm);cursor:pointer;transition:all var(--transition-fast);white-space:nowrap}
+.vc-photo-btn:hover{background:#fff;border-color:var(--color-action);color:var(--color-action)}
+
+/* PKP radio group */
+.pkp-group{display:flex;flex-direction:column;gap:8px}
+.pkp-opt{display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border:1.5px solid var(--color-border-default);border-radius:var(--radius-md);cursor:pointer;transition:all var(--transition-fast);background:var(--color-surface-raised)}
+.pkp-opt:hover{border-color:#c8c2ba;background:var(--color-surface-sunken)}
+.pkp-opt.selected{border-color:var(--color-action);background:var(--ai-surface)}
+.pkp-opt input[type=radio]{display:none}
+.pkp-dot{width:16px;height:16px;border-radius:50%;border:1.5px solid var(--color-border-default);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;transition:all var(--transition-fast);background:var(--color-surface-raised)}
+.pkp-opt.selected .pkp-dot{border-color:var(--color-action);background:var(--color-action)}
+.pkp-dot-inner{width:6px;height:6px;border-radius:50%;background:#fff;display:none}
+.pkp-opt.selected .pkp-dot-inner{display:block}
+.pkp-text{flex:1;min-width:0}
+.pkp-label{font-size:12px;font-weight:600;color:var(--color-text-primary)}
+.pkp-desc{font-size:11px;color:var(--color-text-tertiary);margin-top:2px;line-height:1.45}
+
+/* Bank repeater */
+.bank-list{display:flex;flex-direction:column;gap:8px;margin-bottom:8px}
+.bank-entry{background:var(--color-surface-sunken);border:1px solid var(--color-border-default);border-radius:var(--radius-md);padding:14px}
+.bank-entry-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.bank-entry-num{font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--color-text-tertiary)}
+.bank-default-toggle{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:500;color:var(--color-text-secondary);cursor:pointer;margin-left:auto}
+.bank-default-toggle input{accent-color:var(--color-action);cursor:pointer}
+.btn-del-bank{width:24px;height:24px;border-radius:var(--radius-sm);border:1px solid transparent;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all var(--transition-fast);color:var(--color-text-tertiary)}
+.btn-del-bank:hover{background:var(--danger-surface);border-color:var(--danger-border);color:var(--color-danger-text)}
+.btn-del-bank svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2}
+.btn-add-bank{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-sans);font-size:12px;font-weight:500;color:var(--color-text-tertiary);background:transparent;border:1.5px dashed var(--color-border-default);border-radius:var(--radius-md);padding:10px 14px;cursor:pointer;transition:all var(--transition-fast);width:100%;justify-content:center}
+.btn-add-bank:hover{border-color:var(--color-action);color:var(--color-action);background:var(--ai-surface)}
+.btn-add-bank svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round}

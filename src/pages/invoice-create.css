@@ -106,9 +106,9 @@
 .ai-fill-banner-sub{font-size:11px;color:var(--color-text-secondary)}
 
 /* Form */
-.form-sec{margin-bottom:18px}
-.form-sec-title{font-size:12px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:8px}
-.form-sec-title::after{content:'';flex:1;height:1px;background:var(--color-border-default)}
+.form-sec{margin-bottom:14px}
+.form-sec.card{background:var(--color-surface-raised);border:1px solid var(--color-border-default);border-radius:var(--radius-lg);padding:16px}
+.form-sec-title{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--color-text-tertiary);margin-bottom:12px;display:flex;align-items:center;gap:8px}
 .fg2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
 .fg3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px}
 .form-fld{display:flex;flex-direction:column;gap:4px}

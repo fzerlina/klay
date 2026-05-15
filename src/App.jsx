@@ -4,13 +4,19 @@ import JournalEntryPage from "./pages/JournalEntryPage";
 import ChartOfAccountsPage from "./pages/ChartOfAccountsPage";
 import DimensionsPage from "./pages/DimensionsPage";
 import BillsPage from "./pages/BillsPage";
+import BillCreatePage from "./pages/BillCreatePage";
 import InvoicesPage from "./pages/InvoicesPage";
 import InvoiceCreatePage from "./pages/InvoiceCreatePage";
 import VendorsPage from "./pages/VendorsPage";
+import VendorCreatePage from "./pages/VendorCreatePage";
 import CustomersPage from "./pages/CustomersPage";
+import CustomerCreatePage from "./pages/CustomerCreatePage";
 import GeneralLedgerPage from "./pages/GeneralLedgerPage";
 import TrialBalancePage from "./pages/TrialBalancePage";
 import { InvoicesProvider } from "./state/InvoicesContext";
+import { BillsProvider } from "./state/BillsContext";
+import { VendorsProvider } from "./state/VendorsContext";
+import { CustomersProvider } from "./state/CustomersContext";
 
 function ComingSoon({ title }) {
   return (
@@ -23,22 +29,31 @@ function ComingSoon({ title }) {
 export default function App() {
   return (
     <InvoicesProvider>
-      <Routes>
-        <Route element={<Layout />}>
-          <Route index element={<Navigate to="/journal-entry" replace />} />
-          <Route path="/general-ledger" element={<GeneralLedgerPage />} />
-          <Route path="/journal-entry" element={<JournalEntryPage />} />
-          <Route path="/chart-of-accounts" element={<ChartOfAccountsPage />} />
-          <Route path="/dimensions" element={<DimensionsPage />} />
-          <Route path="/bills" element={<BillsPage />} />
-          <Route path="/invoices" element={<InvoicesPage />} />
-          <Route path="/invoices/new" element={<InvoiceCreatePage />} />
-          <Route path="/vendors" element={<VendorsPage />} />
-          <Route path="/customers" element={<CustomersPage />} />
-          <Route path="/trial-balance" element={<TrialBalancePage />} />
-          <Route path="*" element={<Navigate to="/journal-entry" replace />} />
-        </Route>
-      </Routes>
+      <BillsProvider>
+        <VendorsProvider>
+          <CustomersProvider>
+            <Routes>
+              <Route element={<Layout />}>
+                <Route index element={<Navigate to="/journal-entry" replace />} />
+                <Route path="/general-ledger" element={<GeneralLedgerPage />} />
+                <Route path="/journal-entry" element={<JournalEntryPage />} />
+                <Route path="/chart-of-accounts" element={<ChartOfAccountsPage />} />
+                <Route path="/dimensions" element={<DimensionsPage />} />
+                <Route path="/bills" element={<BillsPage />} />
+                <Route path="/bills/new" element={<BillCreatePage />} />
+                <Route path="/invoices" element={<InvoicesPage />} />
+                <Route path="/invoices/new" element={<InvoiceCreatePage />} />
+                <Route path="/vendors" element={<VendorsPage />} />
+                <Route path="/vendors/new" element={<VendorCreatePage />} />
+                <Route path="/customers" element={<CustomersPage />} />
+                <Route path="/customers/new" element={<CustomerCreatePage />} />
+                <Route path="/trial-balance" element={<TrialBalancePage />} />
+                <Route path="*" element={<Navigate to="/journal-entry" replace />} />
+              </Route>
+            </Routes>
+          </CustomersProvider>
+        </VendorsProvider>
+      </BillsProvider>
     </InvoicesProvider>
   );
 }

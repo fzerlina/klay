@@ -407,7 +407,7 @@ export default function InvoiceCreatePage() {
               </div>
             )}
 
-            <div className="form-sec">
+            <div className="form-sec card">
               <div className="form-sec-title">Informasi Umum</div>
               <div className="fg2">
                 <div className="form-fld">
@@ -447,7 +447,7 @@ export default function InvoiceCreatePage() {
               </div>
             </div>
 
-            <div className="form-sec">
+            <div className="form-sec card">
               <div className="form-sec-title">Item Invoice</div>
               <div className="items-wrap">
                 <table>
@@ -527,7 +527,7 @@ export default function InvoiceCreatePage() {
               )}
             </div>
 
-            <div className="form-sec">
+            <div className="form-sec card">
               <div className="form-sec-title">Lampiran</div>
               {attachments.length > 0 && (
                 <div className="attach-list">
@@ -553,7 +553,7 @@ export default function InvoiceCreatePage() {
               </button>
             </div>
 
-            <div className="form-sec">
+            <div className="form-sec card">
               <div className="form-sec-title">Keterangan</div>
               <div className="form-fld">
                 <label>Catatan / Memo</label>

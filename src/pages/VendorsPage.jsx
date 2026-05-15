@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import { VENDORS as vendors } from "../data/seed/vendors";
+import { useNavigate } from "react-router-dom";
 import { BILLS as bills } from "../data/seed/bills";
+import { useVendors } from "../state/VendorsContext";
 import { CAT_LABELS, PPH_LABELS, ACCT_LABELS, DEFTAX_LABELS } from "../data/labels";
 import { TODAY, daysSince } from "../lib/clock";
 import { formatRupiah, formatDate, initials } from "../lib/format";
@@ -288,6 +289,8 @@ function FilterPopover({ values, onChange, onClose }) {
 // ─── Page ───────────────────────────────────────────────────────────────────
 
 export default function VendorsPage() {
+  const navigate = useNavigate();
+  const { vendors } = useVendors();
   // AP balance per vendor (derived from bills)
   const apBalance = useMemo(() => {
     const m = {};
@@ -327,8 +330,8 @@ export default function VendorsPage() {
     toastTmr.current = setTimeout(() => setToast(""), 1800);
   }
 
-  const insights = useMemo(() => computeVendorsInsights(vendors), []);
-  const aiContext = useMemo(() => makeVendorsAiContext(vendors), []);
+  const insights = useMemo(() => computeVendorsInsights(vendors), [vendors]);
+  const aiContext = useMemo(() => makeVendorsAiContext(vendors), [vendors]);
 
   function askAi(question) {
     setSummaryOpen(false);
@@ -576,7 +579,7 @@ export default function VendorsPage() {
               />
             </div>
             <div className="lg-head-actions">
-              <button className="lg-btn-brand" onClick={() => showToast("Tambah Vendor — coming soon")}>
+              <button className="lg-btn-brand" onClick={() => navigate("/vendors/new")}>
                 <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                 Tambah Vendor
               </button>

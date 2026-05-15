@@ -1,8 +1,9 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import { CUSTOMERS as customers } from "../data/seed/customers";
+import { useNavigate } from "react-router-dom";
 import { INVOICES as invoices } from "../data/seed/invoices";
 import { TODAY, daysSince } from "../lib/clock";
 import { formatRupiah, formatDate, initials } from "../lib/format";
+import { useCustomers } from "../state/CustomersContext";
 import AiChatDrawer from "./AiChatDrawer";
 import SummaryDrawer from "./SummaryDrawer";
 import { computeCustomersInsights, makeCustomersAiContext } from "./ai-customers-context";
@@ -288,6 +289,8 @@ function FilterPopover({ values, onChange, onClose }) {
 // ─── Page ───────────────────────────────────────────────────────────────────
 
 export default function CustomersPage() {
+  const navigate = useNavigate();
+  const { customers } = useCustomers();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState({ kind: "tab", value: "semua" });
   const [sortChoice, setSortChoice] = useState(null);
@@ -317,8 +320,8 @@ export default function CustomersPage() {
     toastTmr.current = setTimeout(() => setToast(""), 1800);
   }
 
-  const insights = useMemo(() => computeCustomersInsights(customers), []);
-  const aiContext = useMemo(() => makeCustomersAiContext(customers), []);
+  const insights = useMemo(() => computeCustomersInsights(customers), [customers]);
+  const aiContext = useMemo(() => makeCustomersAiContext(customers), [customers]);
 
   function askAi(question) {
     setSummaryOpen(false);
@@ -566,7 +569,7 @@ export default function CustomersPage() {
               />
             </div>
             <div className="lg-head-actions">
-              <button className="lg-btn-brand" onClick={() => showToast("Tambah Customer — coming soon")}>
+              <button className="lg-btn-brand" onClick={() => navigate("/customers/new")}>
                 <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                 Tambah Customer
               </button>
