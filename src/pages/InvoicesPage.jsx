@@ -6,6 +6,7 @@ import { TODAY, daysSince } from "../lib/clock";
 import { formatRupiah, formatDate, initials } from "../lib/format";
 import AiChatDrawer from "./AiChatDrawer";
 import SummaryDrawer from "./SummaryDrawer";
+import { makeInvoicesAiContext } from "./ai-invoices-context";
 import "./modules.css";
 import "./invoice-create.css";
 import "./invoices-ledger.css";
@@ -695,6 +696,7 @@ export default function InvoicesPage() {
   }, [invoices, monthPfx]);
 
   const insights = useMemo(() => computeInsights(invoices, TODAY), [invoices]);
+  const aiContext = useMemo(() => makeInvoicesAiContext(invoices), [invoices]);
 
   function askAi(question) {
     setSummaryOpen(false);
@@ -1450,6 +1452,8 @@ export default function InvoicesPage() {
         onClose={() => { setAiOpen(false); setAiSeedQuestion(null); }}
         initialQuestion={aiSeedQuestion}
         onConsumedInitialQuestion={() => setAiSeedQuestion(null)}
+        context={aiContext}
+        contextLabel="Invoices"
       />
     </div>
   );
