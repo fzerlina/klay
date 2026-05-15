@@ -24,7 +24,6 @@ export default function App() {
   return (
     <InvoicesProvider>
       <Routes>
-        <Route path="/invoices/new" element={<InvoiceCreatePage />} />
         <Route element={<Layout />}>
           <Route index element={<Navigate to="/journal-entry" replace />} />
           <Route path="/general-ledger" element={<GeneralLedgerPage />} />
@@ -33,6 +32,7 @@ export default function App() {
           <Route path="/dimensions" element={<DimensionsPage />} />
           <Route path="/bills" element={<BillsPage />} />
           <Route path="/invoices" element={<InvoicesPage />} />
+          <Route path="/invoices/new" element={<InvoiceCreatePage />} />
           <Route path="/vendors" element={<VendorsPage />} />
           <Route path="/customers" element={<CustomersPage />} />
           <Route path="/trial-balance" element={<TrialBalancePage />} />

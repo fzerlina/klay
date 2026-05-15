@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { NavLink } from "react-router-dom";
 
 const navSections = [
@@ -110,98 +110,180 @@ const settingsSections = [
   },
 ];
 
+// Brand-textured background — gradient (on .sb), film grain, soft vignette,
+// architectural light shapes. Pure decoration; aria-hidden, pointer-events:none.
+function BrandTexture() {
+  const noiseSvg =
+    "<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'>" +
+      "<filter id='n'>" +
+        "<feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/>" +
+      "</filter>" +
+      "<rect width='100%' height='100%' filter='url(#n)'/>" +
+    "</svg>";
+  const noiseUrl = `url("data:image/svg+xml,${encodeURIComponent(noiseSvg)}")`;
+  return (
+    <div className="sb-texture" aria-hidden>
+      <div className="sb-grain" style={{ backgroundImage: noiseUrl }} />
+      <div className="sb-vignette" />
+      <svg className="sb-shapes" viewBox="0 0 232 600" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="sb-slat" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="rgba(255,255,255,0)" />
+            <stop offset="100%" stopColor="rgba(255,255,255,0.16)" />
+          </linearGradient>
+        </defs>
+        <g>
+          <rect x="-40" y="80"  width="340" height="540" fill="url(#sb-slat)" opacity="0.6" />
+          <rect x="10"  y="130" width="290" height="490" fill="url(#sb-slat)" opacity="0.6" />
+          <rect x="60"  y="180" width="240" height="440" fill="url(#sb-slat)" opacity="0.6" />
+          <rect x="110" y="230" width="190" height="390" fill="url(#sb-slat)" opacity="0.6" />
+          <rect x="160" y="280" width="140" height="340" fill="url(#sb-slat)" opacity="0.6" />
+        </g>
+      </svg>
+    </div>
+  );
+}
+
+function CollapseToggle({ collapsed, onToggle }) {
+  const label = collapsed ? "Buka sidebar" : "Tutup sidebar";
+  return (
+    <button
+      type="button"
+      className="sb-toggle"
+      onClick={onToggle}
+      title={label}
+      aria-label={label}
+      aria-pressed={collapsed}
+    >
+      <svg viewBox="0 0 12 12">
+        <path d={collapsed ? "M4 2l4 4-4 4" : "M8 2l-4 4 4 4"} />
+      </svg>
+    </button>
+  );
+}
+
+const STORAGE_KEY = "klay.sidebar.collapsed";
+
+function readInitialCollapsed() {
+  if (typeof window === "undefined") return false;
+  try {
+    const saved = window.localStorage.getItem(STORAGE_KEY);
+    if (saved !== null) return saved === "true";
+  } catch (_) {}
+  return window.innerWidth < 1280;
+}
+
 export default function Sidebar() {
   const [open, setOpen] = useState({});
+  const [collapsed, setCollapsed] = useState(readInitialCollapsed);
+
+  useEffect(() => {
+    try { window.localStorage.setItem(STORAGE_KEY, String(collapsed)); } catch (_) {}
+  }, [collapsed]);
+
   const toggle = (key) => setOpen((prev) => ({ ...prev, [key]: !prev[key] }));
 
   return (
-    <nav className="sb">
-      <div className="sb-top">
-        <div className="sb-logomark">
-          <svg viewBox="0 0 24 24" style={{ width: 12, height: 12, fill: "#fff" }}>
-            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-          </svg>
-        </div>
-        <span className="sb-brand">Klay</span>
-      </div>
+    <nav className={`sb${collapsed ? " collapsed" : ""}`}>
+      <BrandTexture />
+      <CollapseToggle collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)} />
 
-      <div className="sb-search-wrap">
-        <div className="sb-search">
-          <svg viewBox="0 0 24 24">
-            <circle cx="11" cy="11" r="8" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-          <input type="text" placeholder="Cari menu, jurnal..." />
-        </div>
-        <button className="sb-notif-btn" type="button">
-          <svg viewBox="0 0 24 24">
-            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-            <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-          </svg>
-          <span className="sb-notif-dot" />
-        </button>
-      </div>
-
-      {navSections.map(({ section, items }) => (
-        <div key={section}>
-          <div className="sb-section">{section}</div>
-          {items.map(({ label, to, icon }) => (
-            <NavLink
-              key={to}
-              to={to}
-              className={({ isActive }) => `sb-item${isActive ? " active" : ""}`}
-            >
-              {icon}
-              {label}
-            </NavLink>
-          ))}
-        </div>
-      ))}
-
-      <div className="sb-section">Settings</div>
-      {settingsSections.map(({ key, label, icon, items }) => (
-        <div key={key}>
-          <div className="sn-item" onClick={() => toggle(key)}>
-            {icon}
-            {label}
-            <svg
-              className="sn-arrow"
-              viewBox="0 0 24 24"
-              style={{ transform: open[key] ? "rotate(90deg)" : "none" }}
-            >
-              <polyline points="9 18 15 12 9 6" />
+      <div className="sb-content">
+        <div className="sb-top">
+          <div className="sb-logomark">
+            <svg viewBox="0 0 24 24">
+              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
             </svg>
           </div>
-          {open[key] && (
-            <div>
-              {items.map((item) =>
-                item.to ? (
-                  <NavLink
-                    key={item.to}
-                    to={item.to}
-                    className={({ isActive }) =>
-                      `sn-subitem${isActive ? " sn-subitem-active" : ""}`
-                    }
-                  >
-                    {item.label}
-                  </NavLink>
-                ) : (
-                  <div key={item.label} className="sn-subitem">
-                    {item.label}
-                  </div>
-                )
-              )}
-            </div>
-          )}
+          <span className="sb-brand">Klay</span>
         </div>
-      ))}
 
-      <div className="sb-bottom">
-        <div className="sb-profile">
-          <div className="sb-av">SW</div>
-          <div>
-            <div className="sb-profile-name">Sarah Wijaya</div>
-            <div className="sb-profile-role">PT Sejahtera Makmur</div>
+        <div className="sb-search-wrap">
+          <div className="sb-search">
+            <svg viewBox="0 0 24 24">
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <input type="text" placeholder="Cari menu, jurnal…" />
+          </div>
+          <button className="sb-notif-btn" type="button" title="Notifikasi">
+            <svg viewBox="0 0 24 24">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+            </svg>
+            <span className="sb-notif-dot" />
+          </button>
+        </div>
+
+        {navSections.map(({ section, items }, sIdx) => (
+          <div key={section}>
+            <div className="sb-section">{section}</div>
+            {sIdx > 0 && <div className="sb-rail-divider" />}
+            {items.map(({ label, to, icon }) => (
+              <NavLink
+                key={to}
+                to={to}
+                title={collapsed ? `${section} · ${label}` : undefined}
+                className={({ isActive }) => `sb-item${isActive ? " active" : ""}`}
+              >
+                {icon}
+                {!collapsed && label}
+              </NavLink>
+            ))}
+          </div>
+        ))}
+
+        {!collapsed && (
+          <>
+            <div className="sb-section">Settings</div>
+            {settingsSections.map(({ key, label, icon, items }) => (
+              <div key={key}>
+                <div className="sn-item" onClick={() => toggle(key)}>
+                  {icon}
+                  {label}
+                  <svg
+                    className="sn-arrow"
+                    viewBox="0 0 24 24"
+                    style={{ transform: open[key] ? "rotate(90deg)" : "none" }}
+                  >
+                    <polyline points="9 18 15 12 9 6" />
+                  </svg>
+                </div>
+                {open[key] && (
+                  <div>
+                    {items.map((item) =>
+                      item.to ? (
+                        <NavLink
+                          key={item.to}
+                          to={item.to}
+                          className={({ isActive }) =>
+                            `sn-subitem${isActive ? " sn-subitem-active" : ""}`
+                          }
+                        >
+                          {item.label}
+                        </NavLink>
+                      ) : (
+                        <div key={item.label} className="sn-subitem">
+                          {item.label}
+                        </div>
+                      ),
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </>
+        )}
+
+        <div className="sb-bottom">
+          <div className="sb-profile" title={collapsed ? "Sarah Wijaya · PT Sejahtera Makmur" : undefined}>
+            <div className="sb-av">SW</div>
+            {!collapsed && (
+              <div>
+                <div className="sb-profile-name">Sarah Wijaya</div>
+                <div className="sb-profile-role">PT Sejahtera Makmur</div>
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -181,6 +181,44 @@
 .wb-btn-primary{font-size:11px;font-weight:600;padding:4px 10px;background:var(--color-action);color:#fff;border:none;border-radius:var(--radius-sm);cursor:pointer;font-family:var(--font-sans)}
 .wb-btn-secondary{font-size:11px;font-weight:600;padding:4px 10px;background:var(--color-surface-raised);color:var(--color-text-secondary);border:1px solid var(--color-border-default);border-radius:var(--radius-sm);cursor:pointer;font-family:var(--font-sans)}
 
+/* ── SAVED VIEW TABS ──────────────────────────────────────────────────────── */
+.view-tabs{display:flex;gap:2px;margin-bottom:10px;border-bottom:1px solid var(--color-border-default);align-items:flex-end}
+.view-tab{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;font-size:12px;font-weight:500;color:var(--color-text-tertiary);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:color var(--transition-fast),border-color var(--transition-fast);white-space:nowrap;user-select:none}
+.view-tab:hover{color:var(--color-text-primary)}
+.view-tab.active{color:var(--color-text-primary);font-weight:600;border-bottom-color:var(--color-action)}
+.view-tab-count{font-family:var(--font-mono);font-size:10px;font-weight:700;padding:1px 6px;border-radius:9999px;background:var(--color-surface-sunken);color:var(--color-text-tertiary)}
+.view-tab.active .view-tab-count{background:var(--color-action);color:#fff}
+.view-tab.add{color:var(--color-action);margin-left:auto;font-weight:500;padding:7px 12px;border-radius:var(--radius-sm);margin-bottom:0;border-bottom:none}
+.view-tab.add:hover{background:var(--ai-surface)}
+
+/* ── KLAY AI SEARCH BAR ───────────────────────────────────────────────────── */
+.ai-search-wrap{background:var(--color-surface-raised);border:1px solid var(--color-border-default);border-radius:var(--radius-md);padding:7px 12px;margin-bottom:8px;display:flex;align-items:center;gap:10px;transition:border-color var(--transition-fast),box-shadow var(--transition-fast)}
+.ai-search-wrap:focus-within{border-color:var(--color-action);box-shadow:0 0 0 3px rgba(26,70,200,.08)}
+.ai-search-wrap.has-parsed{border-color:var(--color-action)}
+.ai-search-icon{width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,#1A46C8,#7C3AED);display:flex;align-items:center;justify-content:center;flex-shrink:0;animation:aiPulseSubtle 3s ease-in-out infinite}
+@keyframes aiPulseSubtle{0%,100%{box-shadow:0 0 0 0 rgba(26,70,200,.3)}50%{box-shadow:0 0 0 5px rgba(26,70,200,0)}}
+.ai-search-icon svg{width:11px;height:11px;stroke:#fff;fill:none;stroke-width:2.5}
+.ai-search-input{border:none;outline:none;font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary);background:transparent;width:100%;min-width:0}
+.ai-search-input::placeholder{color:var(--color-text-tertiary)}
+.ai-search-hint{font-size:10px;color:var(--color-action);font-weight:600;white-space:nowrap;flex-shrink:0;background:var(--ai-surface);padding:2px 8px;border-radius:var(--radius-full);border:1px solid var(--ai-border)}
+
+/* Parsed filter chips */
+.parsed-chips{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px}
+.parsed-chip{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;padding:3px 4px 3px 10px;border-radius:var(--radius-full);background:var(--ai-surface);color:var(--color-action);border:1px solid var(--ai-border)}
+.parsed-chip-x{width:14px;height:14px;border-radius:50%;background:rgba(26,70,200,.18);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--color-action);padding:0}
+.parsed-chip-x:hover{background:var(--color-action);color:#fff}
+.parsed-chip-x svg{width:8px;height:8px;stroke:currentColor;fill:none;stroke-width:2.5}
+
+/* ── AGING CHIPS ──────────────────────────────────────────────────────────── */
+.aging-chips{display:flex;gap:6px;margin-bottom:10px;align-items:center;flex-wrap:wrap}
+.aging-chip-lbl{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--color-text-tertiary);margin-right:4px}
+.aging-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:var(--radius-full);border:1px solid var(--color-border-default);background:var(--color-surface-raised);font-size:11px;font-weight:500;color:var(--color-text-secondary);cursor:pointer;transition:all var(--transition-fast)}
+.aging-chip:hover{border-color:var(--color-text-tertiary);color:var(--color-text-primary)}
+.aging-chip.active{background:var(--color-surface-deep);color:#fff;border-color:var(--color-surface-deep)}
+.aging-chip-count{font-family:var(--font-mono);font-size:10px;font-weight:700;padding:1px 6px;border-radius:9999px;background:var(--color-surface-sunken);color:var(--color-text-tertiary);line-height:1}
+.aging-chip.danger .aging-chip-count{background:var(--danger-surface);color:var(--danger-text)}
+.aging-chip.active .aging-chip-count{background:rgba(255,255,255,.18);color:#fff}
+
 /* ── FILTER BAR ───────────────────────────────────────────────────────────── */
 .filter-bar{background:var(--color-surface-raised);border:1px solid var(--color-border-default);border-radius:var(--radius-md);padding:8px 12px;margin-bottom:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .f-search{display:flex;align-items:center;gap:7px;background:var(--color-surface-sunken);border:1px solid var(--color-border-default);border-radius:var(--radius-sm);padding:6px 10px;width:200px;flex-shrink:0;transition:border-color var(--transition-fast)}

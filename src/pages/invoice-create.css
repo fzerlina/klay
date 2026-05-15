@@ -44,8 +44,8 @@
 .method-tag.ai svg{width:9px;height:9px;stroke:currentColor;fill:none;stroke-width:2}
 .method-tag.man{background:var(--color-surface-sunken);color:var(--color-text-tertiary);border:1px solid var(--color-border-default)}
 
-/* Full-page create */
-.addpage{position:fixed;inset:0;background:var(--color-surface-base);z-index:100;display:flex;flex-direction:column}
+/* Create-invoice page — sits inside the Layout's main area so sidebar stays visible */
+.addpage{flex:1;min-width:0;min-height:0;background:var(--color-surface-base);display:flex;flex-direction:column;overflow:hidden}
 .ap-head{height:52px;background:var(--color-surface-raised);border-bottom:1px solid var(--color-border-default);display:flex;align-items:center;padding:0 24px;gap:16px;flex-shrink:0}
 .ap-title{font-size:14px;font-weight:700}
 .ap-stepper{display:flex;align-items:center;gap:6px;flex:1;justify-content:center}
@@ -194,8 +194,66 @@
 .btn-add-attach svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2}
 
 /* A4 doc — proportions follow ISO 216 (210 × 297 mm = 1:1.4142) */
-.a4-doc{background:#fff;width:100%;max-width:680px;aspect-ratio:210/297;box-shadow:0 4px 20px rgba(8,7,6,.15);border-radius:2px;font-size:12px;display:flex;flex-direction:column;margin-bottom:24px}
-.a4-doc>.a4-items{flex:1}
+.a4-doc{background:#fff;width:100%;max-width:680px;min-height:962px;box-shadow:0 4px 20px rgba(8,7,6,.15);border-radius:2px;font-size:12px;display:flex;flex-direction:column;margin-bottom:24px;padding:0}
+
+/* Enhanced header — brand + meta */
+.a4-head2{padding:26px 32px 20px;display:flex;justify-content:space-between;align-items:flex-start;gap:20px;border-bottom:2px solid var(--color-surface-deep)}
+.a4-brand{flex:1;min-width:0}
+.a4-brand-name{font-size:15px;font-weight:800;letter-spacing:-.02em;color:var(--color-text-primary);margin-bottom:5px;line-height:1.2}
+.a4-brand-tag{font-size:9px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--color-brand)}
+.a4-head-meta{display:flex;flex-direction:column;gap:3px;min-width:180px;flex-shrink:0}
+.a4-head-row{display:flex;justify-content:space-between;gap:12px;font-size:10px}
+.a4-head-lbl{color:var(--color-text-tertiary);font-weight:500;text-transform:uppercase;letter-spacing:.05em;font-size:9px;padding-top:1px;white-space:nowrap}
+.a4-head-val{font-family:var(--font-mono);font-weight:600;font-size:10.5px;color:var(--color-text-primary);text-align:right;white-space:nowrap}
+
+/* FROM / BILL TO / SHIP TO grid */
+.a4-addr-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;padding:22px 36px 18px}
+.a4-addr{min-width:0}
+.a4-addr-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--color-text-tertiary);margin-bottom:8px}
+.a4-addr-name{font-size:12px;font-weight:700;color:var(--color-text-primary);margin-bottom:4px;line-height:1.3}
+.a4-addr-line{font-size:10px;color:var(--color-text-secondary);line-height:1.5}
+.a4-addr-attn{margin-top:4px;font-style:italic;color:var(--color-text-tertiary)}
+.a4-addr-muted{color:var(--color-text-tertiary);opacity:.6;font-style:italic;margin-top:3px}
+
+/* Items table v2 — with numbering + sku */
+.a4-items2{padding:6px 36px 12px}
+.a4-items2 table{width:100%;border-collapse:collapse}
+.a4-items2 thead th{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--color-text-tertiary);padding:8px 6px;border-bottom:1px solid var(--color-surface-deep);text-align:left}
+.a4-items2 thead th.r{text-align:right}
+.a4-items2 thead th.a4-item-num{width:42px;color:var(--color-text-tertiary)}
+.a4-items2 tbody td{padding:10px 6px;border-bottom:1px solid var(--color-surface-sunken);font-size:11px;color:var(--color-text-secondary);vertical-align:top}
+.a4-items2 tbody td.r{text-align:right}
+.a4-items2 tbody td.mono{font-family:var(--font-mono);color:var(--color-text-primary);font-weight:500}
+.a4-items2 tbody td.empty{text-align:center;color:var(--color-text-tertiary);font-style:italic;padding:18px;border:none}
+.a4-items2 tbody td.a4-item-num{font-family:var(--font-mono);font-size:10px;color:var(--color-text-tertiary);font-weight:600;letter-spacing:.04em}
+.a4-item-name{font-size:11px;font-weight:600;color:var(--color-text-primary);line-height:1.35}
+.a4-item-code{font-family:var(--font-mono);font-size:9px;font-weight:600;color:var(--color-text-tertiary);letter-spacing:.05em;margin-top:3px;text-transform:uppercase}
+
+/* Totals */
+.a4-total{padding:6px 36px 18px;display:flex;justify-content:flex-end}
+.a4-tb{min-width:220px}
+.a4-tr{display:flex;justify-content:space-between;gap:16px;padding:3px 0;font-size:11px}
+.a4-tr.grand{border-top:1.5px solid var(--color-surface-deep);margin-top:6px;padding-top:8px;font-weight:700;font-size:14px}
+.a4-tr .lbl{color:var(--color-text-tertiary)}
+.a4-tr.grand .lbl{color:var(--color-text-primary)}
+.a4-tr .val{font-family:var(--font-mono);font-weight:600;color:var(--color-text-primary)}
+
+/* Notes */
+.a4-notes{padding:14px 36px;border-top:1px solid var(--color-surface-sunken)}
+.a4-notes-lbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--color-text-tertiary);margin-bottom:6px}
+.a4-notes-body{font-size:10.5px;color:var(--color-text-secondary);line-height:1.55;white-space:pre-wrap}
+.a4-notes-empty{color:var(--color-text-tertiary);font-style:italic}
+
+/* Signature slots */
+.a4-sig-grid{display:grid;grid-template-columns:1fr 1fr;gap:32px;padding:18px 36px 22px;margin-top:auto}
+.a4-sig{display:flex;flex-direction:column;gap:6px}
+.a4-sig-lbl{font-size:10px;color:var(--color-text-secondary);font-weight:500}
+.a4-sig-box{height:56px;border-bottom:1px solid var(--color-text-tertiary);margin-bottom:2px}
+.a4-sig-name{font-size:11px;font-weight:700;color:var(--color-text-primary)}
+.a4-sig-role{font-size:9px;color:var(--color-text-tertiary);letter-spacing:.04em}
+
+/* Footer */
+.a4-footer{padding:10px 36px 16px;font-size:9px;color:var(--color-text-tertiary);text-align:center;line-height:1.5;border-top:1px solid var(--color-surface-sunken)}
 .a4-head{padding:28px 32px 20px;display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid var(--color-surface-deep)}
 .a4-company{font-size:15px;font-weight:700;color:var(--color-text-primary);margin-bottom:2px}
 .a4-company-sub{font-size:10px;color:var(--color-text-tertiary);line-height:1.5}

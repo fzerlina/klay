@@ -208,7 +208,7 @@ export default function InvoiceCreatePage() {
   function selectProd(p) {
     setItems((prev) =>
       prev.map((it, idx) =>
-        idx === editRowIdx ? { desc: p.name, qty: it.qty || 1, unit: p.unit, price: p.price } : it,
+        idx === editRowIdx ? { desc: p.name, qty: it.qty || 1, unit: p.unit, price: p.price, sku: p.sku } : it,
       ),
     );
     setShowProdDrawer(false);
@@ -612,61 +612,81 @@ export default function InvoiceCreatePage() {
               </button>
             </div>
             <div className="a4-doc">
-              <div className="a4-head">
-                <div>
-                  <div className="a4-company">PT Sejahtera Makmur</div>
-                  <div className="a4-company-sub">Jl. Sudirman No. 99, Jakarta<br />NPWP: 12.345.678.9-000.000</div>
+              {/* Header: brand + invoice meta */}
+              <div className="a4-head2">
+                <div className="a4-brand">
+                  <div className="a4-brand-name">PT Sejahtera Makmur</div>
+                  <div className="a4-brand-tag">Invoice resmi</div>
                 </div>
-                <div className="a4-badge">INVOICE</div>
-              </div>
-              <div className="a4-meta">
-                <div className="a4-mi">
-                  <div className="a4-mi-lbl">No. Invoice</div>
-                  <div className="a4-mi-val">{invNo || "—"}</div>
-                </div>
-                <div className="a4-mi">
-                  <div className="a4-mi-lbl">Tanggal</div>
-                  <div className="a4-mi-val">{formatDate(date)}</div>
-                </div>
-                <div className="a4-mi">
-                  <div className="a4-mi-lbl">Jatuh Tempo</div>
-                  <div className="a4-mi-val">{formatDate(due)}</div>
-                </div>
-                <div className="a4-mi">
-                  <div className="a4-mi-lbl">Customer PO</div>
-                  <div className="a4-mi-val">{custPO || "—"}</div>
+                <div className="a4-head-meta">
+                  <div className="a4-head-row"><span className="a4-head-lbl">Invoice</span><span className="a4-head-val">{invNo || "—"}</span></div>
+                  <div className="a4-head-row"><span className="a4-head-lbl">Tanggal</span><span className="a4-head-val">{formatDate(date)}</span></div>
+                  <div className="a4-head-row"><span className="a4-head-lbl">Jatuh Tempo</span><span className="a4-head-val">{formatDate(due)}</span></div>
+                  {custPO && custPO !== "—" && (
+                    <div className="a4-head-row"><span className="a4-head-lbl">Customer PO</span><span className="a4-head-val">{custPO}</span></div>
+                  )}
                 </div>
               </div>
-              <div className="a4-to">
-                <div className="a4-to-lbl">Tagihan Kepada</div>
-                <div className="a4-to-name">{customer?.name || "—"}</div>
-                <div className="a4-to-sub">{customer?.address || ""}</div>
+
+              {/* FROM / DITAGIHKAN KE / DIKIRIM KE */}
+              <div className="a4-addr-grid">
+                <div className="a4-addr">
+                  <div className="a4-addr-lbl">DARI</div>
+                  <div className="a4-addr-name">PT Sejahtera Makmur</div>
+                  <div className="a4-addr-line">Jl. Sudirman No. 99</div>
+                  <div className="a4-addr-line">Jakarta 10220, Indonesia</div>
+                  <div className="a4-addr-line">NPWP 12.345.678.9-000.000</div>
+                </div>
+                <div className="a4-addr">
+                  <div className="a4-addr-lbl">DITAGIHKAN KE</div>
+                  <div className="a4-addr-name">{customer?.name || "—"}</div>
+                  <div className="a4-addr-line">{customer?.address || ""}</div>
+                  {customer?.npwp && <div className="a4-addr-line">NPWP {customer.npwp}</div>}
+                  {customer?.contacts?.[0] && (
+                    <div className="a4-addr-line a4-addr-attn">Attn: {customer.contacts[0].name}{customer.contacts[0].title ? `, ${customer.contacts[0].title}` : ""}</div>
+                  )}
+                </div>
+                <div className="a4-addr">
+                  <div className="a4-addr-lbl">DIKIRIM KE</div>
+                  <div className="a4-addr-name">{customer?.name || "—"}</div>
+                  <div className="a4-addr-line">{customer?.address || ""}</div>
+                  <div className="a4-addr-line a4-addr-muted">Sama dengan alamat tagihan</div>
+                </div>
               </div>
-              <div className="a4-items">
+
+              {/* Item table */}
+              <div className="a4-items2">
                 <table>
                   <thead>
                     <tr>
-                      <th style={{ width: "44%" }}>Deskripsi</th>
-                      <th className="r">Qty</th>
-                      <th className="r">Harga</th>
-                      <th className="r">Subtotal</th>
+                      <th className="a4-item-num">ITEM</th>
+                      <th>DESKRIPSI</th>
+                      <th className="r">QTY</th>
+                      <th className="r">HARGA</th>
+                      <th className="r">JUMLAH</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {items.length === 0 && (
-                      <tr><td colSpan={4} className="empty">Tambahkan item di form kiri</td></tr>
+                    {items.filter((it) => it.desc).length === 0 && (
+                      <tr><td colSpan={5} className="empty">Tambahkan item di form kiri</td></tr>
                     )}
                     {items.filter((it) => it.desc).map((it, i) => (
                       <tr key={i}>
-                        <td>{it.desc}</td>
-                        <td className="r">{it.qty} {it.unit}</td>
-                        <td className="r">{fmtNum(it.price)}</td>
-                        <td className="r">{fmtNum((Number(it.qty) || 0) * (Number(it.price) || 0))}</td>
+                        <td className="a4-item-num">{String(i + 1).padStart(2, "0")}</td>
+                        <td>
+                          <div className="a4-item-name">{it.desc}</div>
+                          {it.sku && <div className="a4-item-code">{it.sku}</div>}
+                        </td>
+                        <td className="r mono">{it.qty} {it.unit}</td>
+                        <td className="r mono">{fmtNum(it.price)}</td>
+                        <td className="r mono">{fmtNum((Number(it.qty) || 0) * (Number(it.price) || 0))}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
+
+              {/* Totals */}
               <div className="a4-total">
                 <div className="a4-tb">
                   <div className="a4-tr"><span className="lbl">DPP</span><span className="val">{fmtNum(dpp)}</span></div>
@@ -674,8 +694,36 @@ export default function InvoiceCreatePage() {
                   <div className="a4-tr grand"><span className="lbl">Total</span><span className="val">Rp {fmtNum(total)}</span></div>
                 </div>
               </div>
+
+              {/* Notes */}
+              <div className="a4-notes">
+                <div className="a4-notes-lbl">CATATAN</div>
+                <div className="a4-notes-body">
+                  {memo
+                    ? memo
+                    : <span className="a4-notes-empty">Mohon lakukan pembayaran sebelum tanggal jatuh tempo via transfer ke BCA 8888-123-456 a.n. PT Sejahtera Makmur. Cantumkan nomor invoice sebagai berita transfer.</span>}
+                </div>
+              </div>
+
+              {/* Signatures */}
+              <div className="a4-sig-grid">
+                <div className="a4-sig">
+                  <div className="a4-sig-lbl">Hormat Kami,</div>
+                  <div className="a4-sig-box" />
+                  <div className="a4-sig-name">PT Sejahtera Makmur</div>
+                  <div className="a4-sig-role">Authorized Signature</div>
+                </div>
+                <div className="a4-sig">
+                  <div className="a4-sig-lbl">Diterima Oleh,</div>
+                  <div className="a4-sig-box" />
+                  <div className="a4-sig-name">{customer?.name || "—"}</div>
+                  <div className="a4-sig-role">Tanggal & Tanda Tangan</div>
+                </div>
+              </div>
+
+              {/* Footer */}
               <div className="a4-footer">
-                Mohon lakukan pembayaran sebelum tanggal jatuh tempo. Terima kasih atas kepercayaan Anda.
+                Terima kasih atas kepercayaan Anda. · invoice@sejahteramakmur.co.id · +62 21 5550 1234
               </div>
             </div>
           </div>
