@@ -12,7 +12,7 @@ function fmtRpShort(n) {
 
 function shortName(name) {
   if (!name) return "—";
-  const tokens = name.split(/\s+/).filter((t) => t && !/^(PT|CV|UD|Toko|Koperasi)$/i.test(t));
+  const tokens = name.split(/\s+/).filter((t) => t && !/^(PT|CV|UD|Toko|Cooperative)$/i.test(t));
   return tokens.slice(0, 2).join(" ");
 }
 
@@ -38,14 +38,14 @@ export function makeInvoicesAiContext(invoices) {
   const reminderTarget = top[0] ? shortName(top[0].name) : "customer top";
 
   const welcome = (
-    <p>Halo Sarah — saya sudah membaca data piutang Anda hari ini. Mau saya bantu apa?</p>
+    <p>Hi Sarah — I have reviewed your data today. How can I help?</p>
   );
 
   const suggestions = [
-    "Customer mana yang paling sering telat?",
-    "Bagaimana proyeksi cashflow 7 hari ke depan?",
-    `Buatkan template reminder untuk ${reminderTarget}`,
-    "Bandingkan piutang bulan ini vs bulan lalu",
+    "Which customers pay late most often?",
+    "How proyeksi cashflow 7 days to depan?",
+    `Buatkan template reminder for ${reminderTarget}`,
+    "Compare receivables this month vs last month",
   ];
 
   function makeTopCustomersResponse(send) {
@@ -55,7 +55,7 @@ export function makeInvoicesAiContext(invoices) {
       role: "ai",
       content: (
         <>
-          <p>3 customer ini paling sering telat di 90 hari terakhir:</p>
+          <p>3 customer ini most often late di 90 days last:</p>
           <div className="ai-mini-table">
             {top.map((c) => {
               const cust = CUSTOMERS.find((x) => x.id === c.id);
@@ -65,7 +65,7 @@ export function makeInvoicesAiContext(invoices) {
                   <div className="ai-mini-body">
                     <div className="ai-mini-name">{cust?.name || c.name}</div>
                     <div className="ai-mini-meta">
-                      rata-rata <span className="ai-mini-meta-strong">{c.avgDpd}d</span> telat · {c.count} invoice aktif
+                      average <span className="ai-mini-meta-strong">{c.avgDpd}d</span> late · {c.count} invoice active
                     </div>
                   </div>
                   <div className="ai-mini-amt">{fmtRpShort(c.amount)}</div>
@@ -74,12 +74,12 @@ export function makeInvoicesAiContext(invoices) {
             })}
           </div>
           <p>
-            Bersama-sama mereka menyumbang <strong>{pct}%</strong> piutang telat. Mau saya buatkan draft reminder untuk ketiganya?
+            Together they account for <strong>{pct}%</strong> receivables late. Want me to create draft reminder for all three?
           </p>
           <div className="chat-chips">
             <ChatChip primary onClick={() => send("Ya, buat draft reminder")}>Ya, buat draft reminder</ChatChip>
-            <ChatChip onClick={() => send("Tampilkan riwayat penagihan")}>Tampilkan riwayat</ChatChip>
-            <ChatChip onClick={() => send("Saya akan telpon manual saja")}>Telpon manual saja</ChatChip>
+            <ChatChip onClick={() => send("Show riwayat penagihan")}>Show riwayat</ChatChip>
+            <ChatChip onClick={() => send("I will call manually")}>Telpon manual saja</ChatChip>
           </div>
         </>
       ),
@@ -92,13 +92,13 @@ export function makeInvoicesAiContext(invoices) {
       content: (
         <>
           <p>
-            Proyeksi cashflow 7 hari ke depan: <strong>Rp 4,2 M</strong> diharapkan masuk dari 18 invoice yang jatuh tempo.{" "}
-            <span className="danger">3 invoice berisiko telat</span> jika tidak ada follow-up.
+            Proyeksi cashflow 7 days to depan: <strong>Rp 4,2 M</strong> diharapkan masuk from 18 invoice that due.{" "}
+            <span className="danger">3 invoice berisiko late</span> jika none follow-up.
           </p>
-          <p>Mau saya buatkan reminder untuk 3 invoice yang berisiko?</p>
+          <p>Want me to create a reminder for 3 invoice that berisiko?</p>
           <div className="chat-chips">
-            <ChatChip primary>Buat reminder otomatis</ChatChip>
-            <ChatChip>Lihat detailnya dulu</ChatChip>
+            <ChatChip primary>Create reminder automatic</ChatChip>
+            <ChatChip>View detailnya dulu</ChatChip>
           </div>
         </>
       ),
@@ -110,14 +110,14 @@ export function makeInvoicesAiContext(invoices) {
       role: "ai",
       content: (
         <>
-          <p>Draft reminder untuk <strong>{name}</strong>:</p>
+          <p>Draft reminder for <strong>{name}</strong>:</p>
           <div className="ai-mini-table" style={{ padding: "10px 12px" }}>
             <div style={{ fontSize: 11.5, lineHeight: 1.55, color: "var(--color-text-secondary)", whiteSpace: "pre-line" }}>
-              {`Yth. Tim Keuangan ${name},\n\nKami ingin mengingatkan bahwa invoice yang kami terbitkan telah melewati tanggal jatuh tempo. Mohon dapat segera ditindaklanjuti agar tidak mengganggu kerja sama kita.\n\nDetail tagihan terlampir. Terima kasih atas perhatiannya.`}
+              {`Yth. Tim Keuangan ${name},\n\nKami ingin mengingatkan bahwa invoice that kami terbitkan telah passes date due. Mohon dapat segera ditindaklanjuti to avoid mengganggu kerja same we.\n\nDetail tagihan terlampir. Terima cashih for attentionnya.`}
             </div>
           </div>
           <div className="chat-chips">
-            <ChatChip primary>Kirim ke customer</ChatChip>
+            <ChatChip primary>Send to customer</ChatChip>
             <ChatChip>Edit dulu</ChatChip>
           </div>
         </>
@@ -131,13 +131,13 @@ export function makeInvoicesAiContext(invoices) {
       content: (
         <>
           <p>
-            Piutang bulan ini <strong>Rp 11,7 M</strong> — naik{" "}
-            <span style={{ color: "var(--color-warning-text)", fontWeight: 600 }}>+18%</span> dari bulan lalu (Rp 9,9 M). Sebagian besar peningkatan dari segmen <strong>Distribusi</strong> (4 customer baru).
+            Pipayables this month <strong>Rp 11,7 M</strong> — up{" "}
+            <span style={{ color: "var(--color-warning-text)", fontWeight: 600 }}>+18%</span> from last month (Rp 9,9 M). Sebagian besar increase from segmen <strong>Distribusi</strong> (4 customer baru).
           </p>
-          <p>Mau saya bandingkan per segmen atau per customer?</p>
+          <p>Want me to bandingkan as of segmen atau as of customer?</p>
           <div className="chat-chips">
-            <ChatChip primary>Per segmen</ChatChip>
-            <ChatChip>Per customer</ChatChip>
+            <ChatChip primary>As of segmen</ChatChip>
+            <ChatChip>As of customer</ChatChip>
           </div>
         </>
       ),
@@ -149,11 +149,11 @@ export function makeInvoicesAiContext(invoices) {
       role: "ai",
       content: (
         <>
-          <p>Saya belum bisa menjawab "{text}" secara spesifik di prototipe ini, tapi saya bisa bantu hal-hal berikut:</p>
+          <p>I can't specifically answer "{text}" in this prototype, but I can help with:</p>
           <div className="chat-chips">
-            <ChatChip>Customer paling sering telat</ChatChip>
+            <ChatChip>Customer most often late</ChatChip>
             <ChatChip>Proyeksi cashflow</ChatChip>
-            <ChatChip>Bandingkan dengan bulan lalu</ChatChip>
+            <ChatChip>Compare with last month</ChatChip>
           </div>
         </>
       ),
@@ -162,16 +162,16 @@ export function makeInvoicesAiContext(invoices) {
 
   function respond(text, helpers) {
     const t = text.toLowerCase();
-    if (t.includes("telat") || t.includes("sering") || t.includes("customer mana")) {
+    if (t.includes("late") || t.includes("sering") || t.includes("customer which")) {
       return makeTopCustomersResponse(helpers.send);
     }
-    if (t.includes("cashflow") || t.includes("proyeksi") || t.includes("7 hari")) {
+    if (t.includes("cashflow") || t.includes("proyeksi") || t.includes("7 days")) {
       return makeCashflowResponse();
     }
     if (t.includes("reminder") || t.includes("template")) {
       return makeReminderTemplateResponse(reminderTarget);
     }
-    if (t.includes("bulan lalu") || t.includes("bandingkan") || t.includes("mom")) {
+    if (t.includes("last month") || t.includes("bandingkan") || t.includes("mom")) {
       return makeMoMResponse();
     }
     return makeDefaultResponse(text);

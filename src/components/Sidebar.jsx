@@ -13,7 +13,7 @@ const navSections = [
     ],
   },
   {
-    section: "Keuangan",
+    section: "Finance",
     items: [
       {
         label: "General Ledger",
@@ -38,7 +38,7 @@ const navSections = [
     ],
   },
   {
-    section: "Operasional",
+    section: "Operations",
     items: [
       {
         label: "Vendors",
@@ -53,7 +53,7 @@ const navSections = [
     ],
   },
   {
-    section: "Laporan",
+    section: "Reports",
     items: [
       {
         label: "Trial Balance",
@@ -145,7 +145,7 @@ function BrandTexture() {
 }
 
 function CollapseToggle({ collapsed, onToggle }) {
-  const label = collapsed ? "Buka sidebar" : "Tutup sidebar";
+  const label = collapsed ? "Open sidebar" : "Close sidebar";
   return (
     <button
       type="button"
@@ -204,9 +204,9 @@ export default function Sidebar() {
               <circle cx="11" cy="11" r="8" />
               <line x1="21" y1="21" x2="16.65" y2="16.65" />
             </svg>
-            <input type="text" placeholder="Cari menu, jurnal…" />
+            <input type="text" placeholder="Search menu, entries…" />
           </div>
-          <button className="sb-notif-btn" type="button" title="Notifikasi">
+          <button className="sb-notif-btn" type="button" title="Notifications">
             <svg viewBox="0 0 24 24">
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
               <path d="M13.73 21a2 2 0 0 1-3.46 0" />

@@ -49,10 +49,10 @@ function AiSubtitle({ insights, onOpenSummary, onOpenChat, chatActive, summaryAc
       </p>
       <div className="lg-ai-ctas">
         <button type="button" className={`lg-ai-cta-primary${summaryActive ? " active" : ""}`} onClick={onOpenSummary}>
-          <SparkleIcon /> Ringkasan
+          <SparkleIcon /> Summary
         </button>
         <button type="button" className={`lg-ai-cta-secondary${chatActive ? " active" : ""}`} onClick={onOpenChat}>
-          {chatActive ? "Lanjutkan obrolan" : "Tanya Klay AI"} →
+          {chatActive ? "Continue chat" : "Ask Klay AI"} →
         </button>
         {insights.length > 1 && (
           <div className="lg-ai-dots" aria-hidden>
@@ -82,14 +82,14 @@ function CustomerRow({ r, isChecked, onCheck, onClick, onKebab, isSelected, isAl
         </div>
       </div>
       <div>
-        <span className={`type-badge ${r.type}`}>{r.type === "perusahaan" ? "Perusahaan" : "Individu"}</span>
+        <span className={`type-badge ${r.type}`}>{r.type === "perusahaan" ? "Company" : "Individual"}</span>
       </div>
       <div className="lg-cell-date">{r.top}</div>
       <div style={{ fontSize: 11, color: stale ? "var(--color-warning-text)" : "var(--color-text-tertiary)", fontWeight: stale ? 600 : 400 }}>
         {r.lastInv ? (
           <>
             {formatDate(r.lastInv)}
-            {stale && <div style={{ fontSize: 10, marginTop: 1 }}>{daysSince(r.lastInv)} hari lalu</div>}
+            {stale && <div style={{ fontSize: 10, marginTop: 1 }}>{daysSince(r.lastInv)} days ago</div>}
           </>
         ) : (
           <span className="lg-cell-em-dash">—</span>
@@ -105,7 +105,7 @@ function CustomerRow({ r, isChecked, onCheck, onClick, onKebab, isSelected, isAl
         )}
       </div>
       <div>
-        <span className={`status-badge ${r.active ? "active" : "inactive"}`}>{r.active ? "Aktif" : "Non-aktif"}</span>
+        <span className={`status-badge ${r.active ? "active" : "inactive"}`}>{r.active ? "Active" : "Inactive"}</span>
       </div>
       <div className="lg-cell-kebab" onClick={(e) => e.stopPropagation()}>
         <button className="lg-kebab" onClick={() => onKebab(r.id)}>
@@ -131,46 +131,46 @@ function RowMenu({ customer, onClose, onAction }) {
       </div>
       <div className="row-menu-item" onClick={() => onAction("newInvoice", customer)}>
         <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-        Buat Invoice Baru
+        New Invoice
       </div>
       <div className="row-menu-item" onClick={() => onAction("reminder", customer)}>
         <svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><polyline points="4 4 12 13 20 4"/></svg>
-        Kirim Reminder
+        Send Reminder
       </div>
       <div className="row-menu-sep" />
       {customer.active ? (
         <div className="row-menu-item" onClick={() => onAction("deactivate", customer)}>
           <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
-          Non-aktifkan
+          Deactivate
         </div>
       ) : (
         <div className="row-menu-item" onClick={() => onAction("activate", customer)}>
           <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
-          Aktifkan kembali
+          Reactivate
         </div>
       )}
       <div className="row-menu-item danger" onClick={() => onAction("archive", customer)}>
         <svg viewBox="0 0 24 24"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
-        Arsipkan
+        Archive
       </div>
     </div>
   );
 }
 
 const SORT_LABELS = {
-  "name-asc":     "Nama A-Z",
-  "name-desc":    "Nama Z-A",
-  "ar-desc":      "AR Balance tertinggi ↓",
-  "ar-asc":       "AR Balance terendah ↑",
-  "limit-desc":   "Credit Limit tertinggi ↓",
-  "limit-asc":    "Credit Limit terendah ↑",
-  "lastinv-desc": "Invoice terbaru ↓",
-  "lastinv-asc":  "Invoice terlama ↑",
-  "code-asc":     "Kode A-Z",
+  "name-asc":     "Name A-Z",
+  "name-desc":    "Name Z-A",
+  "ar-desc":      "AR Balance highest ↓",
+  "ar-asc":       "AR Balance lowest ↑",
+  "limit-desc":   "Credit Limit highest ↓",
+  "limit-asc":    "Credit Limit lowest ↑",
+  "lastinv-desc": "Invoice newest ↓",
+  "lastinv-asc":  "Invoice oldest ↑",
+  "code-asc":     "Code A-Z",
 };
 const GROUP_LABELS = {
   "none":   "—",
-  "type":   "Tipe",
+  "type":   "Type",
   "status": "Status",
 };
 
@@ -203,8 +203,8 @@ function GroupPopover({ value, onPick, onClose }) {
   const ref = useRef(null);
   useClickOutside(ref, onClose);
   const items = [
-    { k: "none",   lbl: "Tidak dikelompokkan" },
-    { k: "type",   lbl: "Tipe (Perusahaan / Individu)" },
+    { k: "none",   lbl: "Not grouped" },
+    { k: "type",   lbl: "Type (Company / Individualal)" },
     { k: "status", lbl: "Status" },
   ];
   return (
@@ -241,14 +241,14 @@ function FilterPopover({ values, onChange, onClose }) {
   const reset = () => setDraft({ types: new Set(), terms: new Set(), minAr: "", maxAr: "" });
   const apply = () => { onChange(draft); onClose(); };
 
-  const types = [["perusahaan", "Perusahaan"], ["individu", "Individu"]];
+  const types = [["perusahaan", "Company"], ["individu", "Individual"]];
   const allTerms = ["COD", "NET 7", "NET 14", "NET 15", "NET 21", "NET 30", "NET 45", "NET 60"];
 
   return (
     <div className="lg-popover lg-filter-pop" ref={ref}>
       <div className="lg-filter-body">
         <div className="lg-filter-fld">
-          <div className="lg-filter-fld-lbl">Tipe ({draft.types.size > 0 ? `${draft.types.size} dipilih` : "semua"})</div>
+          <div className="lg-filter-fld-lbl">Type ({draft.types.size > 0 ? `${draft.types.size} selected` : "semua"})</div>
           <div className="lg-toggle-row">
             {types.map(([v, lbl]) => (
               <button key={v} className={`lg-toggle${draft.types.has(v) ? " on" : ""}`} onClick={() => toggleType(v)}>
@@ -259,7 +259,7 @@ function FilterPopover({ values, onChange, onClose }) {
         </div>
 
         <div className="lg-filter-fld">
-          <div className="lg-filter-fld-lbl">Payment Terms ({draft.terms.size > 0 ? `${draft.terms.size} dipilih` : "semua"})</div>
+          <div className="lg-filter-fld-lbl">Payment Terms ({draft.terms.size > 0 ? `${draft.terms.size} selected` : "semua"})</div>
           <div className="lg-toggle-row">
             {allTerms.map((t) => (
               <button key={t} className={`lg-toggle${draft.terms.has(t) ? " on" : ""}`} onClick={() => toggleTerm(t)}>
@@ -270,7 +270,7 @@ function FilterPopover({ values, onChange, onClose }) {
         </div>
 
         <div className="lg-filter-fld">
-          <div className="lg-filter-fld-lbl">Rentang AR Balance (Rp)</div>
+          <div className="lg-filter-fld-lbl">Range AR Balance (Rp)</div>
           <div className="lg-filter-row2">
             <input type="number" className="lg-filter-input" placeholder="Min" value={draft.minAr} onChange={(e) => update({ minAr: e.target.value })} />
             <span style={{ color: "var(--color-text-tertiary)", fontSize: 11 }}>—</span>
@@ -280,7 +280,7 @@ function FilterPopover({ values, onChange, onClose }) {
       </div>
       <div className="lg-filter-foot">
         <button className="lg-filter-reset" onClick={reset}>Reset</button>
-        <button className="lg-filter-apply" onClick={apply}>Terapkan filter</button>
+        <button className="lg-filter-apply" onClick={apply}>Apply filter</button>
       </div>
     </div>
   );
@@ -337,34 +337,34 @@ export default function CustomersPage() {
   const activeCount = customers.filter((c) => c.active).length;
 
   const kpis = [
-    { lbl: "Total Customer",   card: "all",      val: String(customers.length),      sub: `${activeCount} aktif`,           tone: "primary" },
+    { lbl: "Total Customers",   card: "all",      val: String(customers.length),      sub: `${activeCount} active`,           tone: "primary" },
     { lbl: "Outstanding AR",   card: "ar",       val: "Rp " + fmtRp(totalAr),        sub: `${arCusts.length} customer`,     tone: "danger"  },
-    { lbl: "Jatuh Tempo",      card: "overdue",  val: String(overdueCusts.length),   sub: "ada invoice telat",              tone: "danger"  },
-    { lbl: "Non-aktif",        card: "inactive", val: String(inactiveCusts.length),  sub: "perlu di-review",                tone: "primary" },
+    { lbl: "Overdue",      card: "overdue",  val: String(overdueCusts.length),   sub: "with late invoices",              tone: "danger"  },
+    { lbl: "Inactive",        card: "inactive", val: String(inactiveCusts.length),  sub: "needs review",                tone: "primary" },
   ];
 
   // ── Tab counts ─────────────────────────────────────────────────────────
   const tabCounts = useMemo(() => ({
     semua:    customers.length,
-    aktif:    activeCount,
+    active:    activeCount,
     ar:       arCusts.length,
     overdue:  overdueCusts.length,
     inactive: inactiveCusts.length,
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }), []);
   const tabs = [
-    { k: "semua",    lbl: "Semua",       count: tabCounts.semua },
-    { k: "aktif",    lbl: "Aktif",       count: tabCounts.aktif },
-    { k: "ar",       lbl: "Punya AR",    count: tabCounts.ar },
-    { k: "overdue",  lbl: "Jatuh Tempo", count: tabCounts.overdue },
-    { k: "inactive", lbl: "Non-aktif",   count: tabCounts.inactive },
+    { k: "semua",    lbl: "All",       count: tabCounts.semua },
+    { k: "active",    lbl: "Active",       count: tabCounts.active },
+    { k: "ar",       lbl: "With AR",    count: tabCounts.ar },
+    { k: "overdue",  lbl: "Overdue", count: tabCounts.overdue },
+    { k: "inactive", lbl: "Inactive",   count: tabCounts.inactive },
   ];
 
   // ── Corpus ─────────────────────────────────────────────────────────────
   const corpus = useMemo(() => {
     let list = customers;
     if (filter.kind === "tab") {
-      if (filter.value === "aktif")        list = list.filter((c) => c.active);
+      if (filter.value === "active")        list = list.filter((c) => c.active);
       else if (filter.value === "ar")      list = list.filter((c) => (c.ar || 0) > 0);
       else if (filter.value === "overdue") list = list.filter((c) => c.arOverdue && c.active);
       else if (filter.value === "inactive")list = list.filter((c) => !c.active);
@@ -447,8 +447,8 @@ export default function CustomersPage() {
   const groups = useMemo(() => {
     if (effectiveGroup === "none") return null;
     const keyFn = (r) => {
-      if (effectiveGroup === "type") return r.type === "perusahaan" ? "Perusahaan" : "Individu";
-      if (effectiveGroup === "status") return r.active ? "Aktif" : "Non-aktif";
+      if (effectiveGroup === "type") return r.type === "perusahaan" ? "Company" : "Individual";
+      if (effectiveGroup === "status") return r.active ? "Active" : "Inactive";
       return "—";
     };
     const map = new Map();
@@ -514,7 +514,7 @@ export default function CustomersPage() {
   }
 
   function exportCsv() {
-    const headers = ["Kode", "Nama", "Tipe", "PIC", "Email", "Alamat", "NPWP", "Terms", "Credit Limit", "AR Balance", "Status", "Last Invoice"];
+    const headers = ["Code", "Name", "Type", "PIC", "Email", "Address", "NPWP", "Terms", "Credit Limit", "AR Balance", "Status", "Last Invoice"];
     const esc = (v) => {
       const s = String(v == null ? "" : v);
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -533,21 +533,21 @@ export default function CustomersPage() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    showToast(`${sortedRows.length} customer diekspor ke CSV`);
+    showToast(`${sortedRows.length} customer exported to CSV`);
   }
 
   function onRowAction(action, c) {
     setMenuOpenFor(null);
     if (action === "edit") showToast(`Edit ${c.name} (demo)`);
-    else if (action === "newInvoice") showToast(`Buat Invoice baru untuk ${c.name}`);
-    else if (action === "reminder") showToast(`Reminder dikirim ke ${c.name}`);
-    else if (action === "activate") showToast(`${c.name} diaktifkan kembali`);
-    else if (action === "deactivate") showToast(`${c.name} di-nonaktifkan`);
+    else if (action === "newInvoice") showToast(`Create Invoice baru for ${c.name}`);
+    else if (action === "reminder") showToast(`Reminder sent to ${c.name}`);
+    else if (action === "activate") showToast(`${c.name} diactivekan kembali`);
+    else if (action === "deactivate") showToast(`${c.name} di-nonactivekan`);
     else if (action === "archive") showToast(`${c.name} diarsipkan`);
   }
   function onBulk(action) {
     const count = checked.size;
-    if (action === "reminder") showToast(`Reminder dikirim ke ${count} customer`);
+    if (action === "reminder") showToast(`Reminder sent to ${count} customer`);
     else if (action === "archive") showToast(`${count} customer diarsipkan`);
     clearChecks();
   }
@@ -571,7 +571,7 @@ export default function CustomersPage() {
             <div className="lg-head-actions">
               <button className="lg-btn-brand" onClick={() => navigate("/customers/new")}>
                 <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                Tambah Customer
+                Add Customer
               </button>
             </div>
           </div>
@@ -608,7 +608,7 @@ export default function CustomersPage() {
             <div className="lg-filter-row">
               <div className="lg-search">
                 <svg viewBox="0 0 14 14"><circle cx="6" cy="6" r="3.5"/><path d="M9 9l3 3" strokeLinecap="round"/></svg>
-                <input placeholder="Cari nama, kode, atau PIC customer…" value={search} onChange={(e) => setSearch(e.target.value)} />
+                <input placeholder="Search customer name, code, or contact…" value={search} onChange={(e) => setSearch(e.target.value)} />
               </div>
               <div className="lg-filter-meta">
                 <div className="lg-meta-btn-wrap">
@@ -621,7 +621,7 @@ export default function CustomersPage() {
                 </div>
                 <div className="lg-meta-btn-wrap">
                   <button className="lg-meta-btn" onClick={() => { setSortPopOpen(!sortPopOpen); setFilterPopOpen(false); setGroupPopOpen(false); }}>
-                    <span className="meta-lbl">Urut:</span>
+                    <span className="meta-lbl">Sort:</span>
                     <span className="meta-val">{SORT_LABELS[effectiveSort]}</span>
                   </button>
                   {sortPopOpen && <SortPopover value={effectiveSort} onPick={(v) => { setSortChoice(v); setSortPopOpen(false); }} onClose={() => setSortPopOpen(false)} />}
@@ -635,19 +635,19 @@ export default function CustomersPage() {
                 </div>
                 <button className="lg-filter-export" onClick={exportCsv}>
                   <svg viewBox="0 0 12 12"><path d="M6 2v6M3 6l3 3 3-3M2 10.5h8" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                  Ekspor CSV
+                  Export CSV
                 </button>
-                {hasActiveFilters && <button className="lg-reset-all" onClick={resetAll}>Reset semua</button>}
+                {hasActiveFilters && <button className="lg-reset-all" onClick={resetAll}>Reset all</button>}
               </div>
             </div>
 
             <div className="lg-col-header">
               <div><input type="checkbox" className="lg-row-check" disabled /></div>
-              <div>Kode</div>
+              <div>Code</div>
               <div>Customer</div>
-              <div>Tipe</div>
+              <div>Type</div>
               <div>Terms</div>
-              <div>Invoice Terakhir</div>
+              <div>Last Invoice</div>
               <div style={{ textAlign: "right" }}>AR Balance</div>
               <div>Status</div>
               <div />
@@ -695,7 +695,7 @@ export default function CustomersPage() {
                 })
               ) : (
                 <>
-                  {sortedRows.length === 0 && <div className="lg-empty">Tidak ada customer yang cocok</div>}
+                  {sortedRows.length === 0 && <div className="lg-empty">None customer matching</div>}
                   {sortedRows.map((r, i) => (
                     <div key={r.id} style={{ position: "relative" }}>
                       <CustomerRow
@@ -724,22 +724,22 @@ export default function CustomersPage() {
       {/* ── Sticky footer ──────────────────────────────────────────── */}
       <div className="lg-footer">
         <div className="lg-footer-left">
-          <span><span className="lg-footer-num">{checked.size}</span> dipilih</span>
+          <span><span className="lg-footer-num">{checked.size}</span> selected</span>
           {checked.size > 0 ? (
             <>
-              <button className="lg-footer-bulk-btn" onClick={() => onBulk("reminder")}>Kirim Reminder</button>
-              <button className="lg-footer-bulk-btn" onClick={() => onBulk("archive")}>Arsipkan</button>
-              <button className="lg-footer-clear" onClick={clearChecks}>Batal pilih</button>
+              <button className="lg-footer-bulk-btn" onClick={() => onBulk("reminder")}>Send Reminder</button>
+              <button className="lg-footer-bulk-btn" onClick={() => onBulk("archive")}>Archive</button>
+              <button className="lg-footer-clear" onClick={clearChecks}>Clear selection</button>
             </>
           ) : (
             <>
               <span className="lg-footer-sep">·</span>
-              <span>Menampilkan <span className="lg-footer-num">{filteredRows.length}</span> customer</span>
+              <span>Showing <span className="lg-footer-num">{filteredRows.length}</span> customers</span>
             </>
           )}
         </div>
         <div className="lg-footer-right">
-          <span className="lg-footer-lbl">{checked.size > 0 ? "Outstanding terpilih" : "Outstanding halaman"}</span>
+          <span className="lg-footer-lbl">{checked.size > 0 ? "Outstanding (selected)" : "Outstanding (page)"}</span>
           <span className="lg-footer-total">Rp {fmtRp(checked.size > 0 ? selectedTotal : pageTotal)}</span>
         </div>
       </div>
@@ -755,7 +755,7 @@ export default function CustomersPage() {
                 <div className="drawer-title">{selected.name}</div>
                 <div className="drawer-sub" style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   {selected.code}
-                  <span className={`type-badge ${selected.type}`}>{selected.type === "perusahaan" ? "Perusahaan" : "Individu"}</span>
+                  <span className={`type-badge ${selected.type}`}>{selected.type === "perusahaan" ? "Company" : "Individual"}</span>
                 </div>
               </div>
               <button className="drawer-close" onClick={() => setSelectedId(null)}>
@@ -763,8 +763,11 @@ export default function CustomersPage() {
               </button>
             </div>
             <div className="drawer-tabs">
-              {[["detail", "Detail"], ["contacts", "Kontak"], ["invoices", "Invoice"]].map(([t, label]) => (
-                <div key={t} className={`drawer-tab${drawerTab === t ? " active" : ""}`} onClick={() => setDrawerTab(t)}>{label}</div>
+              {[["detail", "Detail"], ["contacts", "Contact"], ["invoices", "Invoice"], ["ai", "AI Insight"]].map(([t, label]) => (
+                <div key={t} className={`drawer-tab${drawerTab === t ? " active" : ""}`} onClick={() => setDrawerTab(t)}>
+                  {t === "ai" && <span style={{ marginRight: 4, color: "var(--color-action)" }}>✦</span>}
+                  {label}
+                </div>
               ))}
             </div>
             <div className="drawer-body">
@@ -772,24 +775,24 @@ export default function CustomersPage() {
                 <>
                   <div className="drawer-stat-row">
                     <div className="drawer-stat-card">
-                      <div className="drawer-stat-lbl">AR Aktif</div>
+                      <div className="drawer-stat-lbl">AR Active</div>
                       <div className={`drawer-stat-val${selected.arOverdue ? " danger" : ""}`}>{formatRupiah(selected.ar)}</div>
                     </div>
                     <div className="drawer-stat-card">
-                      <div className="drawer-stat-lbl">Total Invoice</div>
+                      <div className="drawer-stat-lbl">Total Invoices</div>
                       <div className="drawer-stat-val">{selected.totalInv}</div>
                     </div>
                   </div>
                   <div className="drawer-section">
-                    <div className="drawer-section-title">Informasi Customer</div>
+                    <div className="drawer-section-title">Customer Information</div>
                     {[
-                      ["Nama Legal", selected.legalName || selected.name],
-                      ["Kode", selected.code],
+                      ["Legal Name", selected.legalName || selected.name],
+                      ["Code", selected.code],
                       ["NPWP", selected.npwp || "—"],
-                      ["Alamat", selected.address],
+                      ["Address", selected.address],
                       ["Terms", selected.top],
                       ["Credit Limit", selected.creditLimit > 0 ? formatRupiah(selected.creditLimit) : "—"],
-                      ["Invoice Terakhir", selected.lastInv ? formatDate(selected.lastInv) : "—"],
+                      ["Last Invoice", selected.lastInv ? formatDate(selected.lastInv) : "—"],
                     ].map(([label, value]) => (
                       <div key={label} className="drawer-row">
                         <div className="drawer-label">{label}</div>
@@ -800,8 +803,8 @@ export default function CustomersPage() {
                   <div className="drawer-section">
                     <div className="drawer-section-title">Pengaturan Invoice</div>
                     {[
-                      ["Mode Invoice", selected.invMode === "auto" ? "Otomatis" : "Manual"],
-                      ["Channel Kirim", selected.invCh?.length > 0 ? selected.invCh.join(", ") : "—"],
+                      ["Invoice Mode", selected.invMode === "auto" ? "Automatic" : "Manual"],
+                      ["Channel", selected.invCh?.length > 0 ? selected.invCh.join(", ") : "—"],
                     ].map(([label, value]) => (
                       <div key={label} className="drawer-row">
                         <div className="drawer-label">{label}</div>
@@ -813,10 +816,10 @@ export default function CustomersPage() {
               )}
               {drawerTab === "contacts" && (
                 <div className="drawer-section">
-                  <div className="drawer-section-title">Kontak</div>
+                  <div className="drawer-section-title">Contact</div>
                   {selected.contacts.map((ct, i) => (
                     <div key={i} style={{ background: "var(--color-surface-sunken)", border: "1px solid var(--color-border-default)", borderRadius: "var(--radius-md)", padding: "12px 14px", marginBottom: 8 }}>
-                      {ct.primary && <div style={{ fontSize: 10, fontWeight: 700, color: "var(--color-action)", marginBottom: 4, textTransform: "uppercase", letterSpacing: ".06em" }}>PIC Utama</div>}
+                      {ct.primary && <div style={{ fontSize: 10, fontWeight: 700, color: "var(--color-action)", marginBottom: 4, textTransform: "uppercase", letterSpacing: ".06em" }}>Primary PIC</div>}
                       <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>{ct.name}</div>
                       <div style={{ fontSize: 11, color: "var(--color-text-tertiary)", marginBottom: 6 }}>{ct.title}</div>
                       <div style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>{ct.phone}</div>
@@ -829,7 +832,7 @@ export default function CustomersPage() {
                 <div className="drawer-section">
                   <div className="drawer-section-title">Invoice</div>
                   {custInvoices.length === 0
-                    ? <div style={{ color: "var(--color-text-tertiary)", fontSize: 12, padding: "12px 0" }}>Belum ada invoice.</div>
+                    ? <div style={{ color: "var(--color-text-tertiary)", fontSize: 12, padding: "12px 0" }}>Not yet there is invoice.</div>
                     : custInvoices.map((inv) => (
                       <div key={inv.id} style={{ background: "var(--color-surface-sunken)", border: "1px solid var(--color-border-default)", borderRadius: "var(--radius-md)", padding: "10px 12px", marginBottom: 8 }}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
@@ -841,13 +844,46 @@ export default function CustomersPage() {
                           <div style={{ textAlign: "right", flexShrink: 0 }}>
                             <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700 }}>{formatRupiah(inv.total)}</div>
                             <span className={`badge badge-${inv.payStatus}`} style={{ marginTop: 4, display: "inline-flex" }}>
-                              {inv.payStatus === "lunas" ? "Lunas" : inv.payStatus === "overdue" ? "Jatuh Tempo" : inv.payStatus === "belumbayar" ? "Belum Bayar" : inv.payStatus}
+                              {inv.payStatus === "lunas" ? "Paid" : inv.payStatus === "overdue" ? "Overdue" : inv.payStatus === "belumbayar" ? "Unpaid" : inv.payStatus}
                             </span>
                           </div>
                         </div>
                       </div>
                     ))
                   }
+                </div>
+              )}
+              {drawerTab === "ai" && (
+                <div className="drawer-section">
+                  <div className="drawer-section-title">AI Insight</div>
+                  <div style={{ padding: 12, background: "var(--ai-surface)", border: "1px solid var(--ai-border)", borderRadius: "var(--radius-md)", marginBottom: 10 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "var(--color-action)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 4 }}>✦ Customer Profile</div>
+                    <div style={{ fontSize: 12, color: "var(--color-text-secondary)", lineHeight: 1.55 }}>
+                      Klay AI mevalue customer ini as <strong>{selected.arOverdue ? "berisiko" : selected.active ? "sehat" : "needs reactivation"}</strong> berdasarkan pattern payment & frekuensi order.
+                    </div>
+                  </div>
+                  {selected.arOverdue && (
+                    <div style={{ padding: 12, background: "var(--color-danger-surface)", border: "1px solid var(--color-danger-border)", borderRadius: "var(--radius-md)", marginBottom: 10 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: "var(--color-danger-text)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 4 }}>⚠ AR Overdue</div>
+                      <div style={{ fontSize: 12, color: "var(--color-text-secondary)", lineHeight: 1.55 }}>
+                        Customer have invoices that already lewat due total <strong>{formatRupiah(selected.ar)}</strong>. Perteambangkan reminder, follow-up call, atau hold order baru.
+                      </div>
+                    </div>
+                  )}
+                  {selected.creditLimit > 0 && selected.ar > selected.creditLimit && (
+                    <div style={{ padding: 12, background: "var(--color-warning-surface)", border: "1px solid var(--color-warning-border)", borderRadius: "var(--radius-md)", marginBottom: 10 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: "var(--color-warning-text)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 4 }}>Credit Limit Terlampaui</div>
+                      <div style={{ fontSize: 12, color: "var(--color-text-secondary)", lineHeight: 1.55 }}>
+                        AR <strong>{formatRupiah(selected.ar)}</strong> exceeds limit <strong>{formatRupiah(selected.creditLimit)}</strong>. Hold order baru atau request top-up limit.
+                      </div>
+                    </div>
+                  )}
+                  <div style={{ padding: 12, background: "var(--color-surface-sunken)", border: "1px solid var(--color-border-default)", borderRadius: "var(--radius-md)" }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "var(--color-text-tertiary)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 4 }}>Recommendation</div>
+                    <div style={{ fontSize: 12, color: "var(--color-text-secondary)", lineHeight: 1.55 }}>
+                      Total <strong>{selected.totalInv} invoice</strong> selong relasi. Setting invoice: <strong>{selected.invMode === "auto" ? "Automatic" : "Manual"}</strong>{selected.invCh?.length > 0 ? ` via ${selected.invCh.join(", ")}` : ""}.
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -858,7 +894,7 @@ export default function CustomersPage() {
               </button>
               <button className="drawer-btn primary">
                 <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                Buat Invoice
+                Create Invoice
               </button>
             </div>
           </div>

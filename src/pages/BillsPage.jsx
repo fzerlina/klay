@@ -18,13 +18,13 @@ function fmtRp(n) {
 }
 
 const APPROVAL_LABEL = { approved: "Approved", review: "Review", draft: "Draft" };
-const PAY_LABEL = { paid: "Lunas", unpaid: "Belum Bayar", overdue: "Jatuh Tempo" };
+const PAY_LABEL = { paid: "Paid", unpaid: "Unpaid", overdue: "Overdue" };
 const GRN_LABEL = { matched: "Matched", pending: "Pending", mismatch: "Mismatch" };
 
 function payBadgeClass(pay) {
   if (pay === "paid") return "badge-lunas";
   if (pay === "overdue") return "badge-overdue";
-  return "badge-belumbayar";
+  return "badge-unpaid";
 }
 
 function toRow(b) {
@@ -49,10 +49,10 @@ function toRow(b) {
 }
 
 const AGING_BUCKETS = [
-  { key: "90+",    lbl: "Telat > 90 hari",    minDays: 90, maxDaysCap: 150, tone: "danger" },
-  { key: "60-90",  lbl: "Telat 60 – 90 hari", minDays: 60, maxDaysCap: 90,  tone: "danger" },
-  { key: "30-60",  lbl: "Telat 30 – 60 hari", minDays: 30, maxDaysCap: 60,  tone: "warn"   },
-  { key: "0-30",   lbl: "Telat < 30 hari",    minDays:  0, maxDaysCap: 30,  tone: "warn"   },
+  { key: "90+",    lbl: "Overdue > 90 days",    minDays: 90, maxDaysCap: 150, tone: "danger" },
+  { key: "60-90",  lbl: "Overdue 60-90 days", minDays: 60, maxDaysCap: 90,  tone: "danger" },
+  { key: "30-60",  lbl: "Overdue 30-60 days", minDays: 30, maxDaysCap: 60,  tone: "warn"   },
+  { key: "0-30",   lbl: "Overdue < 30 days",    minDays:  0, maxDaysCap: 30,  tone: "warn"   },
 ];
 function bucketOf(d) {
   if (d >= 90) return "90+";
@@ -105,10 +105,10 @@ function AiSubtitle({ insights, onOpenSummary, onOpenChat, chatActive, summaryAc
       </p>
       <div className="lg-ai-ctas">
         <button type="button" className={`lg-ai-cta-primary${summaryActive ? " active" : ""}`} onClick={onOpenSummary}>
-          <SparkleIcon /> Ringkasan
+          <SparkleIcon /> Summary
         </button>
         <button type="button" className={`lg-ai-cta-secondary${chatActive ? " active" : ""}`} onClick={onOpenChat}>
-          {chatActive ? "Lanjutkan obrolan" : "Tanya Klay AI"} →
+          {chatActive ? "Continue chat" : "Ask Klay AI"} →
         </button>
         {insights.length > 1 && (
           <div className="lg-ai-dots" aria-hidden>
@@ -122,12 +122,12 @@ function AiSubtitle({ insights, onOpenSummary, onOpenChat, chatActive, summaryAc
 
 function LedgerRow({ r, bucket, isChecked, onCheck, onClick, onKebab, isSelected, isAlt }) {
   const isOverdue = r.pay === "overdue" && r.daysOverdue > 0;
-  const isLunas = r.pay === "paid";
+  const isPaid = r.pay === "paid";
   const isDraft = r.approval === "draft";
   const isReview = r.approval === "review";
   const dotTone =
     isOverdue ? (bucket?.tone === "warn" ? "warn" : "") :
-    isLunas ? "success" :
+    isPaid ? "success" :
     "muted";
   const pct = isOverdue && bucket
     ? Math.min(100, Math.max(8, ((r.daysOverdue - bucket.minDays) / ((bucket.maxDaysCap - bucket.minDays) || 30)) * 100))
@@ -160,12 +160,12 @@ function LedgerRow({ r, bucket, isChecked, onCheck, onClick, onKebab, isSelected
             <div className="lg-cell-aging-track">
               <div className={`lg-cell-aging-fill${bucket?.tone === "warn" ? " warn" : ""}`} style={{ width: pct + "%" }} />
             </div>
-            <div className="lg-cell-aging-scale">{bucket.minDays} ←—— {bucket.maxDaysCap} hari</div>
+            <div className="lg-cell-aging-scale">{bucket.minDays} ←—— {bucket.maxDaysCap} days</div>
           </>
-        ) : isLunas ? (
-          <span className="lg-cell-status-marker success"><span className="dot" />Lunas</span>
+        ) : isPaid ? (
+          <span className="lg-cell-status-marker success"><span className="dot" />Paid</span>
         ) : isReview ? (
-          <span className="lg-cell-status-marker"><span className="dot" />Menunggu approval</span>
+          <span className="lg-cell-status-marker"><span className="dot" />Awaiting approval</span>
         ) : isDraft ? (
           <span className="lg-cell-status-marker"><span className="dot" />Draft</span>
         ) : (
@@ -208,28 +208,28 @@ function RowMenu({ inv, onClose, onAction }) {
       {canPay && (
         <div className="row-menu-item" onClick={() => onAction("pay", inv)}>
           <svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
-          Catat Pembayaran
+          Catat Payment
         </div>
       )}
       <div className="row-menu-item" onClick={() => onAction("duplicate", inv)}>
         <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-        Duplikat
+        Duplicate
       </div>
       <div className="row-menu-sep" />
       <div className="row-menu-item danger" onClick={() => onAction("archive", inv)}>
         <svg viewBox="0 0 24 24"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
-        Arsipkan
+        Archive
       </div>
     </div>
   );
 }
 
 const SORT_LABELS = {
-  "hari-telat-desc": "Hari Telat ↓",
-  "tanggal-desc":    "Tanggal terbaru ↓",
-  "tanggal-asc":     "Tanggal terlama ↑",
-  "total-desc":      "Total tertinggi ↓",
-  "total-asc":       "Total terendah ↑",
+  "days-late-desc": "Days Overdue ↓",
+  "date-desc":    "Newest date ↓",
+  "date-asc":     "Date oldest ↑",
+  "total-desc":      "Total highest ↓",
+  "total-asc":       "Total lowest ↑",
   "vendor-asc":      "Vendor A-Z",
   "vendor-desc":     "Vendor Z-A",
 };
@@ -237,7 +237,7 @@ const GROUP_LABELS = {
   "none":   "—",
   "aging":  "Aging",
   "vendor": "Vendor",
-  "bulan":  "Bulan",
+  "bulan":  "Month",
   "status": "Status Bayar",
 };
 
@@ -270,10 +270,10 @@ function GroupPopover({ value, canAging, onPick, onClose }) {
   const ref = useRef(null);
   useClickOutside(ref, onClose);
   const items = [
-    { k: "none",   lbl: "Tidak dikelompokkan" },
+    { k: "none",   lbl: "Not grouped" },
     { k: "aging",  lbl: "Aging", disabled: !canAging },
     { k: "vendor", lbl: "Vendor" },
-    { k: "bulan",  lbl: "Bulan (Tanggal Bill)" },
+    { k: "bulan",  lbl: "Month (Date Bill)" },
     { k: "status", lbl: "Status Bayar" },
   ];
   return (
@@ -310,14 +310,14 @@ function FilterPopover({ values, onChange, vendors: vendorList, onClose }) {
     <div className="lg-popover lg-filter-pop" ref={ref}>
       <div className="lg-filter-body">
         <div className="lg-filter-fld">
-          <div className="lg-filter-fld-lbl">Vendor ({draft.vendors.size > 0 ? `${draft.vendors.size} dipilih` : "semua"})</div>
+          <div className="lg-filter-fld-lbl">Vendor ({draft.vendors.size > 0 ? `${draft.vendors.size} selected` : "semua"})</div>
           <div className="lg-cust-multi">
             <div className="lg-cust-search">
               <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6"><circle cx="5" cy="5" r="3"/><path d="M7.5 7.5l3 3"/></svg>
               <input value={vendorSearch} onChange={(e) => setVendorSearch(e.target.value)} placeholder="Cari vendor…" />
             </div>
             <div className="lg-cust-list">
-              {filteredV.length === 0 && <div className="lg-cust-empty">Tidak ada vendor cocok</div>}
+              {filteredV.length === 0 && <div className="lg-cust-empty">None vendor matching</div>}
               {filteredV.map((v) => (
                 <label key={v.id} className="lg-cust-item">
                   <input type="checkbox" checked={draft.vendors.has(v.id)} onChange={() => toggleVendor(v.id)} />
@@ -330,7 +330,7 @@ function FilterPopover({ values, onChange, vendors: vendorList, onClose }) {
         </div>
 
         <div className="lg-filter-fld">
-          <div className="lg-filter-fld-lbl">Rentang Nominal (Rp)</div>
+          <div className="lg-filter-fld-lbl">Range Nominal (Rp)</div>
           <div className="lg-filter-row2">
             <input type="number" className="lg-filter-input" placeholder="Min" value={draft.minAmount} onChange={(e) => update({ minAmount: e.target.value })} />
             <span style={{ color: "var(--color-text-tertiary)", fontSize: 11 }}>—</span>
@@ -340,10 +340,10 @@ function FilterPopover({ values, onChange, vendors: vendorList, onClose }) {
 
         <div className="lg-filter-fld">
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div className="lg-filter-fld-lbl">Rentang Tanggal</div>
+            <div className="lg-filter-fld-lbl">Range Date</div>
             <div className="lg-segmented">
-              <button className={`lg-seg${draft.dateField === "date" ? " on" : ""}`} onClick={() => update({ dateField: "date" })}>Tanggal Bill</button>
-              <button className={`lg-seg${draft.dateField === "due" ? " on" : ""}`} onClick={() => update({ dateField: "due" })}>Jatuh Tempo</button>
+              <button className={`lg-seg${draft.dateField === "date" ? " on" : ""}`} onClick={() => update({ dateField: "date" })}>Date Bill</button>
+              <button className={`lg-seg${draft.dateField === "due" ? " on" : ""}`} onClick={() => update({ dateField: "due" })}>Overdue</button>
             </div>
           </div>
           <div className="lg-filter-row2">
@@ -356,7 +356,7 @@ function FilterPopover({ values, onChange, vendors: vendorList, onClose }) {
         <div className="lg-filter-fld">
           <div className="lg-filter-fld-lbl">Status GRN</div>
           <div className="lg-toggle-row">
-            {[["all", "Semua"], ["matched", "Matched"], ["pending", "Pending"], ["mismatch", "Mismatch"]].map(([k, lbl]) => (
+            {[["all", "All"], ["matched", "Matched"], ["pending", "Pending"], ["mismatch", "Mismatch"]].map(([k, lbl]) => (
               <button key={k} className={`lg-toggle${draft.grn === k ? " on" : ""}`} onClick={() => update({ grn: k })}>{lbl}</button>
             ))}
           </div>
@@ -364,7 +364,7 @@ function FilterPopover({ values, onChange, vendors: vendorList, onClose }) {
       </div>
       <div className="lg-filter-foot">
         <button className="lg-filter-reset" onClick={reset}>Reset</button>
-        <button className="lg-filter-apply" onClick={apply}>Terapkan filter</button>
+        <button className="lg-filter-apply" onClick={apply}>Apply filter</button>
       </div>
     </div>
   );
@@ -414,10 +414,10 @@ export default function BillsPage() {
     const overdueThisMonth = overdue.filter((b) => b.due && b.due.startsWith(monthPfx));
     const thisMonth = bills.filter((b) => b.date && b.date.startsWith(monthPfx));
     return [
-      { lbl: "Total Utang AP",        card: "total",        val: "Rp " + fmtRp(totalAP),                                       sub: active.length + " bill aktif",                                       tone: "primary" },
-      { lbl: "Jatuh Tempo",           card: "overdue",      val: "Rp " + fmtRp(overdue.reduce((s, b) => s + b.sisa, 0)),       sub: overdue.length + " bill telat",                                       tone: "danger"  },
-      { lbl: "Jatuh Tempo Bulan Ini", card: "overdueMonth", val: String(overdueThisMonth.length),                              sub: "Rp " + fmtRp(overdueThisMonth.reduce((s, b) => s + b.sisa, 0)),      tone: "warn"    },
-      { lbl: "Dibuat Bulan Ini",      card: "thisMonth",    val: "Rp " + fmtRp(thisMonth.reduce((s, b) => s + b.total, 0)),    sub: thisMonth.length + " bill baru",                                      tone: "primary" },
+      { lbl: "Total AP",        card: "total",        val: "Rp " + fmtRp(totalAP),                                       sub: active.length + " bill active",                                       tone: "primary" },
+      { lbl: "Overdue",           card: "overdue",      val: "Rp " + fmtRp(overdue.reduce((s, b) => s + b.sisa, 0)),       sub: overdue.length + " bill late",                                       tone: "danger"  },
+      { lbl: "Overdue Month Ini", card: "overdueMonth", val: String(overdueThisMonth.length),                              sub: "Rp " + fmtRp(overdueThisMonth.reduce((s, b) => s + b.sisa, 0)),      tone: "warn"    },
+      { lbl: "Created This Month",      card: "thisMonth",    val: "Rp " + fmtRp(thisMonth.reduce((s, b) => s + b.total, 0)),    sub: thisMonth.length + " new bill",                                      tone: "primary" },
     ];
   }, [monthPfx]);
 
@@ -441,12 +441,12 @@ export default function BillsPage() {
   }), []);
 
   const tabs = [
-    { k: "semua",      lbl: "Semua",       count: tabCounts.semua },
+    { k: "semua",      lbl: "All",       count: tabCounts.semua },
     { k: "approved",   lbl: "Approved",    count: tabCounts.approved },
     { k: "review",     lbl: "Review",      count: tabCounts.review },
     { k: "draft",      lbl: "Draft",       count: tabCounts.draft },
-    { k: "jatuhtempo", lbl: "Jatuh Tempo", count: tabCounts.jatuhtempo },
-    { k: "lunas",      lbl: "Lunas",       count: tabCounts.lunas },
+    { k: "jatuhtempo", lbl: "Overdue", count: tabCounts.jatuhtempo },
+    { k: "lunas",      lbl: "Paid",       count: tabCounts.lunas },
   ];
 
   // ── Corpus ─────────────────────────────────────────────────────────────
@@ -522,18 +522,18 @@ export default function BillsPage() {
 
   // ── Sort + Group ───────────────────────────────────────────────────────
   const onJatuhTempo = filter.kind === "tab" && filter.value === "jatuhtempo";
-  const onLunas      = filter.kind === "tab" && filter.value === "lunas";
+  const onPaid      = filter.kind === "tab" && filter.value === "lunas";
   const onDraft      = filter.kind === "tab" && filter.value === "draft";
 
-  const effectiveSort  = sortChoice  || (onJatuhTempo ? "hari-telat-desc" : "tanggal-desc");
+  const effectiveSort  = sortChoice  || (onJatuhTempo ? "days-late-desc" : "date-desc");
   const effectiveGroup = groupChoice || (onJatuhTempo ? "aging" : "none");
 
   const sortedRows = useMemo(() => {
     const arr = [...filteredRows];
     switch (effectiveSort) {
-      case "hari-telat-desc": arr.sort((a, b) => b.daysOverdue - a.daysOverdue); break;
-      case "tanggal-desc":    arr.sort((a, b) => (b.raw.date || "").localeCompare(a.raw.date || "")); break;
-      case "tanggal-asc":     arr.sort((a, b) => (a.raw.date || "").localeCompare(b.raw.date || "")); break;
+      case "days-late-desc": arr.sort((a, b) => b.daysOverdue - a.daysOverdue); break;
+      case "date-desc":    arr.sort((a, b) => (b.raw.date || "").localeCompare(a.raw.date || "")); break;
+      case "date-asc":     arr.sort((a, b) => (a.raw.date || "").localeCompare(b.raw.date || "")); break;
       case "total-desc":      arr.sort((a, b) => b.total - a.total); break;
       case "total-asc":       arr.sort((a, b) => a.total - b.total); break;
       case "vendor-asc":      arr.sort((a, b) => a.co.localeCompare(b.co)); break;
@@ -561,11 +561,11 @@ export default function BillsPage() {
       if (effectiveGroup === "vendor") return r.co;
       if (effectiveGroup === "bulan") return (r.raw.date || "").slice(0, 7);
       if (effectiveGroup === "status") {
-        if (r.pay === "paid") return "Lunas";
-        if (r.pay === "overdue") return "Jatuh Tempo";
+        if (r.pay === "paid") return "Paid";
+        if (r.pay === "overdue") return "Overdue";
         if (r.approval === "draft") return "Draft";
         if (r.approval === "review") return "Review";
-        return "Belum Bayar";
+        return "Unpaid";
       }
       return "—";
     };
@@ -625,7 +625,7 @@ export default function BillsPage() {
   }
 
   function exportCsv() {
-    const headers = ["Bill", "No. Invoice Vendor", "Tanggal", "Vendor", "Alamat", "Jatuh Tempo", "Hari Telat", "Total", "Approval", "Status Bayar"];
+    const headers = ["Bill", "Vendor Invoice No.", "Date", "Vendor", "Address", "Overdue", "Days Overdue", "Total", "Approval", "Status Bayar"];
     const esc = (v) => {
       const s = String(v == null ? "" : v);
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -644,15 +644,15 @@ export default function BillsPage() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    showToast(`${sortedRows.length} bill diekspor ke CSV`);
+    showToast(`${sortedRows.length} bill exported to CSV`);
   }
 
   function onRowAction(action, b) {
     setMenuOpenFor(null);
     if (action === "edit") showToast(`Edit ${b.id} (demo)`);
     else if (action === "approve") showToast(`${b.id} disetujui`);
-    else if (action === "pay") showToast(`Catat pembayaran untuk ${b.id}`);
-    else if (action === "duplicate") showToast(`Duplikat ${b.id}`);
+    else if (action === "pay") showToast(`Catat payment for ${b.id}`);
+    else if (action === "duplicate") showToast(`Duplicate ${b.id}`);
     else if (action === "archive") showToast(`${b.id} diarsipkan`);
   }
   function onBulk(action) {
@@ -680,7 +680,7 @@ export default function BillsPage() {
             <div className="lg-head-actions">
               <button className="lg-btn-brand" onClick={() => navigate("/bills/new")}>
                 <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                Buat Bill
+                Create Bill
               </button>
             </div>
           </div>
@@ -717,7 +717,7 @@ export default function BillsPage() {
             <div className="lg-filter-row">
               <div className="lg-search">
                 <svg viewBox="0 0 14 14"><circle cx="6" cy="6" r="3.5"/><path d="M9 9l3 3" strokeLinecap="round"/></svg>
-                <input placeholder="Cari ID bill, vendor, no. invoice…" value={search} onChange={(e) => setSearch(e.target.value)} />
+                <input placeholder="Search bill ID, vendor, or invoice no.…" value={search} onChange={(e) => setSearch(e.target.value)} />
               </div>
               <div className="lg-filter-meta">
                 <div className="lg-meta-btn-wrap">
@@ -732,7 +732,7 @@ export default function BillsPage() {
                 </div>
                 <div className="lg-meta-btn-wrap">
                   <button className="lg-meta-btn" onClick={() => { setSortPopOpen(!sortPopOpen); setFilterPopOpen(false); setGroupPopOpen(false); }}>
-                    <span className="meta-lbl">Urut:</span>
+                    <span className="meta-lbl">Sort:</span>
                     <span className="meta-val">{SORT_LABELS[effectiveSort]}</span>
                   </button>
                   {sortPopOpen && (
@@ -745,24 +745,24 @@ export default function BillsPage() {
                     <span className="meta-val">{GROUP_LABELS[effectiveGroup]}</span>
                   </button>
                   {groupPopOpen && (
-                    <GroupPopover value={effectiveGroup} canAging={!onLunas && !onDraft} onPick={(v) => { setGroupChoice(v); setGroupPopOpen(false); }} onClose={() => setGroupPopOpen(false)} />
+                    <GroupPopover value={effectiveGroup} canAging={!onPaid && !onDraft} onPick={(v) => { setGroupChoice(v); setGroupPopOpen(false); }} onClose={() => setGroupPopOpen(false)} />
                   )}
                 </div>
                 <button className="lg-filter-export" onClick={exportCsv}>
                   <svg viewBox="0 0 12 12"><path d="M6 2v6M3 6l3 3 3-3M2 10.5h8" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                  Ekspor CSV
+                  Export CSV
                 </button>
-                {hasActiveFilters && <button className="lg-reset-all" onClick={resetAll}>Reset semua</button>}
+                {hasActiveFilters && <button className="lg-reset-all" onClick={resetAll}>Reset all</button>}
               </div>
             </div>
 
             <div className="lg-col-header">
               <div><input type="checkbox" className="lg-row-check" disabled /></div>
               <div>Bill / Invoice</div>
-              <div>Tanggal</div>
+              <div>Date</div>
               <div>Vendor</div>
-              <div style={{ textAlign: "right" }}>Hari Telat</div>
-              <div style={{ paddingLeft: 12 }}>Jatuh Tempo</div>
+              <div style={{ textAlign: "right" }}>Days Overdue</div>
+              <div style={{ paddingLeft: 12 }}>Overdue</div>
               <div>Aging</div>
               <div style={{ textAlign: "right" }}>Total · IDR</div>
               <div />
@@ -820,7 +820,7 @@ export default function BillsPage() {
                 })
               ) : (
                 <>
-                  {sortedRows.length === 0 && <div className="lg-empty">Tidak ada bill yang cocok</div>}
+                  {sortedRows.length === 0 && <div className="lg-empty">None bill matching</div>}
                   {sortedRows.map((r, i) => {
                     const isOverdue = r.pay === "overdue" && r.daysOverdue > 0;
                     const bucket = isOverdue ? {
@@ -858,21 +858,21 @@ export default function BillsPage() {
       {/* ── Sticky footer ──────────────────────────────────────────── */}
       <div className="lg-footer">
         <div className="lg-footer-left">
-          <span><span className="lg-footer-num">{checked.size}</span> dipilih</span>
+          <span><span className="lg-footer-num">{checked.size}</span> selected</span>
           {checked.size > 0 ? (
             <>
               <button className="lg-footer-bulk-btn" onClick={() => onBulk("approve")}>Setujui</button>
-              <button className="lg-footer-clear" onClick={clearChecks}>Batal pilih</button>
+              <button className="lg-footer-clear" onClick={clearChecks}>Clear selection</button>
             </>
           ) : (
             <>
               <span className="lg-footer-sep">·</span>
-              <span>Menampilkan <span className="lg-footer-num">{filteredRows.length}</span> bill</span>
+              <span>Showing <span className="lg-footer-num">{filteredRows.length}</span> bills</span>
             </>
           )}
         </div>
         <div className="lg-footer-right">
-          <span className="lg-footer-lbl">{checked.size > 0 ? "Subtotal terpilih" : "Subtotal halaman"}</span>
+          <span className="lg-footer-lbl">{checked.size > 0 ? "Subtotal selected" : "Subtotal page"}</span>
           <span className="lg-footer-total">Rp {fmtRp(checked.size > 0 ? selectedTotal : pageTotal)}</span>
         </div>
       </div>
@@ -893,8 +893,11 @@ export default function BillsPage() {
               </button>
             </div>
             <div className="drawer-tabs">
-              {[["detail", "Detail"], ["items", "Items"], ["audit", "Audit"]].map(([t, label]) => (
-                <div key={t} className={`drawer-tab${drawerTab === t ? " active" : ""}`} onClick={() => setDrawerTab(t)}>{label}</div>
+              {[["detail", "Detail"], ["items", "Items"], ["audit", "Audit"], ["ai", "AI Insight"]].map(([t, label]) => (
+                <div key={t} className={`drawer-tab${drawerTab === t ? " active" : ""}`} onClick={() => setDrawerTab(t)}>
+                  {t === "ai" && <span style={{ marginRight: 4, color: "var(--color-action)" }}>✦</span>}
+                  {label}
+                </div>
               ))}
             </div>
             <div className="drawer-body">
@@ -907,17 +910,17 @@ export default function BillsPage() {
                     </div>
                     <div className="drawer-stat-card">
                       <div className="drawer-stat-lbl">Sisa Bayar</div>
-                      <div className={`drawer-stat-val${selected.sisa > 0 ? " danger" : " success"}`}>{selected.sisa > 0 ? formatRupiah(selected.sisa) : "Lunas"}</div>
+                      <div className={`drawer-stat-val${selected.sisa > 0 ? " danger" : " success"}`}>{selected.sisa > 0 ? formatRupiah(selected.sisa) : "Paid"}</div>
                     </div>
                   </div>
                   <div className="drawer-section">
-                    <div className="drawer-section-title">Informasi Bill</div>
+                    <div className="drawer-section-title">Bill Information</div>
                     {[
                       ["Bill ID", selected.id],
-                      ["No. Invoice Vendor", selected.invNo],
-                      ["No. PO", selected.poNo],
-                      ["Tanggal", formatDate(selected.date)],
-                      ["Jatuh Tempo", formatDate(selected.due)],
+                      ["Vendor Invoice No.", selected.invNo],
+                      ["PO No.", selected.poNo],
+                      ["Date", formatDate(selected.date)],
+                      ["Overdue", formatDate(selected.due)],
                       ["GRN", GRN_LABEL[selected.grn]],
                       ["Status Approval", APPROVAL_LABEL[selected.approval]],
                       ["Status Bayar", PAY_LABEL[selected.pay]],
@@ -929,13 +932,13 @@ export default function BillsPage() {
                     ))}
                     {selected.keterangan && (
                       <div className="drawer-row">
-                        <div className="drawer-label">Keterangan</div>
+                        <div className="drawer-label">Description</div>
                         <div className="drawer-value">{selected.keterangan}</div>
                       </div>
                     )}
                   </div>
                   <div className="drawer-section">
-                    <div className="drawer-section-title">Pajak</div>
+                    <div className="drawer-section-title">Tax</div>
                     {[
                       ["DPP", formatRupiah(selected.dpp)],
                       ["PPN (11%)", formatRupiah(selected.ppn)],
@@ -953,7 +956,7 @@ export default function BillsPage() {
                 <div className="drawer-section">
                   <div className="drawer-section-title">Line Items</div>
                   <table className="items-table">
-                    <thead><tr><th>Deskripsi</th><th className="r">Qty</th><th className="r">Harga</th><th className="r">Subtotal</th></tr></thead>
+                    <thead><tr><th>Description</th><th className="r">Qty</th><th className="r">Price</th><th className="r">Subtotal</th></tr></thead>
                     <tbody>
                       {selected.items.map((item, i) => (
                         <tr key={i}>
@@ -973,17 +976,42 @@ export default function BillsPage() {
               )}
               {drawerTab === "audit" && (
                 <div className="drawer-section">
-                  <div className="drawer-section-title">Riwayat Audit</div>
+                  <div className="drawer-section-title">Audit History</div>
                   <div className="audit-list">
                     {selected.audit.map((a, i) => (
                       <div key={i} className="audit-item">
                         <div className={`audit-dot ${a.type}`} />
                         <div>
                           <div className="audit-action">{a.action}</div>
-                          <div className="audit-by">{a.by} · {formatDate(a.date)} {a.time}</div>
+                          <div className="audit-by">{a.by} · {formatDate(a.date)} {a.teame}</div>
                         </div>
                       </div>
                     ))}
+                  </div>
+                </div>
+              )}
+              {drawerTab === "ai" && (
+                <div className="drawer-section">
+                  <div className="drawer-section-title">AI Insight</div>
+                  <div style={{ padding: 12, background: "var(--ai-surface)", border: "1px solid var(--ai-border)", borderRadius: "var(--radius-md)", marginBottom: 10 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "var(--color-action)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 4 }}>✦ Ekstraksi & Matching</div>
+                    <div style={{ fontSize: 12, color: "var(--color-text-secondary)", lineHeight: 1.55 }}>
+                      OCR mengekstrak {selected.items.length} item with akurasi average <strong>96%</strong>. {selected.grn === "matched" ? "PO matched ✓" : selected.grn === "pending" ? "Awaiting match PO" : "Mismatch with PO — needs review."}
+                    </div>
+                  </div>
+                  {selected.pay === "overdue" && (
+                    <div style={{ padding: 12, background: "var(--color-danger-surface)", border: "1px solid var(--color-danger-border)", borderRadius: "var(--radius-md)", marginBottom: 10 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: "var(--color-danger-text)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 4 }}>⚠ Past Due</div>
+                      <div style={{ fontSize: 12, color: "var(--color-text-secondary)", lineHeight: 1.55 }}>
+                        Bill ini already passes due. Potensi late fees vendor — perteambangkan payment segera atau negosiasi keringanan.
+                      </div>
+                    </div>
+                  )}
+                  <div style={{ padding: 12, background: "var(--color-surface-sunken)", border: "1px solid var(--color-border-default)", borderRadius: "var(--radius-md)" }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "var(--color-text-tertiary)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 4 }}>Vendor History</div>
+                    <div style={{ fontSize: 12, color: "var(--color-text-secondary)", lineHeight: 1.55 }}>
+                      Klay AI mendeteksi vendor ini typically receives payment NET 30. Average cycle from issue to pay <strong>22 days</strong>.
+                    </div>
                   </div>
                 </div>
               )}

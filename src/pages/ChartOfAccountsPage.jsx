@@ -1,335 +1,222 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, Fragment } from "react";
 import { COA } from "../data/seed/coa";
+import "./invoices-ledger.css";
+import "./settings-pages.css";
 
-// ── helpers ─────────────────────────────────────────────────────
-const TYPE_CLS = {
-  asset:           "asset",
-  contra_asset:    "asset",
-  liability:       "liability",
-  equity:          "equity",
-  revenue:         "revenue",
-  contra_revenue:  "revenue",
-  expense:         "expense",
+// Accounts whose code is fixed by the system (tax + control accounts).
+// Display name is still editable; the lock icon flags them in the table.
+const LOCKED_CODES = new Set([
+  "1-2100", // Accounts Receivable — Trade (control)
+  "1-2200", // Allowance for Doubtful Accounts (contra)
+  "1-5100", // VAT Input
+  "2-1100", // Accounts Payable — Trade (control)
+  "2-2100", // VAT Output
+  "2-2200", // Income Tax Payable
+  "2-2300", // Withholding Tax Payable
+]);
+
+const CONTRA_TYPES = new Set(["contra_asset", "contra_revenue"]);
+const CONTROL_CODES = new Set(["1-2100", "2-1100"]);
+
+// Top-level section labels — shown as red uppercase section rows.
+const SECTION_LABELS = {
+  "g-asset":     "Assets",
+  "g-liability": "Liabilities",
+  "g-equity":    "Equity",
+  "g-revenue":   "Revenue",
+  "g-cogs":      "Cost of Goods Sold",
+  "g-opex":      "Operating Expenses",
+  "g-other-pl":  "Other Income / Expense",
+  "g-tax":       "Tax",
 };
-const TYPE_LABEL = {
-  asset:           "Asset",
-  contra_asset:    "Contra Asset",
-  liability:       "Liability",
-  equity:          "Equity",
-  revenue:         "Revenue",
-  contra_revenue:  "Contra Revenue",
-  expense:         "Expense",
-};
 
-function TypeBadge({ type }) {
-  const cls = TYPE_CLS[type] || "asset";
-  const label = TYPE_LABEL[type] || type;
-  return <span className={`type-badge-coa ${cls}`}>{label}</span>;
-}
-
-function titleCase(s) {
-  return s ? s.charAt(0).toUpperCase() + s.slice(1) : "";
-}
-
-function Toggle({ on, onChange }) {
-  return (
-    <span
-      className={`toggle-sw ${on ? "on" : "off"}`}
-      onClick={(e) => { e.stopPropagation(); onChange(!on); }}
-      title={on ? "Active" : "Inactive"}
-    />
-  );
-}
-
-// Build an id → node map for ancestor lookups
-const TREE_MAP = Object.fromEntries(COA.map((n) => [n.id, n]));
-
-// Count direct account descendants of a group (all levels below it)
-function countAccounts(groupId) {
-  let n = 0;
-  for (const node of COA) {
-    if (!node.code) continue; // skip groups
-    // walk parent chain
-    let cur = node;
-    while (cur.parent) {
-      if (cur.parent === groupId) { n++; break; }
-      cur = TREE_MAP[cur.parent];
-      if (!cur) break;
-    }
+// Walk the parent chain for an account; return the top-level group id.
+function topGroup(node, byId) {
+  let cur = node;
+  while (cur && cur.parent) {
+    cur = byId[cur.parent];
   }
-  return n;
+  return cur ? cur.id : null;
 }
 
-// Indent class by level
-function levelCls(level) {
-  return `coa-l${Math.min(level, 4)}`;
+// Walk one level above the leaf to get the subsection group label.
+function subsectionLabel(node, byId) {
+  if (!node.parent) return "";
+  const parent = byId[node.parent];
+  if (!parent || parent.level === 0) return ""; // top section, no sub
+  return parent.label || "";
 }
 
-// ── FS Mapping tab ───────────────────────────────────────────────
-// Auto-derived from COA: each leaf account is grouped by its `fs` (Balance
-// Sheet vs P&L). The `line` column is the immediate parent group's label
-// (the line item this account rolls up to in published financials); the
-// `section` column is the COA's section field.
-const FS_GROUPS = (() => {
-  const STMT = { BS: "Balance Sheet", PL: "Profit & Loss" };
-  const groupsById = Object.fromEntries(
-    COA.filter((n) => n.type === "group").map((n) => [n.id, n])
-  );
-  const buckets = { BS: [], PL: [] };
-  COA.filter((n) => n.code).forEach((acct) => {
-    const parentGroup = groupsById[acct.parent];
-    buckets[acct.fs]?.push({
-      code: acct.code,
-      name: acct.name,
-      stmt: STMT[acct.fs] || acct.fs,
-      line: parentGroup?.label || acct.section,
-      section: acct.section,
-    });
-  });
-  return Object.entries(buckets)
-    .filter(([, rows]) => rows.length > 0)
-    .map(([fs, rows]) => ({ label: STMT[fs], rows }));
-})();
-
-// ── main component ───────────────────────────────────────────────
 export default function ChartOfAccountsPage() {
-  const [activeTab, setActiveTab] = useState("accounts");
   const [search, setSearch] = useState("");
-  const [collapsed, setCollapsed] = useState(new Set());
-  const [activeMap, setActiveMap] = useState(() => {
-    const m = {};
-    COA.forEach((n) => { if (n.code) m[n.id] = n.is_active !== false; });
-    return m;
-  });
+  const [lockedOnly, setLockedOnly] = useState(false);
 
-  const accountCount = COA.filter((n) => n.code).length;
+  const byId = useMemo(() => Object.fromEntries(COA.map((n) => [n.id, n])), []);
 
-  function toggleGroup(id) {
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  }
+  // Leaf accounts (only nodes with a `code`).
+  const accounts = useMemo(() => COA.filter((n) => n.code), []);
 
-  function expandAll() { setCollapsed(new Set()); }
-  function collapseAll() {
-    setCollapsed(new Set(COA.filter((n) => !n.code).map((n) => n.id)));
-  }
+  // KPIs at the top of the page.
+  const totalCount = accounts.length;
+  const lockedCount = accounts.filter((a) => LOCKED_CODES.has(a.code)).length;
+  const editableCount = totalCount - lockedCount;
 
-  function toggleActive(id) {
-    setActiveMap((prev) => ({ ...prev, [id]: !prev[id] }));
-  }
+  // Group accounts by section → subsection, preserving COA insertion order.
+  const sections = useMemo(() => {
+    const out = []; // [{ key, label, subs: [{ label, rows: [...] }] }]
+    const sectionMap = new Map();
+    for (const acct of accounts) {
+      const topId = topGroup(acct, byId);
+      if (!topId) continue;
+      const subLbl = subsectionLabel(acct, byId);
+      if (!sectionMap.has(topId)) {
+        sectionMap.set(topId, { key: topId, label: SECTION_LABELS[topId] || byId[topId]?.label || topId, subs: [], subByLbl: new Map() });
+        out.push(sectionMap.get(topId));
+      }
+      const sec = sectionMap.get(topId);
+      if (!sec.subByLbl.has(subLbl)) {
+        const newSub = { label: subLbl, rows: [] };
+        sec.subByLbl.set(subLbl, newSub);
+        sec.subs.push(newSub);
+      }
+      sec.subByLbl.get(subLbl).rows.push(acct);
+    }
+    return out;
+  }, [accounts, byId]);
 
-  // determine if a node is visible (none of its ancestor groups is collapsed)
-  function isVisible(node) {
-    let cur = node;
-    while (cur.parent) {
-      if (collapsed.has(cur.parent)) return false;
-      cur = TREE_MAP[cur.parent];
-      if (!cur) break;
+  // Filter helper: search + locked-only checkbox.
+  const q = search.trim().toLowerCase();
+  function passes(acct) {
+    if (lockedOnly && !LOCKED_CODES.has(acct.code)) return false;
+    if (q) {
+      const hay = (acct.code + " " + acct.name).toLowerCase();
+      if (!hay.includes(q)) return false;
     }
     return true;
   }
 
-  const q = search.toLowerCase().trim();
-
-  // rendered rows
-  const rows = useMemo(() => {
-    return COA.map((node) => {
-      const visible = isVisible(node);
-      const searchMatch = q
-        ? (node.code || "").toLowerCase().includes(q) || (node.name || node.label || "").toLowerCase().includes(q)
-        : true;
-      return { node, visible, searchMatch };
-    });
-  }, [collapsed, q]);
-
-  const groupCounts = useMemo(() => {
-    const m = {};
-    COA.filter((n) => !n.code).forEach((g) => { m[g.id] = countAccounts(g.id); });
-    return m;
-  }, []);
+  // Build the filtered tree shape; sections / subs with no surviving rows collapse out.
+  const filteredSections = useMemo(() => {
+    const out = [];
+    for (const sec of sections) {
+      const subs = [];
+      for (const sub of sec.subs) {
+        const rows = sub.rows.filter(passes);
+        if (rows.length > 0) subs.push({ label: sub.label, rows });
+      }
+      if (subs.length > 0) out.push({ key: sec.key, label: sec.label, subs });
+    }
+    return out;
+  }, [sections, q, lockedOnly]);
 
   return (
-    <div className="coa-view">
-      <div className="coa-scroll">
+    <div className="settings-page">
+      <h1 className="lg-title">Chart of Accounts</h1>
+      <div className="settings-sub">
+        Review the default chart of accounts. Rename or recode any account, and
+        add new accounts where you need them. Some tax and control accounts have
+        a <span style={{ color: "#A02020" }}>🔒</span> — only their display name
+        can change.
+      </div>
 
-        {/* Page header */}
-        <div className="page-head" style={{ marginBottom: 16 }}>
-          <div>
-            <div className="page-title">Chart of Accounts</div>
-            <div className="page-sub">{accountCount} accounts · PT Sejahtera Makmur</div>
-          </div>
-          <div className="head-actions">
-            <button className="btn">
-              <svg viewBox="0 0 24 24" style={{ width: 13, height: 13, stroke: "currentColor", fill: "none", strokeWidth: 1.5 }}><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-              Import CSV
-            </button>
-            <button className="btn btn-primary" style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-              <svg viewBox="0 0 24 24" style={{ width: 13, height: 13, stroke: "#fff", fill: "none", strokeWidth: 2.5 }}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              Add account
-            </button>
-          </div>
-        </div>
+      <div className="coa-page-meta">
+        <span className="stat"><span className="num">{totalCount}</span> accounts</span>
+        <span className="stat"><span className="lock-mini">🔒</span><span className="num">{lockedCount}</span> locked</span>
+        <span className="stat"><span className="num">{editableCount}</span> editable</span>
+      </div>
 
-        {/* Tabs */}
-        <div className="tabs">
-          <div className={`tab${activeTab === "accounts" ? " active" : ""}`} onClick={() => setActiveTab("accounts")}>Accounts</div>
-          <div className={`tab${activeTab === "fs" ? " active" : ""}`} onClick={() => setActiveTab("fs")}>FS mapping</div>
-        </div>
+      <div className="coa-tools">
+        <input
+          className="coa-search"
+          placeholder="Search code or name…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <span className="coa-spacer" />
+        <span
+          className={`coa-lock-toggle${lockedOnly ? " on" : ""}`}
+          onClick={() => setLockedOnly(!lockedOnly)}
+        >
+          <span className="check">{lockedOnly ? "✓" : ""}</span>
+          Show only 🔒 locked
+        </span>
+      </div>
 
-        {/* ── ACCOUNTS TAB ── */}
-        {activeTab === "accounts" && (
-          <>
-            <div className="toolbar">
-              <div className="search-wrap">
-                <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                <input
-                  className="search-input"
-                  type="text"
-                  placeholder="Search by code or name…"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-              </div>
-              <button className="btn" style={{ height: 34, fontSize: 12 }} onClick={expandAll}>Expand all</button>
-              <button className="btn" style={{ height: 34, fontSize: 12 }} onClick={collapseAll}>Collapse all</button>
-            </div>
-
-            <div className="coa-table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th style={{ width: 88 }}>Code</th>
-                    <th>Account name</th>
-                    <th style={{ width: 100 }}>Type</th>
-                    <th style={{ width: 80 }}>FS</th>
-                    <th style={{ width: 100 }}>Normal bal.</th>
-                    <th style={{ width: 62 }}>Active</th>
-                    <th style={{ width: 44 }} />
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map(({ node, visible, searchMatch }) => {
-                    // In search mode: show only accounts that match (ignore collapse)
-                    if (q) {
-                      if (node.code) {
-                        if (!searchMatch) return null;
-                        return (
-                          <tr key={node.id} className="coa-match">
-                            <td className="mono" style={{ paddingLeft: 14 + node.level * 14 }}>{node.code}</td>
-                            <td style={{ fontWeight: 500 }}>{node.name}</td>
-                            <td><TypeBadge type={node.type} /></td>
-                            <td style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>{node.fs}</td>
-                            <td style={{ fontSize: 12, color: "var(--color-text-tertiary)" }}>{titleCase(node.normal_balance)}</td>
-                            <td><Toggle on={activeMap[node.id]} onChange={() => toggleActive(node.id)} /></td>
-                            <td><button className="row-action-btn">Edit</button></td>
-                          </tr>
-                        );
-                      }
-                      return null; // hide group headers during search
-                    }
-
-                    // Normal tree mode
-                    if (!visible) return null;
-
-                    // Group row
-                    if (!node.code) {
-                      const isOpen = !collapsed.has(node.id);
-                      const cnt = groupCounts[node.id] || 0;
+      <table className="coa-table">
+        <thead>
+          <tr>
+            <th>Code</th>
+            <th>Account name</th>
+            <th />
+            <th />
+          </tr>
+        </thead>
+        <tbody>
+          {filteredSections.length === 0 && (
+            <tr>
+              <td colSpan={4} style={{ padding: 32, textAlign: "center", color: "var(--color-text-tertiary)", fontSize: 12 }}>
+                No accounts match your filter.
+              </td>
+            </tr>
+          )}
+          {filteredSections.map((sec) => (
+            <Fragment key={sec.key}>
+              <tr className="coa-section-row">
+                <td colSpan={4}>{sec.label}</td>
+              </tr>
+              {sec.subs.map((sub, si) => {
+                const showSub = sec.subs.length > 1 && sub.label;
+                return (
+                  <Fragment key={si}>
+                    {showSub && (
+                      <tr className="coa-subsection-row">
+                        <td colSpan={4}>{sub.label}</td>
+                      </tr>
+                    )}
+                    {sub.rows.map((acct) => {
+                      const locked = LOCKED_CODES.has(acct.code);
+                      const isContra = CONTRA_TYPES.has(acct.type);
+                      const isControl = CONTROL_CODES.has(acct.code);
                       return (
-                        <tr key={node.id} className={`coa-group-row coa-l${node.level}`} onClick={() => toggleGroup(node.id)}>
-                          <td colSpan={7}>
-                            <span className="tr-chevron" style={{ display: "inline-flex", alignItems: "center" }}>
-                              <svg viewBox="0 0 24 24" style={{ width: 10, height: 10, stroke: "var(--color-text-tertiary)", fill: "none", strokeWidth: 2.5, transform: isOpen ? "rotate(90deg)" : "none", transition: "transform .15s" }}>
-                                <polyline points="9 18 15 12 9 6"/>
-                              </svg>
-                            </span>
-                            {node.label}
-                            <span className="tr-count">({cnt})</span>
+                        <tr key={acct.code} className={`coa-row depth-1${locked ? " locked-row" : ""}`}>
+                          <td className="code">{acct.code}</td>
+                          <td className="name">
+                            {acct.name}
+                            {isControl && <span className="coa-tag ctrl">CTRL</span>}
+                            {isContra && <span className="coa-tag contra">CONTRA</span>}
+                          </td>
+                          <td className="lock-col">
+                            {locked && (
+                              <span className="coa-lock-ico" title="Code is fixed by the system. Display name is editable.">🔒</span>
+                            )}
+                          </td>
+                          <td className="actions">
+                            <button className="coa-row-act" title="Edit account">✎</button>
                           </td>
                         </tr>
                       );
-                    }
+                    })}
+                  </Fragment>
+                );
+              })}
+            </Fragment>
+          ))}
+        </tbody>
+      </table>
 
-                    // Account row
-                    return (
-                      <tr key={node.id} className={levelCls(node.level)}>
-                        <td className="mono">{node.code}</td>
-                        <td style={{ fontWeight: node.level <= 2 ? 500 : 400, color: node.level > 2 ? "var(--color-text-secondary)" : undefined }}>
-                          {node.level > 2 && <span style={{ color: "var(--color-text-tertiary)", marginRight: 4 }}>—</span>}
-                          {node.name}
-                        </td>
-                        <td><TypeBadge type={node.type} /></td>
-                        <td style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>{node.fs}</td>
-                        <td style={{ fontSize: 12, color: "var(--color-text-tertiary)" }}>{titleCase(node.normal_balance)}</td>
-                        <td><Toggle on={activeMap[node.id] !== false} onChange={() => toggleActive(node.id)} /></td>
-                        <td><button className="row-action-btn">Edit</button></td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            <div style={{ marginTop: 10, fontSize: 12, color: "var(--color-text-tertiary)" }}>
-              {q
-                ? `${rows.filter((r) => r.node.code && r.searchMatch).length} accounts match "${search}"`
-                : `${accountCount} accounts total`}
-            </div>
-          </>
-        )}
-
-        {/* ── FS MAPPING TAB ── */}
-        {activeTab === "fs" && (
-          <>
-            <div className="toolbar">
-              <div className="search-wrap">
-                <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                <input className="search-input" type="text" placeholder="Search accounts…" />
-              </div>
-              <select className="filter-select">
-                <option>All statements</option>
-                <option>P&L</option>
-                <option>Balance Sheet</option>
-              </select>
-            </div>
-
-            <div className="coa-table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th style={{ width: 88 }}>Code</th>
-                    <th style={{ width: 220 }}>Account name</th>
-                    <th style={{ width: 130 }}>Statement</th>
-                    <th>Line item</th>
-                    <th style={{ width: 130 }}>Section</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {FS_GROUPS.map((grp) => (
-                    <>
-                      <tr key={grp.label} className="group-row">
-                        <td colSpan={5}>{grp.label}</td>
-                      </tr>
-                      {grp.rows.map((row) => (
-                        <tr key={row.code}>
-                          <td className="mono" style={row.indent ? { paddingLeft: 28 } : undefined}>{row.code}</td>
-                          <td style={row.indent ? { paddingLeft: 28, color: "var(--color-text-secondary)" } : undefined}>{row.name}</td>
-                          <td className="cell-muted">{row.stmt}</td>
-                          <td className="cell-muted">{row.line}</td>
-                          <td className="cell-muted">{row.section}</td>
-                        </tr>
-                      ))}
-                    </>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </>
-        )}
-
+      <div className="coa-legend">
+        <span className="coa-legend-item">
+          <span className="coa-lock-ico">🔒</span>
+          <span>locked — only the display name can change</span>
+        </span>
+        <span className="coa-legend-item">
+          <span className="coa-tag contra">CONTRA</span>
+          <span>contra-account, opposite normal balance</span>
+        </span>
+        <span className="coa-legend-item">
+          <span className="coa-tag ctrl">CTRL</span>
+          <span>control account, posts via subledger only</span>
+        </span>
       </div>
     </div>
   );

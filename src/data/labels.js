@@ -4,16 +4,16 @@ export const CAT_LABELS = {
   inventory: 'Inventory',
   service: 'Service',
   expense: 'Expense',
-  cooperative: 'Koperasi',
-  individual: 'Individu',
+  cooperative: 'Cooperative',
+  individual: 'Individual',
 };
 
 export const PPH_LABELS = {
-  none: 'Tidak ada pemotongan',
-  pph23_2: 'PPh 23 — 2% (jasa/sewa)',
-  pph23_15: 'PPh 23 — 15% (dividen/bunga)',
-  pph4_final: 'PPh 4(2) Final — konstruksi',
-  pph21: 'PPh 21 — individu',
+  none: 'No withholding',
+  pph23_2: 'Withholding Tax (PPh 23) — 2% (services/rent)',
+  pph23_15: 'Withholding Tax (PPh 23) — 15% (dividends/interest)',
+  pph4_final: 'Final Withholding (PPh 4(2)) — construction',
+  pph21: 'Withholding Tax (PPh 21) — individuals',
 };
 
 // Vendor "default account" labels — should mirror leaf accounts in seed/coa.js.
@@ -27,6 +27,6 @@ export const ACCT_LABELS = {
 };
 
 export const DEFTAX_LABELS = {
-  ppn_masukan: 'PPN Masukan 11%',
-  bebas: 'Bebas Pajak',
+  ppn_masukan: 'Input VAT (PPN Masukan) 11%',
+  bebas: 'VAT Exempt',
 };

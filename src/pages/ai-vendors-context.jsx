@@ -13,11 +13,11 @@ function fmtRpShort(n) {
 
 function shortName(name) {
   if (!name) return "—";
-  const tokens = name.split(/\s+/).filter((t) => t && !/^(PT|CV|UD|Toko|Koperasi)$/i.test(t));
+  const tokens = name.split(/\s+/).filter((t) => t && !/^(PT|CV|UD|Toko|Cooperative)$/i.test(t));
   return tokens.slice(0, 2).join(" ");
 }
 
-// AP balance per vendor (sum of unpaid bill `sisa`)
+// AP balance as of vendor (sum of unpaid bill `sisa`)
 function computeApBalance() {
   const m = {};
   for (const b of BILLS) {
@@ -71,11 +71,11 @@ export function computeVendorsInsights(vendors) {
           ({top3.map((v, i) => (
             <span key={v.id}>{i > 0 ? ", " : ""}{shortName(v.name)}</span>
           ))}) menahan{" "}
-          <strong className="lg-ai-strong">{top3Pct}%</strong> dari{" "}
-          <span className="lg-ai-danger">{fmtRpShort(totalAp)}</span> total utang dagang.
+          <strong className="lg-ai-strong">{top3Pct}%</strong> of{" "}
+          <span className="lg-ai-danger">{fmtRpShort(totalAp)}</span> total trade payables.
         </>
       ),
-      question: "Vendor mana yang paling banyak utang kita?",
+      question: "Which vendor that most payables we?",
     });
   }
 
@@ -84,11 +84,11 @@ export function computeVendorsInsights(vendors) {
       id: "stale",
       node: (
         <>
-          <strong className="lg-ai-strong">{stale.length} vendor</strong> aktif tidak punya transaksi lebih dari{" "}
-          <strong className="lg-ai-strong">60 hari</strong> — kandidat untuk di-arsipkan atau di-review.
+          <strong className="lg-ai-strong">{stale.length} vendor</strong> active without transactions over{" "}
+          <strong className="lg-ai-strong">60 days</strong> — candidate for di-arsipkan atau di-review.
         </>
       ),
-      question: "Vendor mana yang sudah lama tidak transaksi?",
+      question: "Which vendor that long since had transactions?",
     });
   }
 
@@ -97,11 +97,11 @@ export function computeVendorsInsights(vendors) {
       id: "categoryConcentration",
       node: (
         <>
-          <strong className="lg-ai-strong">{topCatPct}%</strong> utang dagang ada di kategori{" "}
+          <strong className="lg-ai-strong">{topCatPct}%</strong> trade payables is in category{" "}
           <strong className="lg-ai-strong">{CAT_LABELS[topCat[0]] || topCat[0]}</strong> ({fmtRpShort(topCat[1])}).
         </>
       ),
-      question: "Breakdown vendor per kategori bagaimana?",
+      question: "Breakdown vendor as of category bagaiwhich?",
     });
   }
 
@@ -111,11 +111,11 @@ export function computeVendorsInsights(vendors) {
       id: "inactiveAp",
       node: (
         <>
-          <strong className="lg-ai-strong">{inactiveWithAp.length} vendor non-aktif</strong> masih memiliki saldo utang{" "}
-          <span className="lg-ai-danger">{fmtRpShort(sum)}</span> — perlu di-review.
+          <strong className="lg-ai-strong">{inactiveWithAp.length} vendor inactive</strong> still have AP balances{" "}
+          <span className="lg-ai-danger">{fmtRpShort(sum)}</span> — needs review.
         </>
       ),
-      question: "Vendor non-aktif mana yang masih punya saldo?",
+      question: "Vendor inactive which that masih have a balance?",
     });
   }
 
@@ -124,19 +124,19 @@ export function computeVendorsInsights(vendors) {
       id: "largestVendor",
       node: (
         <>
-          Saldo terbesar: <strong className="lg-ai-strong">{shortName(largest.name)}</strong> dengan{" "}
+          Balance largest: <strong className="lg-ai-strong">{shortName(largest.name)}</strong> with{" "}
           <span className="lg-ai-danger">{fmtRpShort(largest.amount)}</span> outstanding AP.
         </>
       ),
-      question: `Detail tagihan ke ${shortName(largest.name)}`,
+      question: `Detail tagihan to ${shortName(largest.name)}`,
     });
   }
 
   if (insights.length === 0) {
     insights.push({
       id: "empty",
-      node: <>Tidak ada saldo utang dagang yang aktif — master vendor bersih.</>,
-      question: "Ringkasan vendor secara umum",
+      node: <>None balance trade payables that active — master vendor clean.</>,
+      question: "Summary vendor in general",
     });
   }
 
@@ -165,14 +165,14 @@ export function makeVendorsAiContext(vendors) {
   const sortedCats = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
 
   const welcome = (
-    <p>Halo Sarah — saya sudah membaca master vendor Anda. Mau saya bantu apa?</p>
+    <p>Hi Sarah — I have reviewed your vendor master. How can I help?</p>
   );
 
   const suggestions = [
-    "Vendor mana yang paling banyak utang kita?",
-    "Vendor mana yang sudah lama tidak transaksi?",
-    "Breakdown vendor per kategori bagaimana?",
-    "Vendor non-aktif mana yang masih punya saldo?",
+    "Which vendor that most payables we?",
+    "Which vendor that long since had transactions?",
+    "Breakdown vendor as of category bagaiwhich?",
+    "Vendor inactive which that masih have a balance?",
   ];
 
   function makeTopApVendorsResponse(send) {
@@ -182,23 +182,23 @@ export function makeVendorsAiContext(vendors) {
       role: "ai",
       content: (
         <>
-          <p>3 vendor dengan utang dagang terbesar:</p>
+          <p>3 vendor with trade payables largest:</p>
           <div className="ai-mini-table">
             {top.map((v) => (
               <div className="ai-mini-row" key={v.id}>
                 <div className="ai-mini-av">{initials(v.name)}</div>
                 <div className="ai-mini-body">
                   <div className="ai-mini-name">{v.name}</div>
-                  <div className="ai-mini-meta">{CAT_LABELS[v.category] || v.category} · terakhir transaksi {v.lastTx}</div>
+                  <div className="ai-mini-meta">{CAT_LABELS[v.category] || v.category} · last transactions {v.lastTx}</div>
                 </div>
                 <div className="ai-mini-amt">{fmtRpShort(v.amount)}</div>
               </div>
             ))}
           </div>
-          <p>Bersama mereka <strong>{pct}%</strong> dari total utang dagang. Mau saya susun jadwal pembayaran?</p>
+          <p>Together they <strong>{pct}%</strong> from total trade payables. Want me to susun schedule payment?</p>
           <div className="chat-chips">
-            <ChatChip primary onClick={() => send("Ya, susun jadwal pembayaran prioritas")}>Susun jadwal pembayaran</ChatChip>
-            <ChatChip onClick={() => send("Lihat detail bill per vendor")}>Lihat detail</ChatChip>
+            <ChatChip primary onClick={() => send("Ya, susun schedule payment prioritas")}>Susun schedule payment</ChatChip>
+            <ChatChip onClick={() => send("View detail bill as of vendor")}>View detail</ChatChip>
           </div>
         </>
       ),
@@ -207,7 +207,7 @@ export function makeVendorsAiContext(vendors) {
 
   function makeStaleResponse() {
     if (stale.length === 0) {
-      return { role: "ai", content: <p>Tidak ada vendor yang dorman saat ini.</p> };
+      return { role: "ai", content: <p>None vendor that dorman saat ini.</p> };
     }
     const sample = stale.slice(0, 5);
     return {
@@ -215,7 +215,7 @@ export function makeVendorsAiContext(vendors) {
       content: (
         <>
           <p>
-            <strong>{stale.length} vendor</strong> aktif tapi tidak ada transaksi lebih dari 60 hari. Sample:
+            <strong>{stale.length} vendor</strong> active without transactions over 60 days. Sample:
           </p>
           <div className="ai-mini-table">
             {sample.map((v) => (
@@ -223,13 +223,13 @@ export function makeVendorsAiContext(vendors) {
                 <div className="ai-mini-av">{initials(v.name)}</div>
                 <div className="ai-mini-body">
                   <div className="ai-mini-name">{v.name}</div>
-                  <div className="ai-mini-meta">terakhir transaksi {v.lastTx} · {daysSince(v.lastTx)} hari lalu</div>
+                  <div className="ai-mini-meta">last transactions {v.lastTx} · {daysSince(v.lastTx)} days ago</div>
                 </div>
               </div>
             ))}
           </div>
           <div className="chat-chips">
-            <ChatChip primary>Arsipkan semua</ChatChip>
+            <ChatChip primary>Archive semua</ChatChip>
             <ChatChip>Review satu-satu</ChatChip>
           </div>
         </>
@@ -239,13 +239,13 @@ export function makeVendorsAiContext(vendors) {
 
   function makeCategoryResponse() {
     if (sortedCats.length === 0) {
-      return { role: "ai", content: <p>Belum ada saldo utang aktif untuk dipecah per kategori.</p> };
+      return { role: "ai", content: <p>Not yet there is balance payables active for dipecah as of category.</p> };
     }
     return {
       role: "ai",
       content: (
         <>
-          <p>Breakdown utang dagang per kategori:</p>
+          <p>Breakdown trade payables as of category:</p>
           <div className="ai-mini-table">
             {sortedCats.map(([cat, amount]) => {
               const pct = totalAp ? Math.round((amount / totalAp) * 100) : 0;
@@ -254,7 +254,7 @@ export function makeVendorsAiContext(vendors) {
                   <div className="ai-mini-av" style={{ background: "var(--color-brand)" }}>{(CAT_LABELS[cat] || cat).slice(0, 2).toUpperCase()}</div>
                   <div className="ai-mini-body">
                     <div className="ai-mini-name">{CAT_LABELS[cat] || cat}</div>
-                    <div className="ai-mini-meta">{pct}% dari total utang dagang</div>
+                    <div className="ai-mini-meta">{pct}% from total trade payables</div>
                   </div>
                   <div className="ai-mini-amt">{fmtRpShort(amount)}</div>
                 </div>
@@ -268,7 +268,7 @@ export function makeVendorsAiContext(vendors) {
 
   function makeInactiveResponse() {
     if (inactiveWithAp.length === 0) {
-      return { role: "ai", content: <p>Tidak ada vendor non-aktif yang masih memiliki saldo.</p> };
+      return { role: "ai", content: <p>None vendor inactive that still have balance.</p> };
     }
     const sum = inactiveWithAp.reduce((s, v) => s + (apBalance[v.id] || 0), 0);
     return {
@@ -276,7 +276,7 @@ export function makeVendorsAiContext(vendors) {
       content: (
         <>
           <p>
-            <strong>{inactiveWithAp.length} vendor non-aktif</strong> masih punya saldo utang total{" "}
+            <strong>{inactiveWithAp.length} vendor inactive</strong> masih have a balance payables total{" "}
             <span className="danger">{fmtRpShort(sum)}</span>.
           </p>
           <div className="ai-mini-table">
@@ -285,15 +285,15 @@ export function makeVendorsAiContext(vendors) {
                 <div className="ai-mini-av">{initials(v.name)}</div>
                 <div className="ai-mini-body">
                   <div className="ai-mini-name">{v.name}</div>
-                  <div className="ai-mini-meta">non-aktif sejak {v.lastTx || "—"}</div>
+                  <div className="ai-mini-meta">inactive sejak {v.lastTx || "—"}</div>
                 </div>
                 <div className="ai-mini-amt">{fmtRpShort(apBalance[v.id] || 0)}</div>
               </div>
             ))}
           </div>
           <div className="chat-chips">
-            <ChatChip primary>Aktifkan kembali</ChatChip>
-            <ChatChip>Lunasi sekarang</ChatChip>
+            <ChatChip primary>Reactivate</ChatChip>
+            <ChatChip>Paidi sekarang</ChatChip>
           </div>
         </>
       ),
@@ -305,11 +305,11 @@ export function makeVendorsAiContext(vendors) {
       role: "ai",
       content: (
         <>
-          <p>Saya belum bisa menjawab "{text}" di prototipe ini, tapi saya bisa bantu hal-hal berikut:</p>
+          <p>I can't answer "{text}" in this prototype, but I can help with:</p>
           <div className="chat-chips">
-            <ChatChip>Top vendor utang</ChatChip>
+            <ChatChip>Top vendor payables</ChatChip>
             <ChatChip>Vendor dorman</ChatChip>
-            <ChatChip>Breakdown per kategori</ChatChip>
+            <ChatChip>Breakdown as of category</ChatChip>
           </div>
         </>
       ),
@@ -318,16 +318,16 @@ export function makeVendorsAiContext(vendors) {
 
   function respond(text, helpers) {
     const t = text.toLowerCase();
-    if (t.includes("paling banyak") || t.includes("utang kita") || t.includes("top vendor")) {
+    if (t.includes("most") || t.includes("payables we") || t.includes("top vendor")) {
       return makeTopApVendorsResponse(helpers.send);
     }
-    if (t.includes("lama tidak") || t.includes("dorman") || t.includes("stale")) {
+    if (t.includes("long since") || t.includes("dorman") || t.includes("stale")) {
       return makeStaleResponse();
     }
-    if (t.includes("kategori") || t.includes("breakdown")) {
+    if (t.includes("category") || t.includes("breakdown")) {
       return makeCategoryResponse();
     }
-    if (t.includes("non-aktif") || t.includes("inaktif")) {
+    if (t.includes("inactive") || t.includes("inactive")) {
       return makeInactiveResponse();
     }
     return makeDefaultResponse(text);

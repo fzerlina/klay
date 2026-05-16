@@ -36,23 +36,23 @@ function formatMonthLabel(yyyymm) {
 // First two meaningful words (skipping legal prefixes) for "3 customer (X, Y, Z)" copy
 function shortName(name) {
   if (!name) return "—";
-  const tokens = name.split(/\s+/).filter((t) => t && !/^(PT|CV|UD|Toko|Koperasi)$/i.test(t));
+  const tokens = name.split(/\s+/).filter((t) => t && !/^(PT|CV|UD|Toko|Cooperative)$/i.test(t));
   return tokens.slice(0, 2).join(" ");
 }
 
-const APPROVAL_LABEL = { terkirim: "Terkirim", draft: "Draft" };
-const PAY_LABEL = { lunas: "Lunas", overdue: "Jatuh Tempo", belumbayar: "Belum Bayar" };
+const APPROVAL_LABEL = { sent: "Sent", draft: "Draft" };
+const PAY_LABEL = { lunas: "Paid", overdue: "Overdue", belumbayar: "Unpaid" };
 
 function payBadgeClass(payStatus) {
   if (payStatus === "lunas") return "badge-lunas";
   if (payStatus === "overdue") return "badge-overdue";
-  return "badge-belumbayar";
+  return "badge-unpaid";
 }
 
 // Map our internal invoice + customer master into the ledger row shape
 function toRow(inv) {
   const cust = customers.find((c) => c.id === inv.customer);
-  const dOver = daysSince(inv.due); // positive = telat; negative = belum jatuh tempo
+  const dOver = daysSince(inv.due); // positive = late; negative = not yet due
   return {
     id: inv.id,
     no: inv.invNo === "—" ? "(Draft)" : inv.invNo,
@@ -128,12 +128,12 @@ function computeInsights(invoices, todayDate) {
           <strong className="lg-ai-strong">{top3.length} customer</strong>{" "}
           ({top3.map((c, i) => (
             <span key={c.name}>{i > 0 ? ", " : ""}{shortName(c.name)}</span>
-          ))}) menyumbang{" "}
-          <strong className="lg-ai-strong">{top3Pct}%</strong> dari{" "}
-          <span className="lg-ai-danger">{fmtRpShort(totalOverdue)}</span> piutang telat.
+          ))}) account for{" "}
+          <strong className="lg-ai-strong">{top3Pct}%</strong> of{" "}
+          <span className="lg-ai-danger">{fmtRpShort(totalOverdue)}</span> pipayables late.
         </>
       ),
-      question: "Customer mana yang paling sering telat?",
+      question: "Which customers pay late most often?",
     });
   }
 
@@ -142,12 +142,12 @@ function computeInsights(invoices, todayDate) {
       id: "cashflow",
       node: (
         <>
-          <strong className="lg-ai-strong">{upcoming.length} invoice</strong> senilai{" "}
-          <strong className="lg-ai-strong">{fmtRpShort(upcomingTotal)}</strong> akan jatuh tempo dalam{" "}
-          <strong className="lg-ai-strong">7 hari</strong> ke depan.
+          <strong className="lg-ai-strong">{upcoming.length} invoice</strong> worth{" "}
+          <strong className="lg-ai-strong">{fmtRpShort(upcomingTotal)}</strong> will be due in{" "}
+          <strong className="lg-ai-strong">7 days</strong> to depan.
         </>
       ),
-      question: "Bagaimana proyeksi cashflow 7 hari ke depan?",
+      question: "How proyeksi cashflow 7 days to depan?",
     });
   }
 
@@ -156,11 +156,11 @@ function computeInsights(invoices, todayDate) {
       id: "avgDpd",
       node: (
         <>
-          Rata-rata <strong className="lg-ai-strong">{avgDpd} hari telat</strong> untuk{" "}
-          <strong className="lg-ai-strong">{overdue.length} invoice</strong> yang sudah jatuh tempo.
+          Average <strong className="lg-ai-strong">{avgDpd} days overdue</strong> for{" "}
+          <strong className="lg-ai-strong">{overdue.length} invoice</strong> that are overdue.
         </>
       ),
-      question: "Berapa rata-rata hari telat customer kami?",
+      question: "What average days overdue customer kami?",
     });
   }
 
@@ -169,11 +169,11 @@ function computeInsights(invoices, todayDate) {
       id: "monthOverdue",
       node: (
         <>
-          <strong className="lg-ai-strong">{overdueThisMonth.length} invoice</strong> baru jatuh tempo bulan ini,{" "}
+          <strong className="lg-ai-strong">{overdueThisMonth.length} invoice</strong> recently became due this month,{" "}
           total <span className="lg-ai-danger">{fmtRpShort(overdueThisMonthTotal)}</span>.
         </>
       ),
-      question: "Invoice apa saja yang baru jatuh tempo bulan ini?",
+      question: "Which invoices recently became due this month?",
     });
   }
 
@@ -182,21 +182,21 @@ function computeInsights(invoices, todayDate) {
       id: "largest",
       node: (
         <>
-          Invoice telat terbesar:{" "}
-          <span className="lg-ai-danger">{fmtRpShort(largest.total)}</span> dari{" "}
+          Invoice late largest:{" "}
+          <span className="lg-ai-danger">{fmtRpShort(largest.total)}</span> from{" "}
           <strong className="lg-ai-strong">{shortName(largest.customerName)}</strong>{" "}
-          ({Math.max(0, daysSince(largest.due))} hari telat).
+          ({Math.max(0, daysSince(largest.due))} days overdue).
         </>
       ),
-      question: `Detail invoice ${largest.invNo} dari ${shortName(largest.customerName)}`,
+      question: `Invoice detail ${largest.invNo} from ${shortName(largest.customerName)}`,
     });
   }
 
   if (insights.length === 0) {
     insights.push({
       id: "empty",
-      node: <>Belum ada piutang telat hari ini. Semua invoice aktif masih dalam term.</>,
-      question: "Apa yang harus saya monitor minggu ini?",
+      node: <>Not yet there is pipayables late days ini. All invoice active masih in term.</>,
+      question: "What should I monitor this week?",
     });
   }
 
@@ -250,14 +250,14 @@ function AiSubtitle({ insights, onOpenSummary, onOpenChat, chatActive, summaryAc
           className={`lg-ai-cta-primary${summaryActive ? " active" : ""}`}
           onClick={onOpenSummary}
         >
-          <SparkleIcon /> Ringkasan
+          <SparkleIcon /> Summary
         </button>
         <button
           type="button"
           className={`lg-ai-cta-secondary${chatActive ? " active" : ""}`}
           onClick={onOpenChat}
         >
-          {chatActive ? "Lanjutkan obrolan" : "Tanya Klay AI"} →
+          {chatActive ? "Continue chat" : "Ask Klay AI"} →
         </button>
         {insights.length > 1 && (
           <div className="lg-ai-dots" aria-hidden>
@@ -272,10 +272,10 @@ function AiSubtitle({ insights, onOpenSummary, onOpenChat, chatActive, summaryAc
 }
 
 const AGING_BUCKETS = [
-  { key: "90+",    lbl: "Telat > 90 hari",    minDays: 90, maxDaysCap: 150, tone: "danger" },
-  { key: "60-90",  lbl: "Telat 60 – 90 hari", minDays: 60, maxDaysCap: 90,  tone: "danger" },
-  { key: "30-60",  lbl: "Telat 30 – 60 hari", minDays: 30, maxDaysCap: 60,  tone: "warn"   },
-  { key: "0-30",   lbl: "Telat < 30 hari",    minDays:  0, maxDaysCap: 30,  tone: "warn"   },
+  { key: "90+",    lbl: "Overdue > 90 days",    minDays: 90, maxDaysCap: 150, tone: "danger" },
+  { key: "60-90",  lbl: "Overdue 60-90 days", minDays: 60, maxDaysCap: 90,  tone: "danger" },
+  { key: "30-60",  lbl: "Overdue 30-60 days", minDays: 30, maxDaysCap: 60,  tone: "warn"   },
+  { key: "0-30",   lbl: "Overdue < 30 days",    minDays:  0, maxDaysCap: 30,  tone: "warn"   },
 ];
 
 function bucketOf(daysOverdue) {
@@ -289,13 +289,13 @@ function bucketOf(daysOverdue) {
 function LedgerRow({ r, bucket, isChecked, onCheck, onClick, onKebab, isSelected, isAlt }) {
   // Aging mini-bar applies only to overdue rows
   const isOverdue = r.payStatus === "overdue" && r.daysOverdue > 0;
-  const isLunas = r.payStatus === "lunas";
+  const isPaid = r.payStatus === "lunas";
   const isDraft = r.approval === "draft";
 
   // Customer-attention dot color reflects payment state
   const dotTone =
     isOverdue ? (bucket?.tone === "warn" ? "warn" : "") :
-    isLunas ? "success" :
+    isPaid ? "success" :
     "muted";
 
   const pct = isOverdue && bucket
@@ -334,13 +334,13 @@ function LedgerRow({ r, bucket, isChecked, onCheck, onClick, onKebab, isSelected
               />
             </div>
             <div className="lg-cell-aging-scale">
-              {bucket.minDays} ←—— {bucket.maxDaysCap} hari
+              {bucket.minDays} ←—— {bucket.maxDaysCap} days
             </div>
           </>
-        ) : isLunas ? (
-          <span className="lg-cell-status-marker success"><span className="dot" />Lunas</span>
+        ) : isPaid ? (
+          <span className="lg-cell-status-marker success"><span className="dot" />Paid</span>
         ) : isDraft ? (
-          <span className="lg-cell-status-marker"><span className="dot" />Belum dikirim</span>
+          <span className="lg-cell-status-marker"><span className="dot" />Not yet sent</span>
         ) : (
           <span className="lg-cell-status-marker"><span className="dot" />Dalam term</span>
         )}
@@ -364,7 +364,7 @@ function RowMenu({ inv, onClose, onAction }) {
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
   }, [onClose]);
-  const canPay = inv.approval === "terkirim" && inv.payStatus !== "lunas";
+  const canPay = inv.approval === "sent" && inv.payStatus !== "lunas";
   return (
     <div className="row-menu" ref={ref} onClick={(e) => e.stopPropagation()}>
       <div className="row-menu-item" onClick={() => onAction("edit", inv)}>
@@ -374,21 +374,21 @@ function RowMenu({ inv, onClose, onAction }) {
       {canPay && (
         <div className="row-menu-item" onClick={() => onAction("payment", inv)}>
           <svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
-          Catat Pembayaran
+          Catat Payment
         </div>
       )}
       <div className="row-menu-item" onClick={() => onAction("recurring", inv)}>
         <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
-        Buat Berulang
+        Create Berulang
       </div>
       <div className="row-menu-item" onClick={() => onAction("duplicate", inv)}>
         <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-        Duplikat
+        Duplicate
       </div>
       <div className="row-menu-sep" />
       <div className="row-menu-item danger" onClick={() => onAction("archive", inv)}>
         <svg viewBox="0 0 24 24"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
-        Arsipkan
+        Archive
       </div>
     </div>
   );
@@ -401,11 +401,11 @@ const AISvg = () => (
 // ── Sort + Group popovers ─────────────────────────────────────────────────
 
 const SORT_LABELS = {
-  "hari-telat-desc": "Hari Telat ↓",
-  "tanggal-desc":    "Tanggal terbaru ↓",
-  "tanggal-asc":     "Tanggal terlama ↑",
-  "total-desc":      "Total tertinggi ↓",
-  "total-asc":       "Total terendah ↑",
+  "days-late-desc": "Days Overdue ↓",
+  "date-desc":    "Newest date ↓",
+  "date-asc":     "Date oldest ↑",
+  "total-desc":      "Total highest ↓",
+  "total-asc":       "Total lowest ↑",
   "customer-asc":    "Customer A-Z",
   "customer-desc":   "Customer Z-A",
 };
@@ -414,7 +414,7 @@ const GROUP_LABELS = {
   "none":     "—",
   "aging":    "Aging",
   "customer": "Customer",
-  "bulan":    "Bulan",
+  "bulan":    "Month",
   "status":   "Status Bayar",
 };
 
@@ -451,10 +451,10 @@ function GroupPopover({ value, canAging, onPick, onClose }) {
   const ref = useRef(null);
   useClickOutside(ref, onClose);
   const items = [
-    { k: "none",     lbl: "Tidak dikelompokkan" },
+    { k: "none",     lbl: "Not grouped" },
     { k: "aging",    lbl: "Aging", disabled: !canAging },
     { k: "customer", lbl: "Customer" },
-    { k: "bulan",    lbl: "Bulan (Tanggal Invoice)" },
+    { k: "bulan",    lbl: "Month (Date Invoice)" },
     { k: "status",   lbl: "Status Bayar" },
   ];
   return (
@@ -512,7 +512,7 @@ function FilterPopover({ values, onChange, customers: custList, onClose }) {
     <div className="lg-popover lg-filter-pop" ref={ref}>
       <div className="lg-filter-body">
         <div className="lg-filter-fld">
-          <div className="lg-filter-fld-lbl">Customer ({draft.customers.size > 0 ? `${draft.customers.size} dipilih` : "semua"})</div>
+          <div className="lg-filter-fld-lbl">Customer ({draft.customers.size > 0 ? `${draft.customers.size} selected` : "semua"})</div>
           <div className="lg-cust-multi">
             <div className="lg-cust-search">
               <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6"><circle cx="5" cy="5" r="3"/><path d="M7.5 7.5l3 3"/></svg>
@@ -524,7 +524,7 @@ function FilterPopover({ values, onChange, customers: custList, onClose }) {
             </div>
             <div className="lg-cust-list">
               {filteredCusts.length === 0 && (
-                <div className="lg-cust-empty">Tidak ada customer cocok</div>
+                <div className="lg-cust-empty">None customer matching</div>
               )}
               {filteredCusts.map((c) => (
                 <label key={c.id} className="lg-cust-item">
@@ -538,7 +538,7 @@ function FilterPopover({ values, onChange, customers: custList, onClose }) {
         </div>
 
         <div className="lg-filter-fld">
-          <div className="lg-filter-fld-lbl">Rentang Nominal (Rp)</div>
+          <div className="lg-filter-fld-lbl">Range Nominal (Rp)</div>
           <div className="lg-filter-row2">
             <input
               type="number"
@@ -560,19 +560,19 @@ function FilterPopover({ values, onChange, customers: custList, onClose }) {
 
         <div className="lg-filter-fld">
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div className="lg-filter-fld-lbl">Rentang Tanggal</div>
+            <div className="lg-filter-fld-lbl">Range Date</div>
             <div className="lg-segmented">
               <button
                 className={`lg-seg${draft.dateField === "date" ? " on" : ""}`}
                 onClick={() => update({ dateField: "date" })}
               >
-                Tanggal Invoice
+                Date Invoice
               </button>
               <button
                 className={`lg-seg${draft.dateField === "due" ? " on" : ""}`}
                 onClick={() => update({ dateField: "due" })}
               >
-                Jatuh Tempo
+                Overdue
               </button>
             </div>
           </div>
@@ -596,7 +596,7 @@ function FilterPopover({ values, onChange, customers: custList, onClose }) {
         <div className="lg-filter-fld">
           <div className="lg-filter-fld-lbl">Sumber</div>
           <div className="lg-toggle-row">
-            {[["all", "Semua"], ["ai", "AI"], ["manual", "Manual"]].map(([k, lbl]) => (
+            {[["all", "All"], ["ai", "AI"], ["manual", "Manual"]].map(([k, lbl]) => (
               <button
                 key={k}
                 className={`lg-toggle${draft.source === k ? " on" : ""}`}
@@ -611,7 +611,7 @@ function FilterPopover({ values, onChange, customers: custList, onClose }) {
 
       <div className="lg-filter-foot">
         <button className="lg-filter-reset" onClick={reset}>Reset</button>
-        <button className="lg-filter-apply" onClick={apply}>Terapkan filter</button>
+        <button className="lg-filter-apply" onClick={apply}>Apply filter</button>
       </div>
     </div>
   );
@@ -673,7 +673,7 @@ export default function InvoicesPage() {
   // ── Tab counts (derived from full invoices list, before filters) ────────
   const tabCounts = useMemo(() => ({
     semua:      invoices.length,
-    terkirim:   invoices.filter(i => i.approval === "terkirim").length,
+    sent:   invoices.filter(i => i.approval === "sent").length,
     draft:      invoices.filter(i => i.approval === "draft").length,
     jatuhtempo: invoices.filter(i => i.payStatus === "overdue").length,
     lunas:      invoices.filter(i => i.payStatus === "lunas").length,
@@ -683,15 +683,15 @@ export default function InvoicesPage() {
 
   // ── KPI strip ───────────────────────────────────────────────────────────
   const kpis = useMemo(() => {
-    const totalPiutang     = invoices.filter(i => i.payStatus !== "lunas").reduce((s, i) => s + i.total, 0);
+    const totalPipayables     = invoices.filter(i => i.payStatus !== "lunas").reduce((s, i) => s + i.total, 0);
     const overdue          = invoices.filter(i => i.payStatus === "overdue");
     const overdueThisMonth = invoices.filter(i => i.payStatus === "overdue" && i.due && i.due.startsWith(monthPfx));
     const thisMonth        = invoices.filter(i => i.date && i.date.startsWith(monthPfx));
     return [
-      { lbl: "Total Piutang",         card: "total",          val: "Rp " + fmtRp(totalPiutang),                                       sub: invoices.filter(i => i.payStatus !== "lunas").length + " invoice aktif", tone: "primary" },
-      { lbl: "Jatuh Tempo",           card: "overdue",        val: "Rp " + fmtRp(overdue.reduce((s, i) => s + i.total, 0)),           sub: overdue.length + " invoice telat",                                       tone: "danger"  },
-      { lbl: "Jatuh Tempo Bulan Ini", card: "overdueMonth",   val: String(overdueThisMonth.length),                                   sub: "Rp " + fmtRp(overdueThisMonth.reduce((s, i) => s + i.total, 0)),         tone: "warn"    },
-      { lbl: "Dibuat Bulan Ini",      card: "thisMonth",      val: "Rp " + fmtRp(thisMonth.reduce((s, i) => s + i.total, 0)),         sub: thisMonth.length + " invoice baru",                                      tone: "primary" },
+      { lbl: "Total AR",         card: "total",          val: "Rp " + fmtRp(totalPipayables),                                       sub: invoices.filter(i => i.payStatus !== "lunas").length + " invoice active", tone: "primary" },
+      { lbl: "Overdue",           card: "overdue",        val: "Rp " + fmtRp(overdue.reduce((s, i) => s + i.total, 0)),           sub: overdue.length + " invoice late",                                       tone: "danger"  },
+      { lbl: "Overdue Month Ini", card: "overdueMonth",   val: String(overdueThisMonth.length),                                   sub: "Rp " + fmtRp(overdueThisMonth.reduce((s, i) => s + i.total, 0)),         tone: "warn"    },
+      { lbl: "Created This Month",      card: "thisMonth",      val: "Rp " + fmtRp(thisMonth.reduce((s, i) => s + i.total, 0)),         sub: thisMonth.length + " new invoices",                                      tone: "primary" },
     ];
   }, [invoices, monthPfx]);
 
@@ -708,7 +708,7 @@ export default function InvoicesPage() {
   const corpus = useMemo(() => {
     let list = invoices;
     if (filter.kind === "tab") {
-      if (filter.value === "terkirim")        list = list.filter(i => i.approval === "terkirim");
+      if (filter.value === "sent")        list = list.filter(i => i.approval === "sent");
       else if (filter.value === "draft")      list = list.filter(i => i.approval === "draft");
       else if (filter.value === "jatuhtempo") list = list.filter(i => i.payStatus === "overdue");
       else if (filter.value === "lunas")      list = list.filter(i => i.payStatus === "lunas");
@@ -733,7 +733,7 @@ export default function InvoicesPage() {
     return Array.from(counts.values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [corpus]);
 
-  // ── Has-any-filter flag for the "Reset semua" affordance ────────────────
+  // ── Has-any-filter flag for the "Reset all" affordance ────────────────
   const hasActiveFilters = useMemo(() => {
     return (
       filterValues.customers.size > 0 ||
@@ -790,10 +790,10 @@ export default function InvoicesPage() {
 
   // ── Sort + Group derivation ─────────────────────────────────────────────
   const onJatuhTempo = filter.kind === "tab" && filter.value === "jatuhtempo";
-  const onLunas      = filter.kind === "tab" && filter.value === "lunas";
+  const onPaid      = filter.kind === "tab" && filter.value === "lunas";
   const onDraft      = filter.kind === "tab" && filter.value === "draft";
 
-  const defaultSort  = onJatuhTempo ? "hari-telat-desc" : "tanggal-desc";
+  const defaultSort  = onJatuhTempo ? "days-late-desc" : "date-desc";
   const effectiveSort = sortChoice || defaultSort;
 
   const defaultGroup = onJatuhTempo ? "aging" : "none";
@@ -802,9 +802,9 @@ export default function InvoicesPage() {
   const sortedRows = useMemo(() => {
     const arr = [...filteredRows];
     switch (effectiveSort) {
-      case "hari-telat-desc": arr.sort((a, b) => b.daysOverdue - a.daysOverdue); break;
-      case "tanggal-desc":    arr.sort((a, b) => (b.raw.date || "").localeCompare(a.raw.date || "")); break;
-      case "tanggal-asc":     arr.sort((a, b) => (a.raw.date || "").localeCompare(b.raw.date || "")); break;
+      case "days-late-desc": arr.sort((a, b) => b.daysOverdue - a.daysOverdue); break;
+      case "date-desc":    arr.sort((a, b) => (b.raw.date || "").localeCompare(a.raw.date || "")); break;
+      case "date-asc":     arr.sort((a, b) => (a.raw.date || "").localeCompare(b.raw.date || "")); break;
       case "total-desc":      arr.sort((a, b) => b.total - a.total); break;
       case "total-asc":       arr.sort((a, b) => a.total - b.total); break;
       case "customer-asc":    arr.sort((a, b) => a.co.localeCompare(b.co)); break;
@@ -852,10 +852,10 @@ export default function InvoicesPage() {
       if (effectiveGroup === "customer") return r.co;
       if (effectiveGroup === "bulan") return (r.raw.date || "").slice(0, 7); // YYYY-MM
       if (effectiveGroup === "status") {
-        if (r.payStatus === "lunas") return "Lunas";
-        if (r.payStatus === "overdue") return "Jatuh Tempo";
+        if (r.payStatus === "lunas") return "Paid";
+        if (r.payStatus === "overdue") return "Overdue";
         if (r.approval === "draft") return "Draft";
-        return "Belum Bayar";
+        return "Unpaid";
       }
       return "—";
     };
@@ -906,7 +906,7 @@ export default function InvoicesPage() {
   }
 
   function exportCsv() {
-    const headers = ["Invoice", "Tanggal", "Customer", "Alamat", "Jatuh Tempo", "Hari Telat", "Total", "Status Invoice", "Status Bayar"];
+    const headers = ["Invoice", "Date", "Customer", "Address", "Overdue", "Days Overdue", "Total", "Status Invoice", "Status Bayar"];
     const escapeCell = (v) => {
       const s = String(v == null ? "" : v);
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -927,22 +927,22 @@ export default function InvoicesPage() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    showToast(`${sortedRows.length} invoice diekspor ke CSV`);
+    showToast(`${sortedRows.length} invoice exported to CSV`);
   }
 
   function onRowAction(action, inv) {
     setMenuOpenFor(null);
     if (action === "edit") showToast(`Edit ${inv.id} (demo)`);
-    else if (action === "payment") showToast(`Catat pembayaran untuk ${inv.id}`);
-    else if (action === "recurring") showToast(`Buat invoice berulang dari ${inv.id}`);
-    else if (action === "duplicate") showToast(`Duplikat ${inv.id}`);
+    else if (action === "payment") showToast(`Catat payment for ${inv.id}`);
+    else if (action === "recurring") showToast(`Create invoice berulang from ${inv.id}`);
+    else if (action === "duplicate") showToast(`Duplicate ${inv.id}`);
     else if (action === "archive") showToast(`${inv.id} diarsipkan`);
   }
 
   function onBulk(action) {
     const count = checked.size;
-    if (action === "remind") showToast(`Reminder dikirim ke ${count} customer`);
-    else if (action === "lunas") showToast(`${count} invoice ditandai Lunas`);
+    if (action === "remind") showToast(`Reminder sent to ${count} customer`);
+    else if (action === "lunas") showToast(`${count} invoice ditandai Paid`);
     else if (action === "archive") showToast(`${count} invoice diarsipkan`);
     clearChecks();
   }
@@ -963,11 +963,11 @@ export default function InvoicesPage() {
   }
 
   const tabs = [
-    { k: "semua",      lbl: "Semua",       count: tabCounts.semua },
-    { k: "terkirim",   lbl: "Terkirim",    count: tabCounts.terkirim },
+    { k: "semua",      lbl: "All",       count: tabCounts.semua },
+    { k: "sent",   lbl: "Sent",    count: tabCounts.sent },
     { k: "draft",      lbl: "Draft",       count: tabCounts.draft },
-    { k: "jatuhtempo", lbl: "Jatuh Tempo", count: tabCounts.jatuhtempo },
-    { k: "lunas",      lbl: "Lunas",       count: tabCounts.lunas },
+    { k: "jatuhtempo", lbl: "Overdue", count: tabCounts.jatuhtempo },
+    { k: "lunas",      lbl: "Paid",       count: tabCounts.lunas },
   ];
 
   return (
@@ -989,7 +989,7 @@ export default function InvoicesPage() {
           <div className="lg-head-actions">
             <button className="lg-btn-brand" onClick={() => setChoiceOpen(true)}>
               <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              Buat invoice
+              Create invoice
             </button>
           </div>
         </div>
@@ -1035,7 +1035,7 @@ export default function InvoicesPage() {
             <div className="lg-search">
               <svg viewBox="0 0 14 14"><circle cx="6" cy="6" r="3.5"/><path d="M9 9l3 3" strokeLinecap="round"/></svg>
               <input
-                placeholder="Cari nomor invoice, customer…"
+                placeholder="Search invoice number or customer…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -1064,7 +1064,7 @@ export default function InvoicesPage() {
                   className="lg-meta-btn"
                   onClick={() => { setSortPopOpen(!sortPopOpen); setFilterPopOpen(false); setGroupPopOpen(false); }}
                 >
-                  <span className="meta-lbl">Urut:</span>
+                  <span className="meta-lbl">Sort:</span>
                   <span className="meta-val">{SORT_LABELS[effectiveSort]}</span>
                 </button>
                 {sortPopOpen && (
@@ -1086,7 +1086,7 @@ export default function InvoicesPage() {
                 {groupPopOpen && (
                   <GroupPopover
                     value={effectiveGroup}
-                    canAging={!onLunas && !onDraft}
+                    canAging={!onPaid && !onDraft}
                     onPick={(v) => { setGroupChoice(v); setGroupPopOpen(false); }}
                     onClose={() => setGroupPopOpen(false)}
                   />
@@ -1094,10 +1094,10 @@ export default function InvoicesPage() {
               </div>
               <button className="lg-filter-export" onClick={exportCsv}>
                 <svg viewBox="0 0 12 12"><path d="M6 2v6M3 6l3 3 3-3M2 10.5h8" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                Ekspor CSV
+                Export CSV
               </button>
               {hasActiveFilters && (
-                <button className="lg-reset-all" onClick={resetAll}>Reset semua</button>
+                <button className="lg-reset-all" onClick={resetAll}>Reset all</button>
               )}
             </div>
           </div>
@@ -1106,10 +1106,10 @@ export default function InvoicesPage() {
           <div className="lg-col-header">
             <div><input type="checkbox" className="lg-row-check" disabled /></div>
             <div>Invoice</div>
-            <div>Tanggal</div>
+            <div>Date</div>
             <div>Customer</div>
-            <div style={{ textAlign: "right" }}>Hari Telat</div>
-            <div style={{ paddingLeft: 12 }}>Jatuh Tempo</div>
+            <div style={{ textAlign: "right" }}>Days Overdue</div>
+            <div style={{ paddingLeft: 12 }}>Overdue</div>
             <div>Aging</div>
             <div style={{ textAlign: "right" }}>Total · IDR</div>
             <div />
@@ -1173,7 +1173,7 @@ export default function InvoicesPage() {
             ) : (
               <>
                 {sortedRows.length === 0 && (
-                  <div className="lg-empty">Tidak ada invoice yang cocok</div>
+                  <div className="lg-empty">None invoice matching</div>
                 )}
                 {sortedRows.map((r, i) => {
                   const isOverdue = r.payStatus === "overdue" && r.daysOverdue > 0;
@@ -1215,21 +1215,21 @@ export default function InvoicesPage() {
       {/* ── Sticky footer ───────────────────────────────────────────── */}
       <div className="lg-footer">
         <div className="lg-footer-left">
-          <span><span className="lg-footer-num">{checked.size}</span> dipilih</span>
+          <span><span className="lg-footer-num">{checked.size}</span> selected</span>
           {checked.size > 0 ? (
             <>
-              <button className="lg-footer-bulk-btn" onClick={() => onBulk("remind")}>Kirim Reminder</button>
-              <button className="lg-footer-clear" onClick={clearChecks}>Batal pilih</button>
+              <button className="lg-footer-bulk-btn" onClick={() => onBulk("remind")}>Send Reminder</button>
+              <button className="lg-footer-clear" onClick={clearChecks}>Clear selection</button>
             </>
           ) : (
             <>
               <span className="lg-footer-sep">·</span>
-              <span>Menampilkan <span className="lg-footer-num">{filteredRows.length}</span> invoice</span>
+              <span>Showing <span className="lg-footer-num">{filteredRows.length}</span> invoices</span>
             </>
           )}
         </div>
         <div className="lg-footer-right">
-          <span className="lg-footer-lbl">{checked.size > 0 ? "Subtotal terpilih" : "Subtotal halaman"}</span>
+          <span className="lg-footer-lbl">{checked.size > 0 ? "Subtotal selected" : "Subtotal page"}</span>
           <span className="lg-footer-total">Rp {fmtRp(checked.size > 0 ? selectedTotal : pageTotal)}</span>
         </div>
       </div>
@@ -1250,8 +1250,11 @@ export default function InvoicesPage() {
               </button>
             </div>
             <div className="drawer-tabs">
-              {[["detail","Detail"],["items","Items"],["audit","Audit"]].map(([t,label]) => (
-                <div key={t} className={`drawer-tab${drawerTab===t?" active":""}`} onClick={()=>setDrawerTab(t)}>{label}</div>
+              {[["detail","Detail"],["items","Items"],["audit","Audit"],["ai","AI Insight"]].map(([t,label]) => (
+                <div key={t} className={`drawer-tab${drawerTab===t?" active":""}`} onClick={()=>setDrawerTab(t)}>
+                  {t === "ai" && <span style={{ marginRight: 4, color: "var(--color-action)" }}>✦</span>}
+                  {label}
+                </div>
               ))}
             </div>
             <div className="drawer-body">
@@ -1259,7 +1262,7 @@ export default function InvoicesPage() {
                 <>
                   <div className="drawer-stat-row">
                     <div className="drawer-stat-card">
-                      <div className="drawer-stat-lbl">Total Invoice</div>
+                      <div className="drawer-stat-lbl">Total Invoices</div>
                       <div className="drawer-stat-val">{formatRupiah(selected.total)}</div>
                     </div>
                     <div className="drawer-stat-card">
@@ -1270,15 +1273,15 @@ export default function InvoicesPage() {
                     </div>
                   </div>
                   <div className="drawer-section">
-                    <div className="drawer-section-title">Informasi Invoice</div>
+                    <div className="drawer-section-title">Invoice Information</div>
                     {[
                       ["Invoice ID", selected.id],
-                      ["Nomor Invoice", selected.invNo],
+                      ["Invoice Number", selected.invNo],
                       ["Customer PO", selected.custPO],
                       ["Customer", selected.customerName],
                       ["Email", selected.custEmail],
-                      ["Tanggal Dibuat", formatDate(selected.date)],
-                      ["Jatuh Tempo", formatDate(selected.due)],
+                      ["Date Dibuat", formatDate(selected.date)],
+                      ["Overdue", formatDate(selected.due)],
                       ["Status Invoice", APPROVAL_LABEL[selected.approval] || selected.approval],
                     ].map(([label, value]) => (
                       <div key={label} className="drawer-row">
@@ -1288,7 +1291,7 @@ export default function InvoicesPage() {
                     ))}
                   </div>
                   <div className="drawer-section">
-                    <div className="drawer-section-title">Pajak</div>
+                    <div className="drawer-section-title">Tax</div>
                     {[
                       ["DPP", formatRupiah(selected.dpp)],
                       ["PPN (11%)", formatRupiah(selected.ppn)],
@@ -1305,7 +1308,7 @@ export default function InvoicesPage() {
                 <div className="drawer-section">
                   <div className="drawer-section-title">Line Items</div>
                   <table className="items-table">
-                    <thead><tr><th>Deskripsi</th><th className="r">Qty</th><th>Unit</th><th className="r">Harga</th><th className="r">Subtotal</th></tr></thead>
+                    <thead><tr><th>Description</th><th className="r">Qty</th><th>Unit</th><th className="r">Price</th><th className="r">Subtotal</th></tr></thead>
                     <tbody>
                       {selected.items.map((item, i) => (
                         <tr key={i}>
@@ -1323,17 +1326,50 @@ export default function InvoicesPage() {
               )}
               {drawerTab === "audit" && (
                 <div className="drawer-section">
-                  <div className="drawer-section-title">Riwayat Audit</div>
+                  <div className="drawer-section-title">Audit History</div>
                   <div className="audit-list">
                     {selected.audit.map((a, i) => (
                       <div key={i} className="audit-item">
                         <div className={`audit-dot ${a.type}`} />
                         <div>
                           <div className="audit-action">{a.action}</div>
-                          <div className="audit-by">{a.by} · {formatDate(a.date)} {a.time}</div>
+                          <div className="audit-by">{a.by} · {formatDate(a.date)} {a.teame}</div>
                         </div>
                       </div>
                     ))}
+                  </div>
+                </div>
+              )}
+              {drawerTab === "ai" && (
+                <div className="drawer-section">
+                  <div className="drawer-section-title">AI Insight</div>
+                  {selected.isAI && (
+                    <div style={{ padding: 12, background: "var(--ai-surface)", border: "1px solid var(--ai-border)", borderRadius: "var(--radius-md)", marginBottom: 10 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: "var(--color-action)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 4 }}>✦ Dibuat oleh AI</div>
+                      <div style={{ fontSize: 12, color: "var(--color-text-secondary)", lineHeight: 1.55 }}>
+                        This invoice was auto-generated from the customer PO. OCR confidence average <strong>96%</strong>. Mato sure any manually edited fields are finalized before sending.
+                      </div>
+                    </div>
+                  )}
+                  {selected.payStatus === "overdue" && (
+                    <div style={{ padding: 12, background: "var(--color-danger-surface)", border: "1px solid var(--color-danger-border)", borderRadius: "var(--radius-md)", marginBottom: 10 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: "var(--color-danger-text)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 4 }}>⚠ Past Due</div>
+                      <div style={{ fontSize: 12, color: "var(--color-text-secondary)", lineHeight: 1.55 }}>
+                        Invoice ini already passes due. Klay AI menyarankan reminder to <strong>{selected.customerName}</strong>{selected.custEmail && ` via ${selected.custEmail}`}.
+                      </div>
+                    </div>
+                  )}
+                  {selected.payStatus === "lunas" && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: 12, background: "var(--color-success-surface)", border: "1px solid var(--color-success-border)", borderRadius: "var(--radius-md)", fontSize: 12, color: "var(--color-success-text)", marginBottom: 10 }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                      Invoice already lunas — none action that dineedskan.
+                    </div>
+                  )}
+                  <div style={{ padding: 12, background: "var(--color-surface-sunken)", border: "1px solid var(--color-border-default)", borderRadius: "var(--radius-md)" }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "var(--color-text-tertiary)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 4 }}>Customer Pattern</div>
+                    <div style={{ fontSize: 12, color: "var(--color-text-secondary)", lineHeight: 1.55 }}>
+                      {selected.customerName} typically pays in <strong>NET 30</strong>. Klay AI akan trigger reminder automatic 3 days before due.
+                    </div>
                   </div>
                 </div>
               )}
@@ -1342,13 +1378,13 @@ export default function InvoicesPage() {
               {selected.approval === "draft" && (
                 <button className="drawer-btn primary" onClick={openSendForSelected}>
                   <svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-                  Kirim Invoice
+                  Send Invoice
                 </button>
               )}
-              {selected.approval === "terkirim" && selected.payStatus !== "lunas" && (
+              {selected.approval === "sent" && selected.payStatus !== "lunas" && (
                 <button className="drawer-btn primary">
                   <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
-                  Tandai Lunas
+                  Mark Paid
                 </button>
               )}
               <button className="drawer-btn ghost">
@@ -1360,12 +1396,12 @@ export default function InvoicesPage() {
         </>
       )}
 
-      {/* ── Choice modal (Buat Invoice entry point) ─────────────────── */}
+      {/* ── Choice modal (Create Invoice entry point) ─────────────────── */}
       {choiceOpen && (
         <div className="modal-overlay open" onClick={() => setChoiceOpen(false)}>
           <div className="choice-box" onClick={(e) => e.stopPropagation()}>
             <div className="choice-head">
-              <div className="choice-title">Buat Invoice Baru</div>
+              <div className="choice-title">New Invoice</div>
               <button className="choice-close" onClick={() => setChoiceOpen(false)}>
                 <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>
@@ -1376,15 +1412,15 @@ export default function InvoicesPage() {
                   <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                 </div>
                 <div className="method-title">Upload PO Customer</div>
-                <div className="method-sub">Upload dokumen PO dan AI akan mengekstrak data secara otomatis.</div>
-                <span className="method-tag ai"><AISvg />AI Ekstrak Otomatis</span>
+                <div className="method-sub">Upload dokumen PO and AI akan mengekstrak data in automatic.</div>
+                <span className="method-tag ai"><AISvg />AI Ekstrak Automatic</span>
               </div>
               <div className="method-card" onClick={() => { setChoiceOpen(false); navigate("/invoices/new?mode=manual"); }}>
                 <div className="method-icon manual">
                   <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                 </div>
                 <div className="method-title">Isi Manual</div>
-                <div className="method-sub">Input data invoice secara manual dengan form terstruktur.</div>
+                <div className="method-sub">Input data invoice in manual with form terstruktur.</div>
                 <span className="method-tag man">Form Manual</span>
               </div>
             </div>
@@ -1392,7 +1428,7 @@ export default function InvoicesPage() {
         </div>
       )}
 
-      {/* ── Send modal (from drawer's "Kirim Invoice") ──────────────── */}
+      {/* ── Send modal (from drawer's "Send Invoice") ──────────────── */}
       {sendOpen && selected && (
         <div className="modal-overlay open" onClick={() => !sendSuccess && setSendOpen(false)}>
           <div className="modal-box" onClick={(e) => e.stopPropagation()}>
@@ -1401,15 +1437,15 @@ export default function InvoicesPage() {
                 <div className="send-success-icon">
                   <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
                 </div>
-                <div className="send-success-title">Invoice terkirim ✓</div>
-                <div className="send-success-sub">Status berubah ke "Belum Bayar"</div>
+                <div className="send-success-title">Invoice sent ✓</div>
+                <div className="send-success-sub">Status berubah to "Unpaid"</div>
               </div>
             ) : (
               <>
-                <div className="modal-title">Kirim Invoice</div>
-                <div className="modal-sub">Invoice {selected.id} akan dikirimkan ke email customer. PDF dilampirkan otomatis.</div>
+                <div className="modal-title">Send Invoice</div>
+                <div className="modal-sub">Invoice {selected.id} akan sentkan to email customer. PDF dilampirkan automatic.</div>
                 <div className="fld">
-                  <label>Kirim ke</label>
+                  <label>Send to</label>
                   <input type="email" value={sendEmail} onChange={(e) => setSendEmail(e.target.value)} />
                 </div>
                 <div className="fld">
@@ -1417,14 +1453,14 @@ export default function InvoicesPage() {
                   <input type="email" value={sendCC} onChange={(e) => setSendCC(e.target.value)} placeholder="cc@kamu.id" />
                 </div>
                 <div className="fld">
-                  <label>Pesan</label>
+                  <label>Message</label>
                   <textarea value={sendMsg} onChange={(e) => setSendMsg(e.target.value)} />
                 </div>
                 <div className="modal-footer">
-                  <button className="modal-cancel" onClick={() => setSendOpen(false)}>Batal</button>
+                  <button className="modal-cancel" onClick={() => setSendOpen(false)}>Cancel</button>
                   <button className="modal-confirm" onClick={confirmSend}>
                     <svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-                    Kirim Sekarang
+                    Send Sekarang
                   </button>
                 </div>
               </>

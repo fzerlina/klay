@@ -1,15 +1,14 @@
-import { Fragment, useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, Fragment } from "react";
 import { COA, COA_BY_CODE } from "../data/seed/coa";
 import { JOURNAL_ENTRIES } from "../data/seed/journalEntries";
 import { OPENING_BALANCES } from "../data/seed/openingBalances";
-import "./TrialBalancePage.css";
+import AiChatDrawer from "./AiChatDrawer";
+import SummaryDrawer from "./SummaryDrawer";
+import { computeTbInsights, makeTbAiContext } from "./ai-trialbalance-context";
+import "./modules.css";
+import "./invoices-ledger.css";
 
-// ── Source-of-truth views ──────────────────────────────────────────────────
-// Trial Balance derives from the same seed CoA / JEs / opening balances as
-// every other page. Anything reads through this page sees what the JE list
-// and General Ledger see.
-
-// CoA leaf accounts in the shape the rest of this page expects.
+// ── Source views ──────────────────────────────────────────────────────────
 const TB_COA = COA.filter((n) => n.code).map((n) => ({
   code: n.code,
   name: n.name,
@@ -18,14 +17,6 @@ const TB_COA = COA.filter((n) => n.code).map((n) => ({
   parent: n.parent,
   is_active: n.is_active,
 }));
-
-// JEs as-is (snake_case schema already matches what computeTB() consumes).
-const TB_JE = JOURNAL_ENTRIES;
-
-// Opening balances as a { code: oriented_amount } map. Oriented means the
-// stored value is positive when the balance matches the account's normal
-// side (a 500M credit on a credit-normal equity account stores as +500M),
-// matching the convention computeTB() expects.
 const TB_OPENING = OPENING_BALANCES.reduce((m, r) => {
   const acct = COA_BY_CODE[r.account_code];
   if (!acct) return m;
@@ -34,51 +25,53 @@ const TB_OPENING = OPENING_BALANCES.reduce((m, r) => {
   m[r.account_code] = (m[r.account_code] || 0) + oriented;
   return m;
 }, {});
-
-// ── helpers ──────────────────────────────────────────────────────────────
-const PARENT_SET = new Set(TB_COA.filter(a => a.parent).map(a => a.parent));
-const LEAF = TB_COA.filter(a => !PARENT_SET.has(a.code));
+const PARENT_SET = new Set(TB_COA.filter((a) => a.parent).map((a) => a.parent));
+const LEAF = TB_COA.filter((a) => !PARENT_SET.has(a.code));
 
 const TYPE_LABELS = {
-  asset: "ASET",
-  contra_asset: "KONTRA ASET",
-  liability: "LIABILITAS",
-  equity: "EKUITAS",
-  revenue: "PENDAPATAN",
-  contra_revenue: "KONTRA PENDAPATAN",
-  expense: "BEBAN",
+  asset: "Assets",
+  contra_asset: "Contra Assets",
+  liability: "Liabilities",
+  equity: "Equity",
+  revenue: "Revenue",
+  contra_revenue: "Contra Revenue",
+  expense: "Expenses",
 };
 const TYPE_ORDER = ["asset", "contra_asset", "liability", "equity", "revenue", "contra_revenue", "expense"];
 const TYPE_BADGE_CLS = {
-  asset: "tb-asset",
-  contra_asset: "tb-contra",
-  liability: "tb-liab",
-  equity: "tb-equity",
-  revenue: "tb-rev",
-  contra_revenue: "tb-contra",
-  expense: "tb-exp",
+  asset: "approved",
+  contra_asset: "draft",
+  liability: "rejected",
+  equity: "review",
+  revenue: "approved",
+  contra_revenue: "draft",
+  expense: "draft",
+};
+
+const SEVERITY_ICON = {
+  critical: <svg viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 002 1.71 2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
+  warn: <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>,
+  info: <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>,
 };
 
 const rp = (v) => {
   if (v === 0 || v === null || v === undefined) return "—";
   const abs = Math.abs(v);
-  return (v < 0 ? "(" : "") + "Rp " + abs.toLocaleString("id-ID") + (v < 0 ? ")" : "");
+  return (v < 0 ? "(" : "") + "Rp " + abs.toLocaleString("id-ID") + (v < 0 ? ")" : "");
 };
 const rpZ = (v) => {
   if (v === undefined || v === null) return "—";
   const abs = Math.abs(v);
-  return (v < 0 ? "(" : "") + "Rp " + abs.toLocaleString("id-ID") + (v < 0 ? ")" : "");
+  return (v < 0 ? "(" : "") + "Rp " + abs.toLocaleString("id-ID") + (v < 0 ? ")" : "");
 };
 const fmtIdDate = (s) =>
   new Date(s + "T00:00:00").toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
 
-// Compute trial balance rows for the given period.
+// ── TB compute ────────────────────────────────────────────────────────────
 function computeTB(dateFrom, dateTo) {
   const acc = {};
-  LEAF.forEach((a) => {
-    acc[a.code] = { preDr: 0, preCr: 0, perDr: 0, perCr: 0, entries: [] };
-  });
-  TB_JE.forEach((je) => {
+  LEAF.forEach((a) => { acc[a.code] = { preDr: 0, preCr: 0, perDr: 0, perCr: 0, entries: [] }; });
+  JOURNAL_ENTRIES.forEach((je) => {
     if (je.status !== "posted") return;
     je.lines.forEach((line) => {
       const a = acc[line.account_code];
@@ -86,11 +79,9 @@ function computeTB(dateFrom, dateTo) {
       const dr = line.debit || 0;
       const cr = line.credit || 0;
       if (je.je_date < dateFrom) {
-        a.preDr += dr;
-        a.preCr += cr;
+        a.preDr += dr; a.preCr += cr;
       } else if (je.je_date >= dateFrom && je.je_date <= dateTo) {
-        a.perDr += dr;
-        a.perCr += cr;
+        a.perDr += dr; a.perCr += cr;
         a.entries.push({
           je_ref: je.je_number,
           date: je.je_date,
@@ -100,8 +91,6 @@ function computeTB(dateFrom, dateTo) {
           memo: je.memo,
           posted_by: je.posted_by,
           posted_date: je.posted_date,
-          reference_type: je.reference_type,
-          reference_id: je.reference_id,
         });
       }
     });
@@ -131,1031 +120,835 @@ function computeTB(dateFrom, dateTo) {
 }
 
 function checkBalance(rows) {
-  let dr = 0;
-  let cr = 0;
+  let dr = 0, cr = 0;
   rows.forEach((r) => {
     const cb = r.closing_balance;
-    if (r.normal_balance === "debit") {
-      cb >= 0 ? (dr += cb) : (cr += Math.abs(cb));
-    } else {
-      cb >= 0 ? (cr += cb) : (dr += Math.abs(cb));
-    }
+    if (r.normal_balance === "debit") cb >= 0 ? (dr += cb) : (cr += Math.abs(cb));
+    else                              cb >= 0 ? (cr += cb) : (dr += Math.abs(cb));
   });
   return { dr, cr, variance: Math.abs(dr - cr), balanced: Math.abs(dr - cr) < 1 };
 }
 
-// AI anomaly rules — same logic as v4 prototype.
-function detectAnomalies(tb) {
+function detectAnomalyes(tb) {
   const out = [];
   const byCode = {};
   tb.forEach((r) => { byCode[r.code] = r; });
 
-  // Closing balances are computed in each account's normal direction (positive
-  // = balance is on the normal side). For a contra_asset (credit-normal), a
-  // positive closing_balance is the expected accumulation; a negative one
-  // means a JE pushed it the wrong way and is the actual anomaly.
   tb.filter((r) => r.type === "contra_asset").forEach((r) => {
     if (r.closing_balance < 0) {
-      out.push({
-        severity: "critical", code: r.code, name: r.name,
-        title: "Saldo kontra aset bergerak ke arah debit — tidak wajar",
-        desc: `${r.name} memiliki saldo akhir ${rp(r.closing_balance)}, seharusnya bersaldo kredit untuk akun kontra aset. Kemungkinan entri jurnal terbalik.`,
-        action: "Periksa JE yang memengaruhi akun ini dan koreksi jika diperlukan.",
-      });
+      out.push({ severity: "critical", code: r.code, name: r.name, title: "Contra asset balance moved to the debit side — abnormal", desc: `${r.name} has closing balance ${rp(r.closing_balance)}, should have a credit balance for account contra asset. Possibly reversed journal entry.`, action: "Check JEs affecting this account." });
     }
   });
-
   const ar = byCode["1-2100"];
   const allowance = byCode["1-2200"];
   if (ar && allowance && ar.closing_balance > 0 && allowance.closing_balance === 0) {
-    out.push({
-      severity: "critical", code: "1-2200", name: allowance.name,
-      title: "Cadangan piutang ragu-ragu belum dibentuk",
-      desc: `${ar.name} bersaldo ${rp(ar.closing_balance)} namun cadangan masih nol. Standar akuntansi mensyaratkan estimasi tidak tertagih.`,
-      action: "Hitung dan catat pencadangan piutang sesuai kebijakan perusahaan.",
-    });
+    out.push({ severity: "critical", code: "1-2200", name: allowance.name, title: "Allowance pipayables doubtful not yet set up", desc: `${ar.name} has ${rp(ar.closing_balance)} while allowance is still zero.`, action: "Calculate and catat penallowance pipayables." });
   }
-
-  // Total operating revenue across all product / service lines
-  const totalRev = ["4-1100", "4-1200", "4-1300", "4-1400", "4-1500"]
-    .reduce((s, c) => s + (byCode[c]?.closing_balance || 0), 0);
+  const totalRev = ["4-1100", "4-1200", "4-1300", "4-1400", "4-1500"].reduce((s, c) => s + (byCode[c]?.closing_balance || 0), 0);
   if (ar && totalRev > 0 && ar.closing_balance > totalRev * 0.55) {
-    out.push({
-      severity: "warn", code: "1-2100", name: ar.name,
-      title: "Piutang usaha tinggi relatif terhadap pendapatan",
-      desc: `Piutang ${rp(ar.closing_balance)} = ${Math.round(ar.closing_balance / totalRev * 100)}% dari total pendapatan. Risiko kolektibilitas meningkat jika melewati 45 hari.`,
-      action: "Tinjau aging piutang dan kebijakan kredit pelanggan.",
-    });
+    out.push({ severity: "warn", code: "1-2100", name: ar.name, title: "Pitrade payables high relative to pendapatan", desc: `Pipayables ${rp(ar.closing_balance)} = ${Math.round(ar.closing_balance / totalRev * 100)}% from total pendapatan.`, action: "Review aging pipayables." });
   }
-
   const marketing = byCode["6-1200"];
   if (marketing && marketing.opening_balance === 0 && marketing.period_debit > 15000000) {
-    out.push({
-      severity: "warn", code: "6-1200", name: marketing.name,
-      title: "Lonjakan beban iklan tanpa historis saldo awal",
-      desc: `${marketing.name} mencatat debit ${rp(marketing.period_debit)} pada periode ini dengan saldo awal nol — peningkatan signifikan tanpa referensi historis.`,
-      action: "Konfirmasi otorisasi anggaran pemasaran dan kontrak terkait.",
-    });
+    out.push({ severity: "warn", code: "6-1200", name: marketing.name, title: "Spito beban iklan with no opening balance history", desc: `${marketing.name} recorded a debit ${rp(marketing.period_debit)} with opening balance zero.`, action: "Confirm authorization budget." });
   }
-
   const ap = byCode["2-1100"];
   if (ap && ap.closing_balance > 80000000) {
-    out.push({
-      severity: "warn", code: "2-1100", name: ap.name,
-      title: "Saldo utang usaha melebihi ambang batas",
-      desc: `${ap.name} bersaldo ${rp(ap.closing_balance)} — melampaui threshold internal Rp 80 juta. Pastikan jadwal pembayaran vendor sudah direncanakan agar tidak terkena denda keterlambatan.`,
-      action: "Tinjau aging schedule utang usaha dan prioritaskan pembayaran jatuh tempo.",
-    });
+    out.push({ severity: "warn", code: "2-1100", name: ap.name, title: "Balance trade payables exceeds threshold", desc: `${ap.name} has ${rp(ap.closing_balance)} — exceeds internal threshold Rp 80 juta.`, action: "Review aging schedule payables." });
   }
-
   const proSvc = byCode["6-2700"];
   if (proSvc && proSvc.period_debit >= 25000000) {
-    const txs = (proSvc.entries || []).slice(0, 4).map((e) => e.je_ref).join(", ");
-    out.push({
-      severity: "warn", code: "6-2700", name: proSvc.name,
-      title: "Kemungkinan tagihan ganda dari konsultan",
-      desc: `Terdapat ${proSvc.entries.length} transaksi konsultan dalam periode yang sama${txs ? ` (${txs}${proSvc.entries.length > 4 ? ", …" : ""})` : ""} dengan total ${rp(proSvc.period_debit)}. Verifikasi tidak ada duplikasi invoice.`,
-      action: "Cocokkan dengan kontrak dan invoice fisik dari vendor konsultan.",
-    });
+    out.push({ severity: "warn", code: "6-2700", name: proSvc.name, title: "Possibly duplicate billing from consultant", desc: `${proSvc.entries.length} transactions consultant in period that same.`, action: "Match with contract and invoice fisik." });
   }
-
   const vatIn = byCode["1-5100"];
   if (vatIn && vatIn.closing_balance > 10000000) {
-    out.push({
-      severity: "info", code: "1-5100", name: vatIn.name,
-      title: "PPN masukan belum dikompensasikan ke PPN keluaran",
-      desc: `Saldo PPN Masukan ${rp(vatIn.closing_balance)} masih ditahan sebagai aset. Periksa apakah kompensasi dengan PPN Keluaran (2-2100) sudah dilakukan untuk SPT Masa PPN.`,
-      action: "Koordinasikan dengan tim pajak untuk rekonsiliasi PPN bulan berjalan.",
-    });
+    out.push({ severity: "info", code: "1-5100", name: vatIn.name, title: "PPN masukan not yet credited", desc: `Input VAT (PPN) balance ${rp(vatIn.closing_balance)} is still held as aset.`, action: "Coordinate with tax team." });
   }
-
   tb.filter((r) => r.opening_balance !== 0 && r.closing_balance === 0 && r.has_activity && r.type === "liability").forEach((r) => {
-    out.push({
-      severity: "info", code: r.code, name: r.name,
-      title: "Kewajiban terlunasi penuh dalam periode",
-      desc: `${r.name} memiliki saldo awal ${rp(r.opening_balance)} dan terlunasi hingga nol pada periode ini. Konfirmasi pelunasan sudah didokumentasikan.`,
-      action: "Arsipkan bukti pelunasan untuk keperluan audit.",
-    });
+    out.push({ severity: "info", code: r.code, name: r.name, title: "Liability fully settled in period", desc: `${r.name} settled until zero on this period.`, action: "Archive evidence settlement." });
   });
-
   return out;
 }
 
-// ── icons ────────────────────────────────────────────────────────────────
-const IconExport = () => (
-  <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
-);
-const IconSearch = () => (
-  <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
-);
-const IconFilter = () => (
-  <svg viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6" /><line x1="8" y1="12" x2="16" y2="12" /><line x1="12" y1="18" x2="12" y2="18" /></svg>
-);
-const IconChevDown = () => (
-  <svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15" /></svg>
-);
-const IconChevRight = () => (
-  <svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6" /></svg>
-);
-const IconCheck = () => (
-  <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" /></svg>
-);
-const IconClose = () => (
-  <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-);
-const IconCircleSlash = () => (
-  <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><line x1="4.93" y1="4.93" x2="19.07" y2="19.07" /></svg>
-);
-const IconAlertTri = () => (
-  <svg viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
-);
-const IconAlertCircle = () => (
-  <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
-);
-const IconInfo = () => (
-  <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>
-);
-const IconArrowDown = () => (
-  <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19" /><polyline points="19 12 12 19 5 12" /></svg>
-);
-const IconArrowUp = () => (
-  <svg viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5" /><polyline points="5 12 12 5 19 12" /></svg>
-);
-const IconBolt = () => (
-  <svg style={{ width: 11, height: 11, fill: "var(--color-action)", flexShrink: 0 }} viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></svg>
-);
+// ── UI helpers ────────────────────────────────────────────────────────────
 
-function TypeBadge({ type }) {
-  return <span className={`type-badge ${TYPE_BADGE_CLS[type] || "tb-contra"}`}>{TYPE_LABELS[type] || type}</span>;
+function SparkleIcon({ size = 11 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 1.5l1.1 2.7L9.8 5l-2.7 0.8L6 8.5l-1.1-2.7L2.2 5l2.7-0.8L6 1.5z" />
+      <path d="M10 8.5l0.4 1L11.5 10l-1.1 0.4L10 11.5l-0.4-1.1L8.5 10l1.1-0.5L10 8.5z" />
+    </svg>
+  );
 }
 
-const SEVERITY_COLORS = {
-  critical: { bg: "var(--anomaly-critical-surface)", border: "var(--anomaly-critical-border)", text: "var(--anomaly-critical-text)" },
-  warn: { bg: "var(--anomaly-warn-surface)", border: "var(--anomaly-warn-border)", text: "var(--anomaly-warn-text)" },
-  info: { bg: "var(--anomaly-info-surface)", border: "var(--anomaly-info-border)", text: "var(--anomaly-info-text)" },
+function AiSubtitle({ insights, onOpenSummary, onOpenChat, chatActive, summaryActive }) {
+  const [idx, setIdx] = useState(0);
+  const [fading, setFading] = useState(false);
+  useEffect(() => {
+    if (insights.length <= 1) return;
+    const id = setInterval(() => {
+      setFading(true);
+      setTimeout(() => {
+        setIdx((i) => (i + 1) % insights.length);
+        setFading(false);
+      }, 220);
+    }, 7000);
+    return () => clearInterval(id);
+  }, [insights.length]);
+  useEffect(() => { if (idx >= insights.length) setIdx(0); }, [insights.length, idx]);
+  const current = insights[idx] || insights[0];
+  return (
+    <div className={`lg-ai-subtitle${summaryActive || chatActive ? " active" : ""}`}>
+      <p className={`lg-ai-text${fading ? " fading" : ""}`}>
+        <span className="lg-ai-sparkle"><SparkleIcon /></span>
+        {current?.node}
+      </p>
+      <div className="lg-ai-ctas">
+        <button type="button" className={`lg-ai-cta-primary${summaryActive ? " active" : ""}`} onClick={onOpenSummary}>
+          <SparkleIcon /> Summary
+        </button>
+        <button type="button" className={`lg-ai-cta-secondary${chatActive ? " active" : ""}`} onClick={onOpenChat}>
+          {chatActive ? "Continue chat" : "Ask Klay AI"} →
+        </button>
+        {insights.length > 1 && (
+          <div className="lg-ai-dots" aria-hidden>
+            {insights.map((_, i) => <span key={i} className={`lg-ai-dot${i === idx ? " on" : ""}`} />)}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const SORT_LABELS = {
+  "code-asc":     "Code A-Z",
+  "code-desc":    "Code Z-A",
+  "name-asc":     "Name A-Z",
+  "close-desc":   "Closing balance ↓",
+  "close-asc":    "Closing balance ↑",
+  "debit-desc":   "Debit period ↓",
+  "credit-desc":  "Credit period ↓",
+};
+const GROUP_LABELS = {
+  "type":  "Account Type",
+  "none":  "—",
 };
 
-// ── component ────────────────────────────────────────────────────────────
+function useClickOutside(ref, onClose) {
+  useEffect(() => {
+    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [ref, onClose]);
+}
+
+function SortPopover({ value, onPick, onClose }) {
+  const ref = useRef(null);
+  useClickOutside(ref, onClose);
+  return (
+    <div className="lg-popover" ref={ref}>
+      <div className="lg-popover-list">
+        {Object.entries(SORT_LABELS).map(([k, lbl]) => (
+          <button key={k} className={`lg-popover-item${value === k ? " selected" : ""}`} onClick={() => onPick(k)}>
+            {lbl}
+            {value === k && <svg className="lg-popover-check" viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg>}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function GroupPopover({ value, onPick, onClose }) {
+  const ref = useRef(null);
+  useClickOutside(ref, onClose);
+  const items = [
+    { k: "type", lbl: "Account Type (default)" },
+    { k: "none", lbl: "Not grouped" },
+  ];
+  return (
+    <div className="lg-popover" ref={ref}>
+      <div className="lg-popover-list">
+        {items.map((it) => (
+          <button key={it.k} className={`lg-popover-item${value === it.k ? " selected" : ""}`} onClick={() => onPick(it.k)}>
+            {it.lbl}
+            {value === it.k && <svg className="lg-popover-check" viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg>}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function FilterPopover({ values, onChange, onClose }) {
+  const ref = useRef(null);
+  useClickOutside(ref, onClose);
+  const [draft, setDraft] = useState(values);
+  const update = (patch) => setDraft((d) => ({ ...d, ...patch }));
+  const reset = () => setDraft({ dateFrom: "2025-01-01", dateTo: "2025-04-30", hideZero: false });
+  const apply = () => { onChange(draft); onClose(); };
+  function pickShortcut(r) {
+    if (r === "ytd")   update({ dateFrom: "2025-01-01", dateTo: "2025-04-30" });
+    else if (r === "q1") update({ dateFrom: "2025-01-01", dateTo: "2025-03-31" });
+    else if (r === "feb") update({ dateFrom: "2025-01-01", dateTo: "2025-02-28" });
+    else if (r === "jan") update({ dateFrom: "2025-01-01", dateTo: "2025-01-31" });
+  }
+  return (
+    <div className="lg-popover lg-filter-pop" ref={ref}>
+      <div className="lg-filter-body">
+        <div className="lg-filter-fld">
+          <div className="lg-filter-fld-lbl">Period quick</div>
+          <div className="lg-toggle-row">
+            <button className="lg-toggle" onClick={() => pickShortcut("jan")}>Jan 2025</button>
+            <button className="lg-toggle" onClick={() => pickShortcut("feb")}>Feb 2025</button>
+            <button className="lg-toggle" onClick={() => pickShortcut("q1")}>Q1 2025</button>
+            <button className="lg-toggle" onClick={() => pickShortcut("ytd")}>YTD</button>
+          </div>
+        </div>
+        <div className="lg-filter-fld">
+          <div className="lg-filter-fld-lbl">Range date custom</div>
+          <div className="lg-filter-row2">
+            <input type="date" className="lg-filter-input" value={draft.dateFrom} onChange={(e) => update({ dateFrom: e.target.value })} />
+            <span style={{ color: "var(--color-text-tertiary)", fontSize: 11 }}>—</span>
+            <input type="date" className="lg-filter-input" value={draft.dateTo} onChange={(e) => update({ dateTo: e.target.value })} />
+          </div>
+        </div>
+        <div className="lg-filter-fld">
+          <div className="lg-filter-fld-lbl">Display</div>
+          <label style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12, color: "var(--color-text-secondary)", cursor: "pointer" }}>
+            <input type="checkbox" checked={draft.hideZero} onChange={(e) => update({ hideZero: e.target.checked })} style={{ accentColor: "var(--color-action)", cursor: "pointer" }} />
+            Hide account without activity
+          </label>
+        </div>
+      </div>
+      <div className="lg-filter-foot">
+        <button className="lg-filter-reset" onClick={reset}>Reset</button>
+        <button className="lg-filter-apply" onClick={apply}>Apply filter</button>
+      </div>
+    </div>
+  );
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────
+
 export default function TrialBalancePage() {
-  // filters
-  const [dateFrom, setDateFrom] = useState("2025-01-01");
-  const [dateTo, setDateTo] = useState("2025-04-30");
-  const [hideZero, setHideZero] = useState(false);
-  const [groupMode, setGroupMode] = useState(true);
-  const [typeFilter, setTypeFilter] = useState("");
-  const [searchQ, setSearchQ] = useState("");
-  const [sortCol, setSortCol] = useState("code");
-  const [sortDir, setSortDir] = useState("asc");
-  const [collapsedGroups, setCollapsedGroups] = useState(() => new Set());
-  const [anomalyFilter, setAnomalyFilter] = useState(null);
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState({ kind: "tab", value: "all" });
+  const [sortChoice, setSortChoice] = useState(null);
+  const [groupChoice, setGroupChoice] = useState(null);
+  const emptyFilters = { dateFrom: "2025-01-01", dateTo: "2025-04-30", hideZero: false };
+  const [filterValues, setFilterValues] = useState(emptyFilters);
 
-  // export menu
-  const [expMenuOpen, setExpMenuOpen] = useState(false);
-  const [expScope, setExpScope] = useState("visible");
-  const [expFmt, setExpFmt] = useState("xlsx");
-
-  // detail drawer
   const [drawerCode, setDrawerCode] = useState(null);
-  const [drawerTab, setDrawerTab] = useState(0);
+  const [drawerTab, setDrawerTab] = useState("detail");
 
-  // filter drawer
-  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
-  // staged values inside the filter drawer
-  const [fdFrom, setFdFrom] = useState(dateFrom);
-  const [fdTo, setFdTo] = useState(dateTo);
-  const [fdType, setFdType] = useState("");
-  const [fdHideZero, setFdHideZero] = useState(false);
-  const [fdGroup, setFdGroup] = useState(true);
-  const [fdShortcut, setFdShortcut] = useState("ytd");
+  const [sortPopOpen, setSortPopOpen] = useState(false);
+  const [groupPopOpen, setGroupPopOpen] = useState(false);
+  const [filterPopOpen, setFilterPopOpen] = useState(false);
 
-  // AI cards shimmer → reveal
-  const [aiReady, setAiReady] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiSeedQuestion, setAiSeedQuestion] = useState(null);
+  const [summaryOpen, setSummaryOpen] = useState(false);
 
-  const grandRowRef = useRef(null);
-  const expBtnRef = useRef(null);
+  const [collapsedGroups, setCollapsedGroups] = useState(() => new Set());
 
-  // recompute everything when period changes
+  const [toast, setToast] = useState("");
+  const toastTmr = useRef(null);
+  function showToast(msg) {
+    setToast(msg);
+    if (toastTmr.current) clearTimeout(toastTmr.current);
+    toastTmr.current = setTimeout(() => setToast(""), 1800);
+  }
+
+  const { dateFrom, dateTo } = filterValues;
   const ALL_TB = useMemo(() => computeTB(dateFrom, dateTo), [dateFrom, dateTo]);
   const balance = useMemo(() => checkBalance(ALL_TB), [ALL_TB]);
-  const anomalies = useMemo(() => detectAnomalies(ALL_TB), [ALL_TB]);
-  const anomaliesByCode = useMemo(() => {
+  const anomalyes = useMemo(() => detectAnomalyes(ALL_TB), [ALL_TB]);
+  const anomalyesByCode = useMemo(() => {
     const m = {};
-    anomalies.forEach((a) => {
-      if (!m[a.code]) m[a.code] = [];
-      m[a.code].push(a);
-    });
+    anomalyes.forEach((a) => { (m[a.code] ||= []).push(a); });
     return m;
-  }, [anomalies]);
+  }, [anomalyes]);
 
-  // Reset shimmer timer whenever period changes
-  useEffect(() => {
-    setAiReady(false);
-    const t = setTimeout(() => setAiReady(true), 1400);
-    return () => clearTimeout(t);
-  }, [dateFrom, dateTo]);
-
-  // Close export menu on outside click
-  useEffect(() => {
-    if (!expMenuOpen) return;
-    const handler = (e) => {
-      if (expBtnRef.current && !expBtnRef.current.contains(e.target)) setExpMenuOpen(false);
-    };
-    document.addEventListener("click", handler);
-    return () => document.removeEventListener("click", handler);
-  }, [expMenuOpen]);
-
-  // Filter + sort the rows
-  const displayedRows = useMemo(() => {
-    let rows = [...ALL_TB];
-    if (hideZero) rows = rows.filter((r) => r.has_activity);
-    const q = searchQ.toLowerCase();
-    if (q) rows = rows.filter((r) => r.code.toLowerCase().includes(q) || r.name.toLowerCase().includes(q));
-    if (typeFilter) {
-      const types = typeFilter.split(",");
-      rows = rows.filter((r) => types.includes(r.type));
-    }
-    if (anomalyFilter) {
-      const matching = new Set(anomalies.filter((a) => a.severity === anomalyFilter).map((a) => a.code));
-      rows = rows.filter((r) => matching.has(r.code));
-    }
-    rows.sort((a, b) => {
-      let va = a[sortCol];
-      let vb = b[sortCol];
-      if (sortCol !== "code" && sortCol !== "name") {
-        va = a[sortCol] || 0;
-        vb = b[sortCol] || 0;
-      }
-      const cmp = va < vb ? -1 : va > vb ? 1 : 0;
-      return sortDir === "asc" ? cmp : -cmp;
-    });
-    return rows;
-  }, [ALL_TB, hideZero, searchQ, typeFilter, anomalyFilter, anomalies, sortCol, sortDir]);
-
-  const subtitle = useMemo(() => {
-    return "PT Sejahtera Makmur · Per " + fmtIdDate(dateTo);
-  }, [dateTo]);
-
-  // Net income & expense totals for the income card
   const totalRev = useMemo(() => ALL_TB.filter((r) => r.type === "revenue").reduce((s, r) => s + r.closing_balance, 0), [ALL_TB]);
   const totalExp = useMemo(() => ALL_TB.filter((r) => r.type === "expense").reduce((s, r) => s + r.period_debit, 0), [ALL_TB]);
   const netIncome = totalRev - totalExp;
   const margin = totalRev > 0 ? Math.round((netIncome / totalRev) * 100) : 0;
 
-  const critList = useMemo(() => anomalies.filter((a) => a.severity === "critical"), [anomalies]);
-  const warnList = useMemo(() => anomalies.filter((a) => a.severity === "warn"), [anomalies]);
+  const periodLabel = fmtIdDate(dateTo);
+  const critCount = anomalyes.filter((a) => a.severity === "critical").length;
+  const warnCount = anomalyes.filter((a) => a.severity === "warn").length;
 
-  // Filter count
-  const filterCount = (() => {
-    let n = 0;
-    if (dateFrom !== "2025-01-01" || dateTo !== "2025-04-30") n++;
-    if (typeFilter) n++;
-    if (hideZero) n++;
-    return n;
-  })();
+  const insights = useMemo(() => computeTbInsights({
+    balance, anomalyes, netIncome, totalRev, totalExp, margin, period: periodLabel,
+  }), [balance, anomalyes, netIncome, totalRev, totalExp, margin, periodLabel]);
 
-  // ── handlers ───────────────────────────────────────────────────────────
-  function toggleSort(col) {
-    if (sortCol === col) setSortDir(sortDir === "asc" ? "desc" : "asc");
-    else { setSortCol(col); setSortDir("asc"); }
-  }
+  const aiContext = useMemo(() => makeTbAiContext({
+    balance, anomalyes, netIncome, totalRev, totalExp, margin, period: periodLabel,
+    accountCount: ALL_TB.length,
+    topAssets: [...ALL_TB].filter((r) => r.type === "asset" && r.closing_balance > 0).sort((a, b) => b.closing_balance - a.closing_balance).slice(0, 5),
+    topLiabilities: [...ALL_TB].filter((r) => r.type === "liability" && r.closing_balance > 0).sort((a, b) => b.closing_balance - a.closing_balance).slice(0, 5),
+  }), [balance, anomalyes, netIncome, totalRev, totalExp, margin, periodLabel, ALL_TB]);
 
-  function toggleGroup(type) {
-    setCollapsedGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(type)) next.delete(type);
-      else next.add(type);
-      return next;
-    });
+  function askAi(question) {
+    setSummaryOpen(false);
+    setAiSeedQuestion(question);
+    setAiOpen(true);
   }
 
-  function setTypeChip(v) {
-    setTypeFilter(v);
-    setAnomalyFilter(null);
-  }
+  // KPI strip — 4 cells
+  const kpis = [
+    { lbl: "Total Accounts",            card: null,        val: String(ALL_TB.filter((r) => r.has_activity).length), sub: `from ${ALL_TB.length} total`,   tone: "primary" },
+    { lbl: "Net Income (est.)",  card: null,        val: rp(netIncome),                                       sub: netIncome >= 0 ? `Margin ${margin}%` : "Rugi this period",  tone: netIncome >= 0 ? "primary" : "danger" },
+    { lbl: "Critical",                card: "critical",  val: String(critCount),                                  sub: critCount > 0 ? "needs action" : "safe",                  tone: "danger"  },
+    { lbl: "Warning",            card: "warn",      val: String(warnCount),                                  sub: warnCount > 0 ? "needs review" : "safe",                  tone: "warn"    },
+  ];
 
-  function applyAnomalyFilter(severity) {
-    setAnomalyFilter((prev) => (prev === severity ? null : severity));
-  }
-
-  function scrollToGrandTotal() {
-    grandRowRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-  }
-
-  function openDrawer(code) {
-    setDrawerCode(code);
-    setDrawerTab(0);
-  }
-  function closeDrawer() { setDrawerCode(null); }
-
-  function openFilterDrawer() {
-    setFdFrom(dateFrom);
-    setFdTo(dateTo);
-    setFdType(typeFilter && !typeFilter.includes(",") ? typeFilter : "");
-    setFdHideZero(hideZero);
-    setFdGroup(groupMode);
-    setFilterDrawerOpen(true);
-  }
-  function closeFilterDrawer() { setFilterDrawerOpen(false); }
-  function applyFilterDrawer() {
-    setDateFrom(fdFrom);
-    setDateTo(fdTo);
-    setHideZero(fdHideZero);
-    setGroupMode(fdGroup);
-    if (fdType) setTypeFilter(fdType);
-    setFilterDrawerOpen(false);
-  }
-  function clearFilters() {
-    setFdFrom("2025-01-01");
-    setFdTo("2025-04-30");
-    setFdType("");
-    setFdHideZero(false);
-    setFdGroup(true);
-    setFdShortcut("ytd");
-  }
-  function setDateShortcut(r) {
-    setFdShortcut(r);
-    if (r === "ytd") { setFdFrom("2025-01-01"); setFdTo("2025-04-30"); }
-    else if (r === "q1") { setFdFrom("2025-01-01"); setFdTo("2025-03-31"); }
-    else if (r === "feb") { setFdFrom("2025-01-01"); setFdTo("2025-02-28"); }
-    else if (r === "jan") { setFdFrom("2025-01-01"); setFdTo("2025-01-31"); }
-  }
-
-  function doExport() {
-    setExpMenuOpen(false);
-    const rows = expScope === "visible" ? displayedRows : ALL_TB;
-    const hdr = ["Kode Akun", "Nama Akun", "Tipe", "Saldo Normal", "Saldo Awal (Rp)", "Debit Periode (Rp)", "Kredit Periode (Rp)", "Saldo Akhir (Rp)"];
-    const lines = [hdr];
-    rows.forEach((r) => lines.push([r.code, r.name, r.type, r.normal_balance, r.opening_balance, r.period_debit, r.period_credit, r.closing_balance]));
-    lines.push([]);
-    lines.push(["TOTAL DR", "", "", "", "", "", balance.dr, ""]);
-    lines.push(["TOTAL CR", "", "", "", "", "", "", balance.cr]);
-    lines.push(["SEIMBANG", "", "", "", "", "", "", balance.balanced ? "YA" : "TIDAK"]);
-    const csv = lines.map((r) => r.map((c) => `"${c}"`).join(",")).join("\n");
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }));
-    a.download = `TrialBalance_PTSejahteraMakmur_per${dateTo}.${expFmt === "csv" ? "csv" : "csv"}`;
-    a.click();
-  }
-
-  // ── spotlight ──────────────────────────────────────────────────────────
-  // Spotlight tiles use seed CoA names so a code rename / language change
-  // flows through automatically.
+  // Spotlight cards (always 4)
   const SPOTLIGHTS = [
-    { code: "1-1300", label: COA_BY_CODE["1-1300"]?.name || "Bank Operating", barColor: null },
-    { code: "1-2100", label: COA_BY_CODE["1-2100"]?.name || "Trade Receivable", barColor: null },
-    { code: "2-1100", label: COA_BY_CODE["2-1100"]?.name || "Trade Payable", barColor: "var(--danger-text)" },
-    { code: "3-1300", label: COA_BY_CODE["3-1300"]?.name || "Retained Earnings", barColor: "var(--success-text)" },
+    { code: "1-1300", barColor: null },
+    { code: "1-2100", barColor: null },
+    { code: "2-1100", barColor: "var(--color-danger-text)" },
+    { code: "3-1300", barColor: "var(--color-success-text)" },
   ];
   const spotByCode = useMemo(() => {
     const m = {};
     ALL_TB.forEach((r) => { m[r.code] = r; });
     return m;
   }, [ALL_TB]);
-  const spotMax = Math.max(
-    ...SPOTLIGHTS.map((s) => Math.abs(spotByCode[s.code]?.closing_balance || 0)),
-    1
-  );
+  const spotMax = Math.max(...SPOTLIGHTS.map((s) => Math.abs(spotByCode[s.code]?.closing_balance || 0)), 1);
 
-  // ── render row ─────────────────────────────────────────────────────────
-  const renderRow = (r) => {
-    const neg = r.closing_balance < 0 ? " neg" : "";
-    const anom = anomaliesByCode[r.code] || [];
-    let flag = null;
-    if (anom.length > 0) {
-      const top = anom[0];
-      const labels = { critical: "Kritis", warn: "Peringatan", info: "Info" };
-      const icons = { critical: <IconAlertTri />, warn: <IconAlertCircle />, info: <IconInfo /> };
-      flag = (
-        <span className={`anom-flag ${top.severity}`}>
-          {icons[top.severity]}
-          {anom.length > 1 ? `${anom.length} temuan` : labels[top.severity]}
-        </span>
-      );
+  // Tabs by type chip
+  const tabs = [
+    { k: "all",        lbl: "All",       count: ALL_TB.length, types: TYPE_ORDER },
+    { k: "asset",      lbl: "Assets",        count: ALL_TB.filter((r) => r.type === "asset" || r.type === "contra_asset").length, types: ["asset", "contra_asset"] },
+    { k: "liability",  lbl: "Liabilities",  count: ALL_TB.filter((r) => r.type === "liability").length, types: ["liability"] },
+    { k: "equity",     lbl: "Equity",     count: ALL_TB.filter((r) => r.type === "equity").length, types: ["equity"] },
+    { k: "revenue",    lbl: "Revenue",  count: ALL_TB.filter((r) => r.type === "revenue" || r.type === "contra_revenue").length, types: ["revenue", "contra_revenue"] },
+    { k: "expense",    lbl: "Expenses",       count: ALL_TB.filter((r) => r.type === "expense").length, types: ["expense"] },
+  ];
+
+  // Corpus
+  const corpus = useMemo(() => {
+    let list = ALL_TB;
+    if (filter.kind === "tab" && filter.value !== "all") {
+      const tab = tabs.find((t) => t.k === filter.value);
+      const types = tab?.types || [];
+      list = list.filter((r) => types.includes(r.type));
+    } else if (filter.kind === "card") {
+      if (filter.value === "critical") {
+        const codes = new Set(anomalyes.filter((a) => a.severity === "critical").map((a) => a.code));
+        list = list.filter((r) => codes.has(r.code));
+      } else if (filter.value === "warn") {
+        const codes = new Set(anomalyes.filter((a) => a.severity === "warn").map((a) => a.code));
+        list = list.filter((r) => codes.has(r.code));
+      }
     }
-    const rowCls = anom.some((a) => a.severity === "critical") ? " highlighted" : "";
-    return (
-      <tr key={r.code} className={`data-row${rowCls}`} onClick={() => openDrawer(r.code)}>
-        <td className="code">{r.code}</td>
-        <td className="name">{r.name}<TypeBadge type={r.type} />{flag}</td>
-        <td className="num-open">{rp(r.opening_balance)}</td>
-        <td className="num-dr">{r.period_debit ? rp(r.period_debit) : <span style={{ color: "var(--color-border-default)" }}>—</span>}</td>
-        <td className="num-cr">{r.period_credit ? rp(r.period_credit) : <span style={{ color: "var(--color-border-default)" }}>—</span>}</td>
-        <td className={`num-close${neg}`}>{rpZ(r.closing_balance)}</td>
-      </tr>
-    );
-  };
+    return list;
+  }, [filter, anomalyes]);
 
-  const sortClass = (col) => {
-    if (sortCol !== col) return "sortable";
-    return `sortable ${sortDir === "asc" ? "sort-asc" : "sort-desc"}`;
-  };
+  const hasActiveFilters = useMemo(() => (
+    filterValues.dateFrom !== emptyFilters.dateFrom ||
+    filterValues.dateTo !== emptyFilters.dateTo ||
+    filterValues.hideZero ||
+    sortChoice !== null ||
+    groupChoice !== null ||
+    search.trim() !== ""
+  ), [filterValues, sortChoice, groupChoice, search]);
 
-  // ── drawer body ────────────────────────────────────────────────────────
+  const activeFilterCount = useMemo(() => {
+    let n = 0;
+    if (filterValues.dateFrom !== emptyFilters.dateFrom || filterValues.dateTo !== emptyFilters.dateTo) n++;
+    if (filterValues.hideZero) n++;
+    return n;
+  }, [filterValues]);
+
+  const filteredRows = useMemo(() => {
+    let list = corpus;
+    if (filterValues.hideZero) list = list.filter((r) => r.has_activity);
+    const q = search.toLowerCase().trim();
+    if (q) list = list.filter((r) => r.code.toLowerCase().includes(q) || r.name.toLowerCase().includes(q));
+    return list;
+  }, [corpus, filterValues.hideZero, search]);
+
+  const effectiveSort = sortChoice || "code-asc";
+  const effectiveGroup = groupChoice || "type";
+
+  const sortedRows = useMemo(() => {
+    const arr = [...filteredRows];
+    switch (effectiveSort) {
+      case "code-asc":    arr.sort((a, b) => a.code.localeCompare(b.code)); break;
+      case "code-desc":   arr.sort((a, b) => b.code.localeCompare(a.code)); break;
+      case "name-asc":    arr.sort((a, b) => a.name.localeCompare(b.name)); break;
+      case "close-desc":  arr.sort((a, b) => b.closing_balance - a.closing_balance); break;
+      case "close-asc":   arr.sort((a, b) => a.closing_balance - b.closing_balance); break;
+      case "debit-desc":  arr.sort((a, b) => b.period_debit - a.period_debit); break;
+      case "credit-desc": arr.sort((a, b) => b.period_credit - a.period_credit); break;
+      default: break;
+    }
+    return arr;
+  }, [filteredRows, effectiveSort]);
+
+  const groups = useMemo(() => {
+    if (effectiveGroup === "none") return null;
+    const map = new Map();
+    TYPE_ORDER.forEach((t) => map.set(t, []));
+    sortedRows.forEach((r) => { (map.get(r.type) || map.set(r.type, []).get(r.type)).push(r); });
+    return Array.from(map.entries())
+      .filter(([, rows]) => rows.length > 0)
+      .map(([t, rows]) => ({
+        key: t,
+        label: TYPE_LABELS[t] || t,
+        rows,
+        sumDebit:  rows.reduce((s, r) => s + r.period_debit, 0),
+        sumCredit: rows.reduce((s, r) => s + r.period_credit, 0),
+        sumOpen:   rows.reduce((s, r) => s + r.opening_balance, 0),
+        sumClose:  rows.reduce((s, r) => s + r.closing_balance, 0),
+      }));
+  }, [effectiveGroup, sortedRows]);
+
+  function selectTab(t) { setFilter({ kind: "tab", value: t }); }
+  function selectCard(c) {
+    if (!c) { setFilter({ kind: "tab", value: "all" }); return; }
+    setFilter({ kind: "card", value: c });
+  }
+  const isTabActive  = (t) => filter.kind === "tab" && filter.value === t;
+  const isCardActive = (c) => filter.kind === "card" && filter.value === c;
+
+  function resetAll() {
+    setSortChoice(null);
+    setGroupChoice(null);
+    setFilterValues(emptyFilters);
+    setSearch("");
+    setFilter({ kind: "tab", value: "all" });
+  }
+
+  function toggleGroup(key) {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  }
+
+  function exportCsv() {
+    const headers = ["Code", "Name", "Type", "Opening Balance", "Debit", "Credit", "Closing Balance"];
+    const esc = (v) => {
+      const s = String(v == null ? "" : v);
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const lines = [headers.join(",")];
+    for (const r of sortedRows) {
+      lines.push([r.code, r.name, r.type, r.opening_balance, r.period_debit, r.period_credit, r.closing_balance].map(esc).join(","));
+    }
+    const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `klay-trialbalance-${dateTo}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast(`${sortedRows.length} account exported to CSV`);
+  }
+
+  // Drawer data
   const drawerRow = drawerCode ? ALL_TB.find((r) => r.code === drawerCode) : null;
   const drawerAcct = drawerCode ? LEAF.find((a) => a.code === drawerCode) : null;
-  const drawerAnom = drawerCode ? anomaliesByCode[drawerCode] || [] : [];
+  const drawerAnom = drawerCode ? (anomalyesByCode[drawerCode] || []) : [];
+
+  // Render a TB row
+  function TbRow({ r, isAlt }) {
+    const anom = anomalyesByCode[r.code] || [];
+    const top = anom[0];
+    const tint = anom.find((a) => a.severity === "critical") ? " anomaly-danger" : anom.find((a) => a.severity === "warn") ? " anomaly-warn" : "";
+    return (
+      <div className={`lg-row${isAlt ? " alt" : ""}${tint}${drawerCode === r.code ? " selected" : ""}`} onClick={() => { setDrawerCode(r.code); setDrawerTab("detail"); }}>
+        <div className="lg-cell-no">{r.code}</div>
+        <div style={{ minWidth: 0, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 12, color: "var(--color-text-primary)", fontWeight: 500 }}>{r.name}</span>
+          <span className={`badge badge-${TYPE_BADGE_CLS[r.type]}`} style={{ fontSize: 9 }}>{TYPE_LABELS[r.type]}</span>
+          {top && (
+            <span className={`lg-anom-flag ${top.severity}`}>
+              {SEVERITY_ICON[top.severity]}
+              {anom.length > 1 ? `${anom.length} finding` : (top.severity === "critical" ? "Critical" : top.severity === "warn" ? "Warning" : "Info")}
+            </span>
+          )}
+        </div>
+        <div className="lg-cell-total" style={{ color: "var(--color-text-tertiary)" }}>{rp(r.opening_balance)}</div>
+        <div className="lg-cell-total" style={{ color: r.period_debit ? "var(--color-action)" : undefined }}>{r.period_debit ? rp(r.period_debit) : <span className="lg-cell-em-dash">—</span>}</div>
+        <div className="lg-cell-total" style={{ color: r.period_credit ? "var(--color-success-text)" : undefined }}>{r.period_credit ? rp(r.period_credit) : <span className="lg-cell-em-dash">—</span>}</div>
+        <div className="lg-cell-total" style={{ color: r.closing_balance < 0 ? "var(--color-danger-text)" : "var(--color-text-primary)", fontWeight: 600 }}>{rpZ(r.closing_balance)}</div>
+        <div className="lg-cell-kebab" onClick={(e) => e.stopPropagation()}>
+          <button className="lg-kebab">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg>
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="tb-page">
-      <div className="tb-scroll">
-
-        {/* ── BANNER ── */}
-        <div className="oz-banner">
-          <div className="oz-top">
-            <div>
-              <div className="oz-title">Trial Balance</div>
-              <div className="oz-subtitle">{subtitle}</div>
-            </div>
-            <div className="oz-actions">
-              <div style={{ position: "relative" }} ref={expBtnRef}>
-                <button
-                  type="button"
-                  className="oz-btn"
-                  onClick={(e) => { e.stopPropagation(); setExpMenuOpen((v) => !v); }}
-                >
-                  <IconExport />Export
-                </button>
-                <div className={`exp-menu${expMenuOpen ? " open" : ""}`} onClick={(e) => e.stopPropagation()}>
-                  <div className="em-lbl">Scope</div>
-                  <div className="em-chips">
-                    <button type="button" className={`em-chip${expScope === "visible" ? " on" : ""}`} onClick={() => setExpScope("visible")}>Hanya terlihat</button>
-                    <button type="button" className={`em-chip${expScope === "all" ? " on" : ""}`} onClick={() => setExpScope("all")}>Semua</button>
-                  </div>
-                  <div className="em-lbl">Format</div>
-                  <div className="em-chips">
-                    <button type="button" className={`em-chip${expFmt === "xlsx" ? " on" : ""}`} onClick={() => setExpFmt("xlsx")}>Excel (.xlsx)</button>
-                    <button type="button" className={`em-chip${expFmt === "csv" ? " on" : ""}`} onClick={() => setExpFmt("csv")}>CSV (.csv)</button>
-                  </div>
-                  <div className="em-div" />
-                  <button type="button" className="em-dl" onClick={doExport}>
-                    <IconExport />Download
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Summary cards */}
-          <div className="oz-cards">
-            {/* Card 1: Balance status */}
-            <div
-              className={`oz-card ${balance.balanced ? "balanced" : "unbalanced"}`}
-              onClick={scrollToGrandTotal}
-              style={{ cursor: "pointer" }}
-            >
-              <div className="oz-card-label">Status</div>
-              {balance.balanced ? (
-                <>
-                  <div className="oz-card-num"><span style={{ color: "var(--success-text)" }}>✓ Seimbang</span></div>
-                  <div className="oz-card-sub">Debit = Kredit</div>
-                  <div className="oz-card-detail">Total <strong>{rp(balance.dr)}</strong></div>
-                </>
-              ) : (
-                <>
-                  <div className="oz-card-num">✕ Tidak Seimbang</div>
-                  <div className="oz-card-sub">Selisih perlu diselesaikan</div>
-                  <div className="oz-card-detail">Selisih <strong>{rp(Math.abs(balance.dr - balance.cr))}</strong></div>
-                </>
-              )}
-            </div>
-
-            {/* Card 2: Net income */}
-            <div className="oz-card" style={{ cursor: "default" }}>
-              <div className="oz-card-label">Estimasi Laba Bersih</div>
-              <div className={`oz-card-num${netIncome < 0 ? " danger" : ""}`}>{rp(netIncome)}</div>
-              <div className="oz-card-sub">{netIncome >= 0 ? `Margin ${margin}%` : "Rugi periode ini"}</div>
-              <div className="oz-card-detail">Pendapatan <strong>{rp(totalRev)}</strong> · Beban <strong>{rp(totalExp)}</strong></div>
-            </div>
-
-            {/* Card 3: Critical */}
-            <div
-              className={`oz-card${anomalyFilter === "critical" ? " active-filter" : ""}`}
-              onClick={() => applyAnomalyFilter("critical")}
-              style={{ cursor: "pointer" }}
-            >
-              {!aiReady ? (
-                <div className="oz-card-shimmer">
-                  <div className="shimmer-line lg" />
-                  <div className="shimmer-line sm" />
-                  <div className="shimmer-line xs" />
-                </div>
-              ) : (
-                <>
-                  <div className="oz-card-label">Kritis</div>
-                  <div className={`oz-card-num${critList.length > 0 ? " danger" : ""}`}>{critList.length}</div>
-                  <div className="oz-card-sub">{critList.length > 0 ? "temuan perlu tindakan" : "tidak ada temuan kritis"}</div>
-                  <div className="oz-card-detail">
-                    {critList.length > 0
-                      ? critList.map((a, i) => <span key={a.code + i}>{i > 0 ? " · " : ""}<strong>{a.name}</strong></span>)
-                      : "Trial balance aman."}
-                  </div>
-                  {critList.length > 0 && (
-                    <div className="oz-card-lihat">Lihat akun <IconChevRight /></div>
-                  )}
-                </>
-              )}
-            </div>
-
-            {/* Card 4: Warn */}
-            <div
-              className={`oz-card${anomalyFilter === "warn" ? " active-filter" : ""}`}
-              onClick={() => applyAnomalyFilter("warn")}
-              style={{ cursor: "pointer" }}
-            >
-              {!aiReady ? (
-                <div className="oz-card-shimmer">
-                  <div className="shimmer-line lg" />
-                  <div className="shimmer-line sm" />
-                  <div className="shimmer-line xs" />
-                </div>
-              ) : (
-                <>
-                  <div className="oz-card-label">Peringatan</div>
-                  <div className={`oz-card-num${warnList.length > 0 ? " warn" : ""}`}>{warnList.length}</div>
-                  <div className="oz-card-sub">{warnList.length > 0 ? "perlu ditinjau" : "tidak ada peringatan"}</div>
-                  <div className="oz-card-detail">
-                    {warnList.length > 0
-                      ? warnList.map((a, i) => <span key={a.code + i}>{i > 0 ? " · " : ""}<strong>{a.name}</strong></span>)
-                      : "Semua dalam batas normal."}
-                  </div>
-                  {warnList.length > 0 && (
-                    <div className="oz-card-lihat">Lihat akun <IconChevRight /></div>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* ── SPOTLIGHT ── */}
-        <div className="spotlight-row">
-          {SPOTLIGHTS.map((s) => {
-            const row = spotByCode[s.code];
-            const cb = row?.closing_balance ?? 0;
-            const ob = row?.opening_balance ?? 0;
-            let delta = { text: "tidak ada aktivitas", cls: "neu" };
-            if (ob !== 0) {
-              const pct = ((cb - ob) / Math.abs(ob) * 100).toFixed(1);
-              const dir = cb >= ob ? "up" : "dn";
-              const sign = cb >= ob ? "+" : "";
-              delta = { text: `${sign}${pct}% vs saldo awal`, cls: dir };
-            } else if (cb !== 0) {
-              delta = { text: "baru periode ini", cls: "dn" };
-            }
-            const widthPct = Math.round(Math.abs(cb) / spotMax * 100);
-            return (
-              <div key={s.code} className="spot-card" onClick={() => openDrawer(s.code)}>
-                <div className="spot-card-code">{s.code}</div>
-                <div className="spot-card-name">{s.label}</div>
-                <div className="spot-card-num">{rp(cb)}</div>
-                <div className={`spot-card-delta ${delta.cls}`}>{delta.text}</div>
-                <div className="spot-card-bar">
-                  <div
-                    className="spot-card-bar-fill"
-                    style={{ width: `${widthPct}%`, ...(s.barColor ? { background: s.barColor } : {}) }}
-                  />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="tb-scroll-inner">
-          {/* ── FILTER BAR ── */}
-          <div className="filter-bar">
-            <div className="f-search">
-              <IconSearch />
-              <input
-                type="text"
-                value={searchQ}
-                onChange={(e) => setSearchQ(e.target.value)}
-                placeholder="Cari kode atau nama akun…"
-                autoComplete="off"
+    <div className="lg-page">
+      <div className="lg-scroll-container">
+        {/* ── Editorial header ──────────────────────────────────────── */}
+        <div className="lg-head">
+          <div className="lg-head-top">
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <h1 className="lg-title">Trial Balance</h1>
+              <AiSubtitle
+                insights={insights}
+                onOpenSummary={() => setSummaryOpen(true)}
+                onOpenChat={() => setAiOpen(true)}
+                chatActive={aiOpen}
+                summaryActive={summaryOpen}
               />
             </div>
-            <div className="fsep" />
-            <div className="chip-grp">
-              {[
-                { v: "", label: "Semua" },
-                { v: "asset,contra_asset", label: "Aset" },
-                { v: "liability", label: "Liabilitas" },
-                { v: "equity", label: "Ekuitas" },
-                { v: "revenue", label: "Pendapatan" },
-                { v: "expense", label: "Beban" },
-              ].map((c) => (
-                <button
-                  key={c.label}
-                  type="button"
-                  className={`tb-chip${typeFilter === c.v ? " on" : ""}`}
-                  onClick={() => setTypeChip(c.v)}
-                >
-                  {c.label}
-                </button>
-              ))}
-            </div>
-            <div className="f-right">
-              <button type="button" className="f-filter-btn" onClick={openFilterDrawer}>
-                <IconFilter />
-                Filter Lainnya
-                <span className={`f-filter-count${filterCount > 0 ? " show" : ""}`}>{filterCount}</span>
+            <div className="lg-head-actions">
+              <button className="lg-btn-brand" onClick={exportCsv}>
+                <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Export TB
               </button>
             </div>
           </div>
 
-          {/* ── TABLE ── */}
-          <div className="tbl-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th className={sortClass("code")} onClick={() => toggleSort("code")} style={{ width: 88 }}>
-                    Kode<span className="sort-arrow" />
-                  </th>
-                  <th className={sortClass("name")} onClick={() => toggleSort("name")}>
-                    Nama Akun<span className="sort-arrow" />
-                  </th>
-                  <th className={`r ${sortClass("opening_balance")}`} onClick={() => toggleSort("opening_balance")} style={{ width: 152 }}>
-                    Saldo Awal<span className="sort-arrow" />
-                  </th>
-                  <th className={`r ${sortClass("period_debit")}`} onClick={() => toggleSort("period_debit")} style={{ width: 152 }}>
-                    Debit Periode<span className="sort-arrow" />
-                  </th>
-                  <th className={`r ${sortClass("period_credit")}`} onClick={() => toggleSort("period_credit")} style={{ width: 152 }}>
-                    Kredit Periode<span className="sort-arrow" />
-                  </th>
-                  <th className={`r ${sortClass("closing_balance")}`} onClick={() => toggleSort("closing_balance")} style={{ width: 160 }}>
-                    Saldo Akhir<span className="sort-arrow" />
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {displayedRows.length === 0 ? null : groupMode ? (
-                  <>
-                    {TYPE_ORDER.map((type) => {
-                      const grp = displayedRows.filter((r) => r.type === type);
-                      if (!grp.length) return null;
-                      const collapsed = collapsedGroups.has(type);
-                      const sumDr = grp.reduce((s, r) => s + r.period_debit, 0);
-                      const sumCr = grp.reduce((s, r) => s + r.period_credit, 0);
-                      const sumOpen = grp.reduce((s, r) => s + r.opening_balance, 0);
-                      const sumClose = grp.reduce((s, r) => s + r.closing_balance, 0);
-                      return (
-                        <Fragment key={`grp-${type}`}>
-                          <tr className="group-row" onClick={() => toggleGroup(type)}>
-                            <td colSpan={6}>
-                              <div className="group-inner">
-                                <span className="group-lbl">{TYPE_LABELS[type]}</span>
-                                <span className="group-count">{grp.length} akun</span>
-                                <svg className={`group-chev${collapsed ? " collapsed" : ""}`} viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15" /></svg>
-                              </div>
-                            </td>
-                          </tr>
-                          {!collapsed && grp.map((r) => renderRow(r))}
-                          {!collapsed && (
-                            <tr className="subtotal-row">
-                              <td className="code" />
-                              <td className="name">Subtotal {TYPE_LABELS[type]}</td>
-                              <td className="num" style={{ textAlign: "right", color: "var(--color-text-tertiary)" }}>{sumOpen ? rp(sumOpen) : "—"}</td>
-                              <td className="num" style={{ textAlign: "right", color: "var(--color-action)" }}>{sumDr ? rp(sumDr) : "—"}</td>
-                              <td className="num" style={{ textAlign: "right", color: "var(--success-text)" }}>{sumCr ? rp(sumCr) : "—"}</td>
-                              <td className="num" style={{ textAlign: "right", fontWeight: 700 }}>{rp(sumClose)}</td>
-                            </tr>
-                          )}
-                        </Fragment>
-                      );
-                    })}
-                    <tr className="grand-row" ref={grandRowRef}>
-                      <td className="code" />
-                      <td className="name">TOTAL</td>
-                      <td style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 12, color: "rgba(255,255,255,.45)" }}>—</td>
-                      <td className="num-dr">{rp(balance.dr)}</td>
-                      <td className="num-cr">{rp(balance.cr)}</td>
-                      <td className="bal-cell">
-                        <span className="bal-badge ok">
-                          <IconCheck />Seimbang
-                        </span>
-                      </td>
-                    </tr>
-                  </>
-                ) : (
-                  displayedRows.map((r) => renderRow(r))
-                )}
-              </tbody>
-            </table>
-            {displayedRows.length === 0 && (
-              <div className="empty-state">
-                <IconCircleSlash />
-                <div className="empty-title">Tidak ada data</div>
-                <div className="empty-sub">Coba ubah filter atau rentang tanggal</div>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* ── STATUS BAR ── */}
-      <div className="status-bar">
-        <div className="sbs"><span className="sbs-lbl">Akun</span><span className="sbs-val">{displayedRows.length} akun</span></div>
-        <div className="sbsep" />
-        <div className="sbs"><span className="sbs-lbl">Total Debit</span><span className="sbs-val dr">{rp(balance.dr)}</span></div>
-        <div className="sbsep" />
-        <div className="sbs"><span className="sbs-lbl">Total Kredit</span><span className="sbs-val cr">{rp(balance.cr)}</span></div>
-      </div>
-
-      {/* ── DETAIL DRAWER ── */}
-      <div className={`drawer-overlay${drawerCode ? " open" : ""}`} onClick={closeDrawer} />
-      <div className={`drawer${drawerCode ? " open" : ""}`}>
-        {drawerRow && (
-          <>
-            <div className="dh">
-              <div>
-                <div className="dh-code">{drawerRow.code}</div>
-                <div className="dh-name">{drawerRow.name}</div>
-              </div>
-              <button type="button" className="dclose" onClick={closeDrawer}><IconClose /></button>
-            </div>
-            <div className="dtab-bar">
-              {["Detail", "Transaksi", "Audit Trail"].map((label, i) => (
-                <div
-                  key={label}
-                  className={`dtab${drawerTab === i ? " active" : ""}`}
-                  onClick={() => setDrawerTab(i)}
-                >
-                  {label}
-                </div>
-              ))}
-              <div
-                className={`dtab${drawerTab === 3 ? " active" : ""}`}
-                onClick={() => setDrawerTab(3)}
+          <div className="lg-kpi-strip">
+            {kpis.map((k) => (
+              <button
+                type="button"
+                className={`lg-kpi-cell${k.card && isCardActive(k.card) ? " active" : ""}`}
+                key={k.lbl}
+                onClick={() => k.card && selectCard(isCardActive(k.card) ? null : k.card)}
+                aria-pressed={k.card ? isCardActive(k.card) : false}
+                style={!k.card ? { cursor: "default" } : undefined}
               >
-                <IconBolt />AI Insight
+                <div className="lg-kpi-lbl">{k.lbl}</div>
+                <div className={`lg-kpi-val${k.tone === "danger" ? " danger" : k.tone === "warn" ? " warn" : ""}`}>{k.val}</div>
+                <div className="lg-kpi-sub">{k.sub}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Spotlight row + Table card (single wrap so spacing is single-source) ── */}
+        <div className="lg-table-wrap">
+          <div className="lg-spotlight-row">
+            {SPOTLIGHTS.map((s) => {
+              const row = spotByCode[s.code];
+              const cb = row?.closing_balance ?? 0;
+              const ob = row?.opening_balance ?? 0;
+              let delta = { text: "none activity", cls: "" };
+              if (ob !== 0) {
+                const pct = ((cb - ob) / Math.abs(ob) * 100).toFixed(1);
+                const dir = cb >= ob ? "up" : "dn";
+                const sign = cb >= ob ? "+" : "";
+                delta = { text: `${sign}${pct}% vs opening balance`, cls: dir };
+              } else if (cb !== 0) {
+                delta = { text: "baru this period", cls: "up" };
+              }
+              const widthPct = Math.round(Math.abs(cb) / spotMax * 100);
+              return (
+                <button type="button" key={s.code} className="lg-spot-card" onClick={() => { setDrawerCode(s.code); setDrawerTab("detail"); }}>
+                  <div className="lg-spot-code">{s.code}</div>
+                  <div className="lg-spot-name">{COA_BY_CODE[s.code]?.name || s.code}</div>
+                  <div className="lg-spot-num">{rp(cb)}</div>
+                  <div className={`lg-spot-delta ${delta.cls}`}>{delta.text}</div>
+                  <div className="lg-spot-bar">
+                    <div className="lg-spot-bar-fill" style={{ width: `${widthPct}%`, ...(s.barColor ? { background: s.barColor } : {}) }} />
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="lg-card lg-table-tb">
+            <div className="lg-pills-row">
+              {tabs.map((t) => (
+                <button key={t.k} className={`lg-pill${isTabActive(t.k) ? " active" : ""}`} onClick={() => selectTab(t.k)}>
+                  {t.lbl}
+                  <span className="lg-pill-count">{t.count}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="lg-filter-row">
+              <div className="lg-search">
+                <svg viewBox="0 0 14 14"><circle cx="6" cy="6" r="3.5"/><path d="M9 9l3 3" strokeLinecap="round"/></svg>
+                <input placeholder="Search account code or name…" value={search} onChange={(e) => setSearch(e.target.value)} />
+              </div>
+              <div className="lg-filter-meta">
+                <div className="lg-meta-btn-wrap">
+                  <button className={`lg-meta-btn${activeFilterCount > 0 ? " active" : ""}`} onClick={() => { setFilterPopOpen(!filterPopOpen); setSortPopOpen(false); setGroupPopOpen(false); }}>
+                    <svg viewBox="0 0 12 12"><path d="M2 3h8M3 6h6M4 9h4" strokeLinecap="round"/></svg>
+                    Filter
+                    {activeFilterCount > 0 && <span className="lg-filter-badge">{activeFilterCount}</span>}
+                  </button>
+                  {filterPopOpen && <FilterPopover values={filterValues} onChange={setFilterValues} onClose={() => setFilterPopOpen(false)} />}
+                </div>
+                <div className="lg-meta-btn-wrap">
+                  <button className="lg-meta-btn" onClick={() => { setSortPopOpen(!sortPopOpen); setFilterPopOpen(false); setGroupPopOpen(false); }}>
+                    <span className="meta-lbl">Sort:</span>
+                    <span className="meta-val">{SORT_LABELS[effectiveSort]}</span>
+                  </button>
+                  {sortPopOpen && <SortPopover value={effectiveSort} onPick={(v) => { setSortChoice(v); setSortPopOpen(false); }} onClose={() => setSortPopOpen(false)} />}
+                </div>
+                <div className="lg-meta-btn-wrap">
+                  <button className="lg-meta-btn" onClick={() => { setGroupPopOpen(!groupPopOpen); setSortPopOpen(false); setFilterPopOpen(false); }}>
+                    <span className="meta-lbl">Group:</span>
+                    <span className="meta-val">{GROUP_LABELS[effectiveGroup]}</span>
+                  </button>
+                  {groupPopOpen && <GroupPopover value={effectiveGroup} onPick={(v) => { setGroupChoice(v); setGroupPopOpen(false); }} onClose={() => setGroupPopOpen(false)} />}
+                </div>
+                <button className="lg-filter-export" onClick={exportCsv}>
+                  <svg viewBox="0 0 12 12"><path d="M6 2v6M3 6l3 3 3-3M2 10.5h8" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  Export CSV
+                </button>
+                {hasActiveFilters && <button className="lg-reset-all" onClick={resetAll}>Reset all</button>}
               </div>
             </div>
-            <div className="dbody">
-              {drawerTab === 0 && (
-                <div className="dpane">
-                  <div className="d-sum-grid">
-                    <div className="d-sum-card"><div className="d-sum-lbl">Saldo Awal</div><div className="d-sum-val" style={{ color: "var(--color-text-tertiary)" }}>{rp(drawerRow.opening_balance)}</div></div>
-                    <div className="d-sum-card"><div className="d-sum-lbl">Saldo Akhir</div><div className={`d-sum-val${drawerRow.closing_balance < 0 ? " cr" : ""}`}>{rpZ(drawerRow.closing_balance)}</div></div>
-                    <div className="d-sum-card"><div className="d-sum-lbl">Debit Periode</div><div className="d-sum-val dr">{rp(drawerRow.period_debit)}</div></div>
-                    <div className="d-sum-card"><div className="d-sum-lbl">Kredit Periode</div><div className="d-sum-val cr">{rp(drawerRow.period_credit)}</div></div>
-                  </div>
-                  <div className="dsec">
-                    <div className="dsec-title">Informasi Akun</div>
-                    <div className="info-row"><label>Kode</label><span className="mono">{drawerRow.code}</span></div>
-                    <div className="info-row"><label>Nama</label><span>{drawerRow.name}</span></div>
-                    <div className="info-row"><label>Tipe</label><span><TypeBadge type={drawerRow.type} /></span></div>
-                    <div className="info-row"><label>Saldo Normal</label><span>{drawerRow.normal_balance === "debit" ? "Debit" : "Kredit"}</span></div>
-                    <div className="info-row"><label>Kategori</label><span>{drawerAcct?.category || "—"}</span></div>
-                    <div className="info-row"><label>Status</label><span className="ok">Aktif</span></div>
-                  </div>
-                  <div className="dsec">
-                    <div className="dsec-title">Periode</div>
-                    <div className="info-row"><label>As-of Date</label><span className="mono">{fmtIdDate(dateTo)}</span></div>
-                    <div className="info-row"><label>Awal Periode</label><span className="mono">{fmtIdDate(dateFrom)}</span></div>
-                    <div className="info-row"><label>Jumlah Transaksi</label><span>{drawerRow.entries.length} JE</span></div>
-                  </div>
-                </div>
-              )}
 
-              {drawerTab === 1 && (
-                <div className="dpane">
-                  {drawerRow.entries.length === 0 ? (
-                    <div style={{ padding: "32px 0", textAlign: "center", color: "var(--color-text-tertiary)", fontSize: 12 }}>
-                      Tidak ada transaksi dalam periode ini
-                    </div>
-                  ) : (
-                    [...drawerRow.entries]
-                      .sort((a, b) => (a.date < b.date ? -1 : 1))
-                      .map((e, idx) => {
-                        const isDr = e.debit > 0;
-                        const amt = isDr ? e.debit : e.credit;
-                        const dl = new Date(e.date + "T00:00:00").toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
-                        return (
-                          <div key={`${e.je_ref}-${idx}`} className="txn-item">
-                            <div className={`txn-icon ${isDr ? "d" : "c"}`}>{isDr ? <IconArrowUp /> : <IconArrowDown />}</div>
-                            <div className="txn-info">
-                              <div className="txn-ref">{e.je_ref}</div>
-                              <div className="txn-desc">{e.description}</div>
-                              <div className="txn-date">{dl} · {(e.reference_type || "JE").toUpperCase()}</div>
-                            </div>
-                            <div className={`txn-amt ${isDr ? "d" : "c"}`}>{rp(amt)}</div>
-                          </div>
-                        );
-                      })
-                  )}
-                </div>
-              )}
+            <div className="lg-col-header">
+              <div>Code</div>
+              <div>Account Name</div>
+              <div style={{ textAlign: "right" }}>Opening Balance</div>
+              <div style={{ textAlign: "right" }}>Period Debit</div>
+              <div style={{ textAlign: "right" }}>Period Credit</div>
+              <div style={{ textAlign: "right" }}>Closing Balance</div>
+              <div />
+            </div>
 
-              {drawerTab === 2 && (
-                <div className="dpane">
-                  <div className="dsec-title" style={{ marginBottom: 12 }}>Log Aktivitas</div>
-                  <div className="audit-item">
-                    <div className="audit-dot posted"><IconCheck /></div>
-                    <div className="audit-content">
-                      <div className="audit-action">Akun aktif dalam periode</div>
-                      <div className="audit-meta">
-                        {drawerRow.entries.length} journal entry
-                        {drawerRow.period_debit ? ` · ${rp(drawerRow.period_debit)} DR` : ""}
-                        {drawerRow.period_debit && drawerRow.period_credit ? " · " : ""}
-                        {drawerRow.period_credit ? `${rp(drawerRow.period_credit)} CR` : ""}
-                      </div>
-                    </div>
-                  </div>
-                  {drawerRow.entries[0] && (
-                    <div className="audit-item">
-                      <div className="audit-dot info"><IconInfo /></div>
-                      <div className="audit-content">
-                        <div className="audit-action">Transaksi pertama periode ini</div>
-                        <div className="audit-meta">
-                          {drawerRow.entries[0].je_ref} · {fmtIdDate(drawerRow.entries[0].date)}<br />
-                          by {drawerRow.entries[0].posted_by || "system"}
+            <div>
+              {groups ? (
+                groups.map((g) => {
+                  const isCollapsed = collapsedGroups.has(g.key);
+                  return (
+                    <Fragment key={g.key}>
+                      <div className="lg-group-head muted" onClick={() => toggleGroup(g.key)}>
+                        <div className="lg-group-left">
+                          <svg className={`lg-group-chevron${isCollapsed ? " closed" : ""}`} viewBox="0 0 9 9"><path d="M2 3l2.5 3L7 3"/></svg>
+                          <span className="lg-group-lbl">{g.label}</span>
+                          <span className="lg-group-count">{g.rows.length}</span>
                         </div>
                       </div>
-                    </div>
-                  )}
-                  {drawerRow.entries.length > 1 && (
-                    <div className="audit-item">
-                      <div className="audit-dot info"><IconInfo /></div>
-                      <div className="audit-content">
-                        <div className="audit-action">Transaksi terakhir periode ini</div>
-                        <div className="audit-meta">
-                          {drawerRow.entries[drawerRow.entries.length - 1].je_ref} · {fmtIdDate(drawerRow.entries[drawerRow.entries.length - 1].date)}<br />
-                          by {drawerRow.entries[drawerRow.entries.length - 1].posted_by || "system"}
+                      {!isCollapsed && g.rows.map((r, i) => (
+                        <TbRow key={r.code} r={r} isAlt={i % 2 === 1} />
+                      ))}
+                      {!isCollapsed && (
+                        <div className="lg-row subtotal">
+                          <div />
+                          <div style={{ fontWeight: 700, color: "var(--color-text-secondary)", fontSize: 11, textTransform: "uppercase", letterSpacing: ".04em" }}>
+                            Subtotal {g.label}
+                          </div>
+                          <div className="lg-cell-total" style={{ color: "var(--color-text-tertiary)" }}>{g.sumOpen ? rp(g.sumOpen) : "—"}</div>
+                          <div className="lg-cell-total" style={{ color: "var(--color-action)" }}>{g.sumDebit ? rp(g.sumDebit) : "—"}</div>
+                          <div className="lg-cell-total" style={{ color: "var(--color-success-text)" }}>{g.sumCredit ? rp(g.sumCredit) : "—"}</div>
+                          <div className="lg-cell-total" style={{ fontWeight: 700, color: "var(--color-text-primary)" }}>{rp(g.sumClose)}</div>
+                          <div />
                         </div>
-                      </div>
-                    </div>
-                  )}
-                  <div className="audit-item">
-                    <div className="audit-dot posted"><IconCheck /></div>
-                    <div className="audit-content">
-                      <div className="audit-action">Akun dibuat & aktif</div>
-                      <div className="audit-meta">system · Jan 2025 · entity_id: 1001</div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {drawerTab === 3 && (
-                <div className="dpane">
-                  {(() => {
-                    const ratio = drawerRow.opening_balance !== 0
-                      ? ((drawerRow.closing_balance - drawerRow.opening_balance) / Math.abs(drawerRow.opening_balance) * 100).toFixed(1)
-                      : null;
-                    return (
-                      <>
-                        <div className="d-sum-grid">
-                          <div className="d-sum-card">
-                            <div className="d-sum-lbl">Perubahan Saldo</div>
-                            <div className={`d-sum-val ${drawerRow.closing_balance >= drawerRow.opening_balance ? "dr" : "cr"}`}>
-                              {ratio !== null ? `${ratio > 0 ? "+" : ""}${ratio}%` : "—"}
-                            </div>
-                          </div>
-                          <div className="d-sum-card">
-                            <div className="d-sum-lbl">Aktivitas Transaksi</div>
-                            <div className="d-sum-val">{drawerRow.entries.length} entri</div>
-                          </div>
-                        </div>
-                        {drawerAnom.length > 0 ? (
-                          <>
-                            <div className="dsec-title" style={{ marginBottom: 10 }}>Temuan AI</div>
-                            {drawerAnom.map((a, i) => {
-                              const c = SEVERITY_COLORS[a.severity];
-                              return (
-                                <div
-                                  key={i}
-                                  style={{
-                                    background: c.bg,
-                                    border: `1px solid ${c.border}`,
-                                    borderRadius: "var(--radius-md)",
-                                    padding: "12px 14px",
-                                    marginBottom: 8,
-                                  }}
-                                >
-                                  <div style={{ fontSize: 12, fontWeight: 700, color: c.text, marginBottom: 4 }}>{a.title}</div>
-                                  <div style={{ fontSize: 11, color: "var(--color-text-secondary)", lineHeight: 1.55, marginBottom: 6 }}>{a.desc}</div>
-                                  <div style={{ fontSize: 11, color: "var(--color-text-tertiary)", fontStyle: "italic" }}>{a.action}</div>
-                                </div>
-                              );
-                            })}
-                          </>
-                        ) : (
-                          <div style={{ fontSize: 12, color: "var(--color-text-tertiary)", padding: "6px 0" }}>
-                            Tidak ada anomali terdeteksi untuk akun ini.
-                          </div>
-                        )}
-                        <div className="dsec-title" style={{ marginTop: 14, marginBottom: 8 }}>Komposisi Aktivitas</div>
-                        <div style={{ display: "flex", gap: 8 }}>
-                          <div className="d-sum-card" style={{ flex: 1 }}>
-                            <div className="d-sum-lbl">Total Debit</div>
-                            <div style={{ fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 700, color: "var(--color-action)", marginTop: 4 }}>
-                              {drawerRow.period_debit ? rp(drawerRow.period_debit) : "—"}
-                            </div>
-                          </div>
-                          <div className="d-sum-card" style={{ flex: 1 }}>
-                            <div className="d-sum-lbl">Total Kredit</div>
-                            <div style={{ fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 700, color: "var(--success-text)", marginTop: 4 }}>
-                              {drawerRow.period_credit ? rp(drawerRow.period_credit) : "—"}
-                            </div>
-                          </div>
-                        </div>
-                      </>
-                    );
-                  })()}
-                </div>
+                      )}
+                    </Fragment>
+                  );
+                })
+              ) : (
+                <>
+                  {sortedRows.length === 0 && <div className="lg-empty">None account matching</div>}
+                  {sortedRows.map((r, i) => <TbRow key={r.code} r={r} isAlt={i % 2 === 1} />)}
+                </>
               )}
             </div>
-          </>
-        )}
+          </div>
+        </div>
+      </div>{/* /lg-scroll-container */}
+
+      {/* ── Sticky footer ──────────────────────────────────────────── */}
+      <div className="lg-footer">
+        <div className="lg-footer-left">
+          <span><span className="lg-footer-num">{sortedRows.length}</span> account dishow</span>
+          <span className="lg-footer-sep">·</span>
+          <span>Total Debit <span className="lg-footer-num" style={{ color: "var(--color-action)" }}>{rp(balance.dr)}</span></span>
+          <span className="lg-footer-sep">·</span>
+          <span>Total Credit <span className="lg-footer-num" style={{ color: "var(--color-success-text)" }}>{rp(balance.cr)}</span></span>
+          <span className="lg-footer-sep">·</span>
+          <span style={{ color: balance.balanced ? "var(--color-success-text)" : "var(--color-danger-text)" }}>
+            {balance.balanced ? "✓ Balanced" : `Variance ${rp(balance.variance)}`}
+          </span>
+        </div>
+        <div className="lg-footer-right">
+          <span className="lg-footer-lbl">Per</span>
+          <span className="lg-footer-total" style={{ fontSize: 13 }}>{fmtIdDate(dateTo)}</span>
+        </div>
       </div>
 
-      {/* ── FILTER DRAWER ── */}
-      <div className={`filter-overlay${filterDrawerOpen ? " open" : ""}`} onClick={closeFilterDrawer} />
-      <div className={`filter-drawer${filterDrawerOpen ? " open" : ""}`}>
-        <div className="fd-head">
-          <span className="fd-title">Filter</span>
-          <span className="fd-clear" onClick={clearFilters}>Reset semua</span>
-        </div>
-        <div className="fd-body">
-          <div className="fd-section">
-            <div className="fd-label">Per Tanggal (As-of Date)</div>
-            <div className="fd-shortcuts">
-              {[
-                { r: "ytd", label: "YTD Apr 2025" },
-                { r: "q1", label: "Per Mar 2025" },
-                { r: "feb", label: "Per Feb 2025" },
-                { r: "jan", label: "Per Jan 2025" },
-              ].map((s) => (
-                <div
-                  key={s.r}
-                  className={`fd-sc${fdShortcut === s.r ? " on" : ""}`}
-                  onClick={() => setDateShortcut(s.r)}
-                >
-                  {s.label}
+      {/* ── Side drawer (account detail) ─────────────────────────── */}
+      {drawerRow && (
+        <>
+          <div className="drawer-overlay" onClick={() => setDrawerCode(null)} />
+          <div className="drawer">
+            <div className="drawer-head">
+              <div className="drawer-av invoice" style={{ fontSize: 9 }}>{drawerRow.code.slice(0, 3)}</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="drawer-title">{drawerRow.name}</div>
+                <div className="drawer-sub">
+                  <span style={{ fontFamily: "var(--font-mono)" }}>{drawerRow.code}</span> ·{" "}
+                  <span className={`badge badge-${TYPE_BADGE_CLS[drawerRow.type]}`}>{TYPE_LABELS[drawerRow.type]}</span>
+                </div>
+              </div>
+              <button className="drawer-close" onClick={() => setDrawerCode(null)}>
+                <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+            <div className="drawer-tabs">
+              {[["detail", "Detail"], ["transactions", "Transactions"], ["audit", "Audit Trail"], ["ai", "AI Insight"]].map(([t, label]) => (
+                <div key={t} className={`drawer-tab${drawerTab === t ? " active" : ""}`} onClick={() => setDrawerTab(t)}>
+                  {t === "ai" && <span style={{ marginRight: 4, color: "var(--color-action)" }}>✦</span>}
+                  {label}
+                  {t === "ai" && drawerAnom.length > 0 && (
+                    <span style={{ marginLeft: 5, fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 9999, background: "var(--color-danger-surface)", color: "var(--color-danger-text)" }}>
+                      {drawerAnom.length}
+                    </span>
+                  )}
                 </div>
               ))}
             </div>
-            <div className="fd-date-row">
-              <div>
-                <div className="fd-sublabel">Awal Periode</div>
-                <input
-                  type="date"
-                  className="fd-input"
-                  value={fdFrom}
-                  onChange={(e) => setFdFrom(e.target.value)}
-                />
-              </div>
-              <div>
-                <div className="fd-sublabel">Per Tanggal</div>
-                <input
-                  type="date"
-                  className="fd-input"
-                  value={fdTo}
-                  onChange={(e) => setFdTo(e.target.value)}
-                />
-              </div>
+            <div className="drawer-body">
+              {drawerTab === "detail" && (
+                <>
+                  <div className="drawer-stat-row" style={{ gridTemplateColumns: "1fr 1fr" }}>
+                    <div className="drawer-stat-card">
+                      <div className="drawer-stat-lbl">Opening Balance</div>
+                      <div className="drawer-stat-val" style={{ color: "var(--color-text-tertiary)" }}>{rp(drawerRow.opening_balance)}</div>
+                    </div>
+                    <div className="drawer-stat-card">
+                      <div className="drawer-stat-lbl">Closing Balance</div>
+                      <div className={`drawer-stat-val${drawerRow.closing_balance < 0 ? " danger" : ""}`}>{rpZ(drawerRow.closing_balance)}</div>
+                    </div>
+                    <div className="drawer-stat-card">
+                      <div className="drawer-stat-lbl">Period Debit</div>
+                      <div className="drawer-stat-val" style={{ color: "var(--color-action)" }}>{rp(drawerRow.period_debit)}</div>
+                    </div>
+                    <div className="drawer-stat-card">
+                      <div className="drawer-stat-lbl">Period Credit</div>
+                      <div className="drawer-stat-val" style={{ color: "var(--color-success-text)" }}>{rp(drawerRow.period_credit)}</div>
+                    </div>
+                  </div>
+                  <div className="drawer-section">
+                    <div className="drawer-section-title">Information Account</div>
+                    {[
+                      ["Code", drawerRow.code],
+                      ["Name", drawerRow.name],
+                      ["Type", TYPE_LABELS[drawerRow.type]],
+                      ["Normal Balance", drawerRow.normal_balance === "debit" ? "Debit" : "Credit"],
+                      ["Status", drawerAcct?.is_active ? "Active" : "Inactive"],
+                    ].map(([label, value]) => (
+                      <div key={label} className="drawer-row">
+                        <div className="drawer-label">{label}</div>
+                        <div className="drawer-value">{value}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="drawer-section">
+                    <div className="drawer-section-title">Period</div>
+                    <div className="drawer-row">
+                      <div className="drawer-label">Awal Period</div>
+                      <div className="drawer-value">{fmtIdDate(dateFrom)}</div>
+                    </div>
+                    <div className="drawer-row">
+                      <div className="drawer-label">As-of</div>
+                      <div className="drawer-value">{fmtIdDate(dateTo)}</div>
+                    </div>
+                    <div className="drawer-row">
+                      <div className="drawer-label">Jumlah Transactions</div>
+                      <div className="drawer-value">{drawerRow.entries.length} JE</div>
+                    </div>
+                  </div>
+                </>
+              )}
+              {drawerTab === "transactions" && (
+                <div className="drawer-section">
+                  <div className="drawer-section-title">Transactions Period · {drawerRow.entries.length} entri</div>
+                  {drawerRow.entries.length === 0 ? (
+                    <div style={{ color: "var(--color-text-tertiary)", fontSize: 12, padding: "12px 0" }}>Not yet there is transactions on this period.</div>
+                  ) : drawerRow.entries.slice(0, 50).map((e, i) => (
+                    <div key={i} style={{ background: "var(--color-surface-sunken)", border: "1px solid var(--color-border-default)", borderRadius: "var(--radius-md)", padding: "10px 12px", marginBottom: 8 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--color-action)" }}>{e.je_ref}</div>
+                          <div style={{ fontSize: 12, fontWeight: 600, marginTop: 2 }}>{e.memo}</div>
+                          <div style={{ fontSize: 11, color: "var(--color-text-tertiary)", marginTop: 2 }}>{fmtIdDate(e.date)}</div>
+                        </div>
+                        <div style={{ textAlign: "right", flexShrink: 0 }}>
+                          {e.debit > 0 && <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700 }}>Dr {rp(e.debit)}</div>}
+                          {e.credit > 0 && <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, color: "var(--color-action)" }}>Cr {rp(e.credit)}</div>}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {drawerTab === "audit" && (
+                <div className="drawer-section">
+                  <div className="drawer-section-title">Audit Trail</div>
+                  {drawerRow.entries.slice(0, 20).map((e, i) => (
+                    <div key={i} style={{ display: "flex", gap: 10, padding: "8px 0", borderBottom: i < 19 ? "1px solid var(--color-surface-sunken)" : "none" }}>
+                      <div style={{ width: 18, height: 18, borderRadius: 9, background: "var(--color-surface-sunken)", border: "1px solid var(--color-border-default)", flexShrink: 0 }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 12, fontWeight: 600 }}>{e.je_ref} posted</div>
+                        <div style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>{e.posted_by || "—"} · {e.posted_date ? fmtIdDate(e.posted_date) : "—"}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {drawerTab === "ai" && (
+                <div className="drawer-section">
+                  <div className="drawer-section-title">AI Insight</div>
+                  {drawerAnom.length === 0 ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: 12, background: "var(--color-success-surface)", border: "1px solid var(--color-success-border)", borderRadius: "var(--radius-md)", fontSize: 12, color: "var(--color-success-text)" }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                      Account ini within normal range — none finding AI.
+                    </div>
+                  ) : drawerAnom.map((a, i) => (
+                    <div key={i} style={{
+                      padding: 12,
+                      background: a.severity === "critical" ? "var(--color-danger-surface)" : a.severity === "warn" ? "var(--color-warning-surface)" : "var(--ai-surface)",
+                      border: `1px solid ${a.severity === "critical" ? "var(--color-danger-border)" : a.severity === "warn" ? "var(--color-warning-border)" : "var(--ai-border)"}`,
+                      borderRadius: "var(--radius-md)",
+                      marginBottom: 8,
+                    }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, fontWeight: 700, color: a.severity === "critical" ? "var(--color-danger-text)" : a.severity === "warn" ? "var(--color-warning-text)" : "var(--color-action)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 4 }}>
+                        {SEVERITY_ICON[a.severity]}
+                        {a.severity === "critical" ? "Critical" : a.severity === "warn" ? "Warning" : "Info"}
+                      </div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-primary)", marginBottom: 4 }}>{a.title}</div>
+                      <div style={{ fontSize: 11, color: "var(--color-text-secondary)", lineHeight: 1.55, marginBottom: 6 }}>{a.desc}</div>
+                      <div style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>Recommendation: {a.action}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
-          <div className="fd-section">
-            <div className="fd-label">Tipe Akun</div>
-            <select
-              className="fd-select"
-              value={fdType}
-              onChange={(e) => setFdType(e.target.value)}
-            >
-              <option value="">Semua Tipe</option>
-              <option value="asset">Aset</option>
-              <option value="contra_asset">Kontra Aset</option>
-              <option value="liability">Liabilitas</option>
-              <option value="equity">Ekuitas</option>
-              <option value="revenue">Pendapatan</option>
-              <option value="expense">Beban</option>
-            </select>
-          </div>
-          <div className="fd-section">
-            <div className="fd-label">Tampilan</div>
-            <div className="fd-toggle-row">
-              <span className="fd-toggle-label">Sembunyikan saldo nol</span>
-              <label className="fd-toggle-sw">
-                <input type="checkbox" checked={fdHideZero} onChange={(e) => setFdHideZero(e.target.checked)} />
-                <div className="fd-toggle-track" />
-                <div className="fd-toggle-thumb" />
-              </label>
-            </div>
-            <div className="fd-toggle-row" style={{ marginTop: 6 }}>
-              <span className="fd-toggle-label">Kelompokkan per tipe akun</span>
-              <label className="fd-toggle-sw">
-                <input type="checkbox" checked={fdGroup} onChange={(e) => setFdGroup(e.target.checked)} />
-                <div className="fd-toggle-track" />
-                <div className="fd-toggle-thumb" />
-              </label>
-            </div>
-          </div>
-        </div>
-        <div className="fd-foot">
-          <button type="button" className="fd-cancel-btn" onClick={closeFilterDrawer}>Batal</button>
-          <button type="button" className="fd-apply" onClick={applyFilterDrawer}>Terapkan Filter</button>
-        </div>
-      </div>
+        </>
+      )}
+
+      {/* ── Klay AI drawers ────────────────────────────────────────── */}
+      <div
+        className={`ai-backdrop${aiOpen || summaryOpen ? " open" : ""}`}
+        onClick={() => { setAiOpen(false); setSummaryOpen(false); }}
+        aria-hidden={!(aiOpen || summaryOpen)}
+      />
+      <SummaryDrawer open={summaryOpen} insights={insights} onClose={() => setSummaryOpen(false)} onAsk={askAi} />
+      <AiChatDrawer
+        open={aiOpen}
+        onClose={() => { setAiOpen(false); setAiSeedQuestion(null); }}
+        initialQuestion={aiSeedQuestion}
+        onConsumedInitialQuestion={() => setAiSeedQuestion(null)}
+        context={aiContext}
+        contextLabel="Trial Balance"
+      />
+
+      {toast && <div className="toast show">{toast}</div>}
     </div>
   );
 }

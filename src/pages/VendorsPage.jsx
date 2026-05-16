@@ -50,10 +50,10 @@ function AiSubtitle({ insights, onOpenSummary, onOpenChat, chatActive, summaryAc
       </p>
       <div className="lg-ai-ctas">
         <button type="button" className={`lg-ai-cta-primary${summaryActive ? " active" : ""}`} onClick={onOpenSummary}>
-          <SparkleIcon /> Ringkasan
+          <SparkleIcon /> Summary
         </button>
         <button type="button" className={`lg-ai-cta-secondary${chatActive ? " active" : ""}`} onClick={onOpenChat}>
-          {chatActive ? "Lanjutkan obrolan" : "Tanya Klay AI"} →
+          {chatActive ? "Continue chat" : "Ask Klay AI"} →
         </button>
         {insights.length > 1 && (
           <div className="lg-ai-dots" aria-hidden>
@@ -89,7 +89,7 @@ function VendorRow({ r, isChecked, onCheck, onClick, onKebab, isSelected, isAlt 
         {r.lastTx ? (
           <>
             {formatDate(r.lastTx)}
-            {stale && <div style={{ fontSize: 10, marginTop: 1 }}>{daysSince(r.lastTx)} hari lalu</div>}
+            {stale && <div style={{ fontSize: 10, marginTop: 1 }}>{daysSince(r.lastTx)} days ago</div>}
           </>
         ) : (
           <span className="lg-cell-em-dash">—</span>
@@ -105,7 +105,7 @@ function VendorRow({ r, isChecked, onCheck, onClick, onKebab, isSelected, isAlt 
         )}
       </div>
       <div>
-        <span className={`status-badge ${r.status}`}>{r.status === "active" ? "Aktif" : "Non-aktif"}</span>
+        <span className={`status-badge ${r.status}`}>{r.status === "active" ? "Active" : "Inactive"}</span>
       </div>
       <div className="lg-cell-kebab" onClick={(e) => e.stopPropagation()}>
         <button className="lg-kebab" onClick={() => onKebab(r.id)}>
@@ -131,46 +131,46 @@ function RowMenu({ vendor, onClose, onAction }) {
       </div>
       <div className="row-menu-item" onClick={() => onAction("newBill", vendor)}>
         <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-        Buat Bill Baru
+        New Bill
       </div>
       <div className="row-menu-item" onClick={() => onAction("duplicate", vendor)}>
         <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-        Duplikat
+        Duplicate
       </div>
       <div className="row-menu-sep" />
       {vendor.status === "active" ? (
         <div className="row-menu-item" onClick={() => onAction("deactivate", vendor)}>
           <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
-          Non-aktifkan
+          Deactivate
         </div>
       ) : (
         <div className="row-menu-item" onClick={() => onAction("activate", vendor)}>
           <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
-          Aktifkan kembali
+          Reactivate
         </div>
       )}
       <div className="row-menu-item danger" onClick={() => onAction("archive", vendor)}>
         <svg viewBox="0 0 24 24"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
-        Arsipkan
+        Archive
       </div>
     </div>
   );
 }
 
 const SORT_LABELS = {
-  "name-asc":     "Nama A-Z",
-  "name-desc":    "Nama Z-A",
-  "ap-desc":      "AP Balance tertinggi ↓",
-  "ap-asc":       "AP Balance terendah ↑",
-  "lasttx-desc":  "Transaksi terbaru ↓",
-  "lasttx-asc":   "Transaksi terlama ↑",
-  "code-asc":     "Kode A-Z",
+  "name-asc":     "Name A-Z",
+  "name-desc":    "Name Z-A",
+  "ap-desc":      "AP Balance highest ↓",
+  "ap-asc":       "AP Balance lowest ↑",
+  "lasttx-desc":  "Transactions newest ↓",
+  "lasttx-asc":   "Transactions oldest ↑",
+  "code-asc":     "Code A-Z",
 };
 const GROUP_LABELS = {
   "none":     "—",
-  "category": "Kategori",
+  "category": "Category",
   "status":   "Status",
-  "type":     "Tipe",
+  "type":     "Type",
 };
 
 function useClickOutside(ref, onClose) {
@@ -202,10 +202,10 @@ function GroupPopover({ value, onPick, onClose }) {
   const ref = useRef(null);
   useClickOutside(ref, onClose);
   const items = [
-    { k: "none",     lbl: "Tidak dikelompokkan" },
-    { k: "category", lbl: "Kategori" },
+    { k: "none",     lbl: "Not grouped" },
+    { k: "category", lbl: "Category" },
     { k: "status",   lbl: "Status" },
-    { k: "type",     lbl: "Tipe (Company / Cooperative / Individual)" },
+    { k: "type",     lbl: "Type (Company / Cooperative / Individualal)" },
   ];
   return (
     <div className="lg-popover" ref={ref}>
@@ -248,7 +248,7 @@ function FilterPopover({ values, onChange, onClose }) {
     <div className="lg-popover lg-filter-pop" ref={ref}>
       <div className="lg-filter-body">
         <div className="lg-filter-fld">
-          <div className="lg-filter-fld-lbl">Kategori ({draft.categories.size > 0 ? `${draft.categories.size} dipilih` : "semua"})</div>
+          <div className="lg-filter-fld-lbl">Category ({draft.categories.size > 0 ? `${draft.categories.size} selected` : "semua"})</div>
           <div className="lg-toggle-row">
             {categories.map((c) => (
               <button key={c} className={`lg-toggle${draft.categories.has(c) ? " on" : ""}`} onClick={() => toggleCat(c)}>
@@ -259,7 +259,7 @@ function FilterPopover({ values, onChange, onClose }) {
         </div>
 
         <div className="lg-filter-fld">
-          <div className="lg-filter-fld-lbl">Payment Terms ({draft.terms.size > 0 ? `${draft.terms.size} dipilih` : "semua"})</div>
+          <div className="lg-filter-fld-lbl">Payment Terms ({draft.terms.size > 0 ? `${draft.terms.size} selected` : "semua"})</div>
           <div className="lg-toggle-row">
             {allTerms.map((t) => (
               <button key={t} className={`lg-toggle${draft.terms.has(t) ? " on" : ""}`} onClick={() => toggleTerm(t)}>
@@ -270,7 +270,7 @@ function FilterPopover({ values, onChange, onClose }) {
         </div>
 
         <div className="lg-filter-fld">
-          <div className="lg-filter-fld-lbl">Rentang AP Balance (Rp)</div>
+          <div className="lg-filter-fld-lbl">Range AP Balance (Rp)</div>
           <div className="lg-filter-row2">
             <input type="number" className="lg-filter-input" placeholder="Min" value={draft.minAp} onChange={(e) => update({ minAp: e.target.value })} />
             <span style={{ color: "var(--color-text-tertiary)", fontSize: 11 }}>—</span>
@@ -280,7 +280,7 @@ function FilterPopover({ values, onChange, onClose }) {
       </div>
       <div className="lg-filter-foot">
         <button className="lg-filter-reset" onClick={reset}>Reset</button>
-        <button className="lg-filter-apply" onClick={apply}>Terapkan filter</button>
+        <button className="lg-filter-apply" onClick={apply}>Apply filter</button>
       </div>
     </div>
   );
@@ -291,7 +291,7 @@ function FilterPopover({ values, onChange, onClose }) {
 export default function VendorsPage() {
   const navigate = useNavigate();
   const { vendors } = useVendors();
-  // AP balance per vendor (derived from bills)
+  // AP balance as of vendor (derived from bills)
   const apBalance = useMemo(() => {
     const m = {};
     for (const b of bills) {
@@ -347,34 +347,34 @@ export default function VendorsPage() {
   const activeCount = vendors.filter((v) => v.status === "active").length;
 
   const kpis = [
-    { lbl: "Total Vendor",     card: "all",      val: String(vendors.length),     sub: `${activeCount} aktif`,             tone: "primary" },
+    { lbl: "Total Vendors",     card: "all",      val: String(vendors.length),     sub: `${activeCount} active`,             tone: "primary" },
     { lbl: "Outstanding AP",   card: "ap",       val: "Rp " + fmtRp(totalAp),     sub: `${apVendors.length} vendor`,       tone: "danger"  },
-    { lbl: "Stale 60+ Hari",   card: "stale",    val: String(staleVendors.length), sub: "tidak ada transaksi",             tone: "warn"    },
-    { lbl: "Non-aktif",        card: "inactive", val: String(inactiveVendors.length), sub: "perlu di-review",              tone: "primary" },
+    { lbl: "Stale 60+ Days",   card: "stale",    val: String(staleVendors.length), sub: "none transactions",             tone: "warn"    },
+    { lbl: "Inactive",        card: "inactive", val: String(inactiveVendors.length), sub: "needs review",              tone: "primary" },
   ];
 
   // ── Tab counts ─────────────────────────────────────────────────────────
   const tabCounts = useMemo(() => ({
     semua:    vendors.length,
-    aktif:    activeCount,
+    active:    activeCount,
     ap:       apVendors.length,
     stale:    staleVendors.length,
     inactive: inactiveVendors.length,
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }), []);
   const tabs = [
-    { k: "semua",    lbl: "Semua",          count: tabCounts.semua },
-    { k: "aktif",    lbl: "Aktif",          count: tabCounts.aktif },
-    { k: "ap",       lbl: "Punya AP",       count: tabCounts.ap },
+    { k: "semua",    lbl: "All",          count: tabCounts.semua },
+    { k: "active",    lbl: "Active",          count: tabCounts.active },
+    { k: "ap",       lbl: "With AP",       count: tabCounts.ap },
     { k: "stale",    lbl: "Stale 60+",      count: tabCounts.stale },
-    { k: "inactive", lbl: "Non-aktif",      count: tabCounts.inactive },
+    { k: "inactive", lbl: "Inactive",      count: tabCounts.inactive },
   ];
 
   // ── Corpus ─────────────────────────────────────────────────────────────
   const corpus = useMemo(() => {
     let list = vendors;
     if (filter.kind === "tab") {
-      if (filter.value === "aktif")        list = list.filter((v) => v.status === "active");
+      if (filter.value === "active")        list = list.filter((v) => v.status === "active");
       else if (filter.value === "ap")      list = list.filter((v) => (apBalance[v.id] || 0) > 0);
       else if (filter.value === "stale")   list = list.filter((v) => v.status === "active" && daysSince(v.lastTx) > 60);
       else if (filter.value === "inactive")list = list.filter((v) => v.status === "inactive");
@@ -459,8 +459,8 @@ export default function VendorsPage() {
     if (effectiveGroup === "none") return null;
     const keyFn = (r) => {
       if (effectiveGroup === "category") return CAT_LABELS[r.category] || r.category;
-      if (effectiveGroup === "status") return r.status === "active" ? "Aktif" : "Non-aktif";
-      if (effectiveGroup === "type") return r.type === "company" ? "Company" : r.type === "cooperative" ? "Cooperative" : "Individual";
+      if (effectiveGroup === "status") return r.status === "active" ? "Active" : "Inactive";
+      if (effectiveGroup === "type") return r.type === "company" ? "Company" : r.type === "cooperative" ? "Cooperative" : "Individualal";
       return "—";
     };
     const map = new Map();
@@ -525,7 +525,7 @@ export default function VendorsPage() {
   }
 
   function exportCsv() {
-    const headers = ["Kode", "Nama", "Kategori", "Tipe", "PIC", "Email", "Telepon", "Alamat", "NPWP", "Terms", "Status", "Last Transaction", "AP Balance"];
+    const headers = ["Code", "Name", "Category", "Type", "PIC", "Email", "Telepon", "Address", "NPWP", "Terms", "Status", "Last Transaction", "AP Balance"];
     const esc = (v) => {
       const s = String(v == null ? "" : v);
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -544,16 +544,16 @@ export default function VendorsPage() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    showToast(`${sortedRows.length} vendor diekspor ke CSV`);
+    showToast(`${sortedRows.length} vendor exported to CSV`);
   }
 
   function onRowAction(action, v) {
     setMenuOpenFor(null);
     if (action === "edit") showToast(`Edit ${v.name} (demo)`);
-    else if (action === "newBill") showToast(`Buat Bill baru untuk ${v.name}`);
-    else if (action === "duplicate") showToast(`Duplikat ${v.name}`);
-    else if (action === "activate") showToast(`${v.name} diaktifkan kembali`);
-    else if (action === "deactivate") showToast(`${v.name} di-nonaktifkan`);
+    else if (action === "newBill") showToast(`Create Bill baru for ${v.name}`);
+    else if (action === "duplicate") showToast(`Duplicate ${v.name}`);
+    else if (action === "activate") showToast(`${v.name} diactivekan kembali`);
+    else if (action === "deactivate") showToast(`${v.name} di-nonactivekan`);
     else if (action === "archive") showToast(`${v.name} diarsipkan`);
   }
   function onBulk(action) {
@@ -581,7 +581,7 @@ export default function VendorsPage() {
             <div className="lg-head-actions">
               <button className="lg-btn-brand" onClick={() => navigate("/vendors/new")}>
                 <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                Tambah Vendor
+                Add Vendor
               </button>
             </div>
           </div>
@@ -618,7 +618,7 @@ export default function VendorsPage() {
             <div className="lg-filter-row">
               <div className="lg-search">
                 <svg viewBox="0 0 14 14"><circle cx="6" cy="6" r="3.5"/><path d="M9 9l3 3" strokeLinecap="round"/></svg>
-                <input placeholder="Cari nama, kode, atau PIC vendor…" value={search} onChange={(e) => setSearch(e.target.value)} />
+                <input placeholder="Search vendor name, code, or contact…" value={search} onChange={(e) => setSearch(e.target.value)} />
               </div>
               <div className="lg-filter-meta">
                 <div className="lg-meta-btn-wrap">
@@ -631,7 +631,7 @@ export default function VendorsPage() {
                 </div>
                 <div className="lg-meta-btn-wrap">
                   <button className="lg-meta-btn" onClick={() => { setSortPopOpen(!sortPopOpen); setFilterPopOpen(false); setGroupPopOpen(false); }}>
-                    <span className="meta-lbl">Urut:</span>
+                    <span className="meta-lbl">Sort:</span>
                     <span className="meta-val">{SORT_LABELS[effectiveSort]}</span>
                   </button>
                   {sortPopOpen && <SortPopover value={effectiveSort} onPick={(v) => { setSortChoice(v); setSortPopOpen(false); }} onClose={() => setSortPopOpen(false)} />}
@@ -645,19 +645,19 @@ export default function VendorsPage() {
                 </div>
                 <button className="lg-filter-export" onClick={exportCsv}>
                   <svg viewBox="0 0 12 12"><path d="M6 2v6M3 6l3 3 3-3M2 10.5h8" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                  Ekspor CSV
+                  Export CSV
                 </button>
-                {hasActiveFilters && <button className="lg-reset-all" onClick={resetAll}>Reset semua</button>}
+                {hasActiveFilters && <button className="lg-reset-all" onClick={resetAll}>Reset all</button>}
               </div>
             </div>
 
             <div className="lg-col-header">
               <div><input type="checkbox" className="lg-row-check" disabled /></div>
-              <div>Kode</div>
+              <div>Code</div>
               <div>Vendor</div>
-              <div>Kategori</div>
+              <div>Category</div>
               <div>Terms</div>
-              <div>Transaksi Terakhir</div>
+              <div>Transactions Last</div>
               <div style={{ textAlign: "right" }}>AP Balance</div>
               <div>Status</div>
               <div />
@@ -705,7 +705,7 @@ export default function VendorsPage() {
                 })
               ) : (
                 <>
-                  {sortedRows.length === 0 && <div className="lg-empty">Tidak ada vendor yang cocok</div>}
+                  {sortedRows.length === 0 && <div className="lg-empty">None vendor matching</div>}
                   {sortedRows.map((r, i) => (
                     <div key={r.id} style={{ position: "relative" }}>
                       <VendorRow
@@ -734,21 +734,21 @@ export default function VendorsPage() {
       {/* ── Sticky footer ──────────────────────────────────────────── */}
       <div className="lg-footer">
         <div className="lg-footer-left">
-          <span><span className="lg-footer-num">{checked.size}</span> dipilih</span>
+          <span><span className="lg-footer-num">{checked.size}</span> selected</span>
           {checked.size > 0 ? (
             <>
-              <button className="lg-footer-bulk-btn" onClick={() => onBulk("archive")}>Arsipkan</button>
-              <button className="lg-footer-clear" onClick={clearChecks}>Batal pilih</button>
+              <button className="lg-footer-bulk-btn" onClick={() => onBulk("archive")}>Archive</button>
+              <button className="lg-footer-clear" onClick={clearChecks}>Clear selection</button>
             </>
           ) : (
             <>
               <span className="lg-footer-sep">·</span>
-              <span>Menampilkan <span className="lg-footer-num">{filteredRows.length}</span> vendor</span>
+              <span>Showing <span className="lg-footer-num">{filteredRows.length}</span> vendors</span>
             </>
           )}
         </div>
         <div className="lg-footer-right">
-          <span className="lg-footer-lbl">{checked.size > 0 ? "Outstanding terpilih" : "Outstanding halaman"}</span>
+          <span className="lg-footer-lbl">{checked.size > 0 ? "Outstanding (selected)" : "Outstanding (page)"}</span>
           <span className="lg-footer-total">Rp {fmtRp(checked.size > 0 ? selectedTotal : pageTotal)}</span>
         </div>
       </div>
@@ -769,9 +769,10 @@ export default function VendorsPage() {
               </button>
             </div>
             <div className="drawer-tabs">
-              {["detail", "bank", "bills"].map((t) => (
+              {["detail", "bank", "bills", "ai"].map((t) => (
                 <div key={t} className={`drawer-tab${drawerTab === t ? " active" : ""}`} onClick={() => setDrawerTab(t)}>
-                  {t === "detail" ? "Detail" : t === "bank" ? "Bank" : "Riwayat Bill"}
+                  {t === "ai" && <span style={{ marginRight: 4, color: "var(--color-action)" }}>✦</span>}
+                  {t === "detail" ? "Detail" : t === "bank" ? "Bank" : t === "bills" ? "Bill History" : "AI Insight"}
                 </div>
               ))}
             </div>
@@ -789,15 +790,15 @@ export default function VendorsPage() {
                     </div>
                   </div>
                   <div className="drawer-section">
-                    <div className="drawer-section-title">Informasi Vendor</div>
+                    <div className="drawer-section-title">Vendor Information</div>
                     {[
-                      ["Nama Legal", selected.name],
-                      ["Kode", selected.code],
-                      ["Tipe", selected.type],
-                      ["PIC / Kontak", selected.contact],
+                      ["Legal Name", selected.name],
+                      ["Code", selected.code],
+                      ["Type", selected.type],
+                      ["PIC / Contact", selected.contact],
                       ["Telepon", selected.phone],
                       ["Email", selected.email],
-                      ["Alamat", selected.address],
+                      ["Address", selected.address],
                       ["NPWP", selected.tax_id || "—"],
                       ["Status PKP", selected.pkp],
                     ].map(([label, value]) => (
@@ -808,10 +809,10 @@ export default function VendorsPage() {
                     ))}
                   </div>
                   <div className="drawer-section">
-                    <div className="drawer-section-title">Akuntansi & Pajak</div>
+                    <div className="drawer-section-title">Accounttansi & Tax</div>
                     {[
-                      ["Akun Default", ACCT_LABELS[selected.acct] || selected.acct],
-                      ["Pajak Default", DEFTAX_LABELS[selected.defTax] || selected.defTax],
+                      ["Account Default", ACCT_LABELS[selected.acct] || selected.acct],
+                      ["Tax Default", DEFTAX_LABELS[selected.defTax] || selected.defTax],
                       ["PPh Pemotongan", PPH_LABELS[selected.pph] || selected.pph],
                     ].map(([label, value]) => (
                       <div key={label} className="drawer-row">
@@ -822,7 +823,7 @@ export default function VendorsPage() {
                   </div>
                   {selected.notes && (
                     <div className="drawer-section">
-                      <div className="drawer-section-title">Catatan</div>
+                      <div className="drawer-section-title">Notes</div>
                       <div style={{ fontSize: 12, color: "var(--color-text-secondary)", lineHeight: 1.6, padding: "6px 0" }}>{selected.notes}</div>
                     </div>
                   )}
@@ -830,7 +831,7 @@ export default function VendorsPage() {
               )}
               {drawerTab === "bank" && (
                 <div className="drawer-section">
-                  <div className="drawer-section-title">Rekening Bank</div>
+                  <div className="drawer-section-title">Bank Account</div>
                   {selected.banks.map((bank, i) => (
                     <div key={i} style={{ background: "var(--color-surface-sunken)", border: "1px solid var(--color-border-default)", borderRadius: "var(--radius-md)", padding: "12px 14px", marginBottom: 8 }}>
                       {bank.isDefault && <div style={{ fontSize: 10, fontWeight: 700, color: "var(--color-action)", marginBottom: 6, letterSpacing: ".06em", textTransform: "uppercase" }}>Default</div>}
@@ -843,14 +844,39 @@ export default function VendorsPage() {
               )}
               {drawerTab === "bills" && (
                 <div className="drawer-section">
-                  <div className="drawer-section-title">Riwayat Transaksi</div>
+                  <div className="drawer-section-title">Transaction History</div>
                   <div className="drawer-row">
-                    <div className="drawer-label">Terakhir</div>
+                    <div className="drawer-label">Last</div>
                     <div className="drawer-value">{selected.lastTx || "—"}</div>
                   </div>
                   <div className="drawer-row">
                     <div className="drawer-label">AP Saat Ini</div>
                     <div className="drawer-value mono">{formatRupiah(apBalance[selected.id] || 0)}</div>
+                  </div>
+                </div>
+              )}
+              {drawerTab === "ai" && (
+                <div className="drawer-section">
+                  <div className="drawer-section-title">AI Insight</div>
+                  <div style={{ padding: 12, background: "var(--ai-surface)", border: "1px solid var(--ai-border)", borderRadius: "var(--radius-md)", marginBottom: 10 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "var(--color-action)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 4 }}>✦ Vendor Profile</div>
+                    <div style={{ fontSize: 12, color: "var(--color-text-secondary)", lineHeight: 1.55 }}>
+                      Klay AI mevalue vendor ini as <strong>{selected.status === "active" ? "active & reliable" : "needs review"}</strong> berdasarkan pattern payment historical and compliance pajak.
+                    </div>
+                  </div>
+                  {(apBalance[selected.id] || 0) > 50000000 && (
+                    <div style={{ padding: 12, background: "var(--color-warning-surface)", border: "1px solid var(--color-warning-border)", borderRadius: "var(--radius-md)", marginBottom: 10 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: "var(--color-warning-text)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 4 }}>High AP Concentration</div>
+                      <div style={{ fontSize: 12, color: "var(--color-text-secondary)", lineHeight: 1.55 }}>
+                        AP balance to vendor ini <strong>{formatRupiah(apBalance[selected.id] || 0)}</strong> — perteambangkan diversificashi supplier for mengurangi konsentrasi risiko.
+                      </div>
+                    </div>
+                  )}
+                  <div style={{ padding: 12, background: "var(--color-surface-sunken)", border: "1px solid var(--color-border-default)", borderRadius: "var(--radius-md)" }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "var(--color-text-tertiary)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 4 }}>Recommendation</div>
+                    <div style={{ fontSize: 12, color: "var(--color-text-secondary)", lineHeight: 1.55 }}>
+                      Default account: <strong>{ACCT_LABELS[selected.acct] || selected.acct}</strong>. Tax default: <strong>{DEFTAX_LABELS[selected.defTax] || "—"}</strong>. Setting ini akan automatic dipakai saat Create Bill from vendor ini.
+                    </div>
                   </div>
                 </div>
               )}
@@ -862,7 +888,7 @@ export default function VendorsPage() {
               </button>
               <button className="drawer-btn primary">
                 <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                Buat Bill Baru
+                New Bill
               </button>
             </div>
           </div>

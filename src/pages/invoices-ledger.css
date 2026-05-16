@@ -120,6 +120,60 @@
 .lg-card.lg-table-vendor .lg-col-header,
 .lg-card.lg-table-customer .lg-row,
 .lg-card.lg-table-customer .lg-col-header{grid-template-columns:30px 90px 1fr 130px 110px 140px 150px 100px 30px}
+/* Journal entry grid — balanced ledger columns */
+.lg-card.lg-table-je .lg-row,
+.lg-card.lg-table-je .lg-col-header{grid-template-columns:30px 100px 130px 1fr 50px 140px 140px 90px 30px}
+/* General Ledger grid — per-line ledger rows with rekon col */
+.lg-card.lg-table-gl .lg-row,
+.lg-card.lg-table-gl .lg-col-header{grid-template-columns:90px 110px 50px 1fr 120px 120px 130px 70px 30px}
+/* Anomaly row tints */
+.lg-row.anomaly-warn{background:var(--color-warning-surface)}
+.lg-row.anomaly-warn.alt{background:#FDF1DA}
+.lg-row.anomaly-warn:hover{background:#FBEBC3}
+.lg-row.anomaly-danger{background:var(--color-danger-surface)}
+.lg-row.anomaly-danger.alt{background:#F9E2E2}
+.lg-row.anomaly-danger:hover{background:#F5D2D2}
+/* JE group header (first line of a JE group, optional accent) */
+.lg-row.je-first{border-top:1px solid var(--color-border-default)}
+/* 5-cell KPI strip variant — explicit 5-column grid, slightly narrower cells */
+.lg-kpi-strip.kpi-5{grid-template-columns:1fr 1fr 1fr 1fr 1fr}
+.lg-kpi-strip.kpi-5 .lg-kpi-cell{padding:14px 18px}
+.lg-kpi-strip.kpi-5 .lg-kpi-val{font-size:22px}
+/* Trial Balance grid — kode, nama, opening, debit period, credit period, closing, kebab */
+.lg-card.lg-table-tb .lg-row,
+.lg-card.lg-table-tb .lg-col-header{grid-template-columns:80px 1fr 140px 140px 140px 160px 30px}
+/* TB subtotal row — emphasized closing column */
+.lg-row.subtotal{background:var(--color-surface-sunken);font-weight:600;border-top:1px solid var(--color-border-default)}
+.lg-row.subtotal:hover{background:#EDE7DF}
+/* TB spotlight row — 4 highlight account cards */
+.lg-spotlight-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}
+.lg-spot-card{background:var(--color-surface-raised);border:1px solid var(--color-border-default);border-radius:var(--radius-lg);padding:14px 16px 16px;cursor:pointer;transition:all var(--transition-fast)}
+.lg-spot-card:hover{border-color:var(--color-action);box-shadow:0 4px 18px rgba(26,70,200,.08);transform:translateY(-1px)}
+.lg-spot-code{font-family:var(--font-mono);font-size:10px;font-weight:600;color:var(--color-action);letter-spacing:.04em}
+.lg-spot-name{font-size:12px;font-weight:600;color:var(--color-text-primary);margin-top:3px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lg-spot-num{font-family:var(--font-mono);font-size:18px;font-weight:700;color:var(--color-text-primary);margin-top:8px;letter-spacing:-.01em}
+.lg-spot-delta{font-size:11px;font-weight:500;margin-top:3px;color:var(--color-text-tertiary)}
+.lg-spot-delta.up{color:var(--color-success-text)}
+.lg-spot-delta.dn{color:var(--color-danger-text)}
+.lg-spot-bar{height:3px;background:var(--color-surface-sunken);border-radius:2px;overflow:hidden;margin-top:10px}
+.lg-spot-bar-fill{height:100%;background:var(--color-action);border-radius:2px;transition:width var(--transition-slow)}
+/* Inline anomaly flag — used per-row in TB and elsewhere */
+.lg-anom-flag{display:inline-flex;align-items:center;gap:3px;font-size:9px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:1px 7px;border-radius:9999px;border:1px solid;margin-left:6px;vertical-align:middle}
+.lg-anom-flag.critical{background:var(--color-danger-surface);color:var(--color-danger-text);border-color:var(--color-danger-border)}
+.lg-anom-flag.warn{background:var(--color-warning-surface);color:var(--color-warning-text);border-color:var(--color-warning-border)}
+.lg-anom-flag.info{background:var(--ai-surface);color:var(--color-action);border-color:var(--ai-border)}
+.lg-anom-flag svg{width:9px;height:9px;stroke:currentColor;fill:none;stroke-width:2}
+/* Period tab strip */
+.lg-period-tabs{display:flex;align-items:center;gap:6px;padding:10px 24px;background:var(--color-surface-raised);border:1px solid var(--color-border-default);border-radius:var(--radius-md);margin-bottom:10px}
+.lg-pt-arr{width:22px;height:22px;display:flex;align-items:center;justify-content:center;color:var(--color-text-tertiary);cursor:pointer;border-radius:var(--radius-sm);transition:background var(--transition-fast)}
+.lg-pt-arr:hover{background:var(--color-surface-sunken)}
+.lg-pt-arr svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round}
+.lg-pt-tab{display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:var(--radius-full);font-size:11px;font-weight:600;color:var(--color-text-tertiary);border:1px solid transparent;cursor:pointer;white-space:nowrap;transition:all var(--transition-fast)}
+.lg-pt-tab:hover{background:var(--color-surface-sunken);color:var(--color-text-secondary)}
+.lg-pt-tab.locked{color:var(--color-text-tertiary);opacity:.55;cursor:not-allowed}
+.lg-pt-tab.locked svg{width:9px;height:9px;stroke:currentColor;fill:none;stroke-width:1.5}
+.lg-pt-tab.active{background:var(--color-text-primary);color:#fff;border-color:var(--color-text-primary)}
+.lg-pt-tab.future{color:var(--color-text-tertiary);opacity:.4;cursor:not-allowed}
 .lg-row.alt{background:#FDFBF8}
 .lg-row:last-child{border-bottom:none;border-radius:0 0 12px 12px}
 .lg-row:hover,.lg-row.alt:hover{background:#FBF9F6}

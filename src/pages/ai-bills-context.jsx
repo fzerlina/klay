@@ -12,7 +12,7 @@ function fmtRpShort(n) {
 
 function shortName(name) {
   if (!name) return "—";
-  const tokens = name.split(/\s+/).filter((t) => t && !/^(PT|CV|UD|Toko|Koperasi)$/i.test(t));
+  const tokens = name.split(/\s+/).filter((t) => t && !/^(PT|CV|UD|Toko|Cooperative)$/i.test(t));
   return tokens.slice(0, 2).join(" ");
 }
 
@@ -67,12 +67,12 @@ export function computeBillsInsights(bills) {
           <strong className="lg-ai-strong">{top3.length} vendor</strong>{" "}
           ({top3.map((v, i) => (
             <span key={v.id}>{i > 0 ? ", " : ""}{shortName(v.name)}</span>
-          ))}) menyumbang{" "}
-          <strong className="lg-ai-strong">{top3Pct}%</strong> dari{" "}
-          <span className="lg-ai-danger">{fmtRpShort(totalOverdue)}</span> utang yang sudah jatuh tempo.
+          ))}) account for{" "}
+          <strong className="lg-ai-strong">{top3Pct}%</strong> of{" "}
+          <span className="lg-ai-danger">{fmtRpShort(totalOverdue)}</span> payables that are overdue.
         </>
       ),
-      question: "Vendor mana yang paling banyak kita telat bayar?",
+      question: "Which vendor that we most frequently pay late?",
     });
   }
 
@@ -81,12 +81,12 @@ export function computeBillsInsights(bills) {
       id: "cashflowOut",
       node: (
         <>
-          <strong className="lg-ai-strong">{upcoming.length} bill</strong> senilai{" "}
-          <strong className="lg-ai-strong">{fmtRpShort(upcomingTotal)}</strong> akan jatuh tempo dalam{" "}
-          <strong className="lg-ai-strong">7 hari</strong> ke depan.
+          <strong className="lg-ai-strong">{upcoming.length} bill</strong> worth{" "}
+          <strong className="lg-ai-strong">{fmtRpShort(upcomingTotal)}</strong> will be due in{" "}
+          <strong className="lg-ai-strong">7 days</strong> to depan.
         </>
       ),
-      question: "Berapa kas yang harus disiapkan untuk minggu ini?",
+      question: "What cash should be prepared for this week?",
     });
   }
 
@@ -95,11 +95,11 @@ export function computeBillsInsights(bills) {
       id: "inReview",
       node: (
         <>
-          <strong className="lg-ai-strong">{inReview.length} bill</strong> menunggu approval, total{" "}
+          <strong className="lg-ai-strong">{inReview.length} bill</strong> awaiting approval, total{" "}
           <span className="lg-ai-danger">{fmtRpShort(inReviewTotal)}</span>.
         </>
       ),
-      question: "Bill apa saja yang menunggu approval?",
+      question: "Which bills are awaiting approval?",
     });
   }
 
@@ -108,11 +108,11 @@ export function computeBillsInsights(bills) {
       id: "avgDpd",
       node: (
         <>
-          Rata-rata <strong className="lg-ai-strong">{avgDpd} hari telat</strong> untuk{" "}
-          <strong className="lg-ai-strong">{overdue.length} bill</strong> yang belum kita bayar.
+          Average <strong className="lg-ai-strong">{avgDpd} days overdue</strong> for{" "}
+          <strong className="lg-ai-strong">{overdue.length} bill</strong> that not yet we bayar.
         </>
       ),
-      question: "Berapa rata-rata hari kita telat bayar vendor?",
+      question: "What average days we pay vendors late?",
     });
   }
 
@@ -121,21 +121,21 @@ export function computeBillsInsights(bills) {
       id: "largest",
       node: (
         <>
-          Utang terbesar yang telat:{" "}
+          Payables largest that late:{" "}
           <span className="lg-ai-danger">{fmtRpShort(largest.sisa)}</span> ke{" "}
           <strong className="lg-ai-strong">{shortName(largest.vendorName)}</strong>{" "}
-          ({Math.max(0, daysSince(largest.due))} hari telat).
+          ({Math.max(0, daysSince(largest.due))} days overdue).
         </>
       ),
-      question: `Detail bill ${largest.invNo || largest.id} dari ${shortName(largest.vendorName)}`,
+      question: `Detail bill ${largest.invNo || largest.id} from ${shortName(largest.vendorName)}`,
     });
   }
 
   if (insights.length === 0) {
     insights.push({
       id: "empty",
-      node: <>Semua utang dagang kita dalam term hari ini — tidak ada yang telat bayar.</>,
-      question: "Bagaimana ringkasan AP minggu ini?",
+      node: <>All trade payables we in term today — none that late paying.</>,
+      question: "How ringcashan AP this week?",
     });
   }
 
@@ -174,14 +174,14 @@ export function makeBillsAiContext(bills) {
   const upcoming7Total = upcoming7.reduce((s, b) => s + b.sisa, 0);
 
   const welcome = (
-    <p>Halo Sarah — saya sudah membaca data utang dagang Anda. Mau saya bantu apa?</p>
+    <p>Hi Sarah — I have reviewed data trade payables your. How can I help?</p>
   );
 
   const suggestions = [
-    "Vendor mana yang paling banyak kita telat bayar?",
-    "Berapa kas yang harus disiapkan untuk minggu ini?",
-    "Bill mana yang menunggu approval?",
-    "Bandingkan utang dagang bulan ini vs bulan lalu",
+    "Which vendor that we most frequently pay late?",
+    "What cash should be prepared for this week?",
+    "Bill which that awaiting approval?",
+    "Compare trade payables this month vs last month",
   ];
 
   function makeTopVendorsResponse(send) {
@@ -191,7 +191,7 @@ export function makeBillsAiContext(bills) {
       role: "ai",
       content: (
         <>
-          <p>3 vendor yang paling banyak kita telat bayar:</p>
+          <p>3 vendor that we most frequently pay late:</p>
           <div className="ai-mini-table">
             {top.map((v) => {
               const vendor = VENDORS.find((x) => x.id === v.id);
@@ -201,7 +201,7 @@ export function makeBillsAiContext(bills) {
                   <div className="ai-mini-body">
                     <div className="ai-mini-name">{vendor?.name || v.name}</div>
                     <div className="ai-mini-meta">
-                      rata-rata <span className="ai-mini-meta-strong">{v.avgDpd}d</span> telat · {v.count} bill aktif
+                      average <span className="ai-mini-meta-strong">{v.avgDpd}d</span> late · {v.count} bill active
                     </div>
                   </div>
                   <div className="ai-mini-amt">{fmtRpShort(v.amount)}</div>
@@ -210,12 +210,12 @@ export function makeBillsAiContext(bills) {
             })}
           </div>
           <p>
-            Total <strong>{pct}%</strong> dari utang yang telat ada di {top.length} vendor ini. Mau saya susun jadwal pembayaran prioritas?
+            Total <strong>{pct}%</strong> from payables that late is in {top.length} vendor ini. Want me to susun schedule payment prioritas?
           </p>
           <div className="chat-chips">
-            <ChatChip primary onClick={() => send("Ya, susun jadwal pembayaran prioritas")}>Susun jadwal pembayaran</ChatChip>
-            <ChatChip onClick={() => send("Tampilkan riwayat pembayaran")}>Tampilkan riwayat</ChatChip>
-            <ChatChip onClick={() => send("Saya negosiasi term dulu")}>Negosiasi term</ChatChip>
+            <ChatChip primary onClick={() => send("Ya, susun schedule payment prioritas")}>Susun schedule payment</ChatChip>
+            <ChatChip onClick={() => send("Show riwayat payment")}>Show riwayat</ChatChip>
+            <ChatChip onClick={() => send("I negosiasi term dulu")}>Negosiasi term</ChatChip>
           </div>
         </>
       ),
@@ -228,14 +228,14 @@ export function makeBillsAiContext(bills) {
       content: (
         <>
           <p>
-            Kas keluar 7 hari ke depan: <strong>{fmtRpShort(upcoming7Total)}</strong> untuk{" "}
-            <strong>{upcoming7.length} bill</strong> yang sudah approved dan akan jatuh tempo.{" "}
-            <span className="danger">3 bill berisiko terlambat</span> jika tidak ada follow-up internal.
+            Kas keluar 7 days to depan: <strong>{fmtRpShort(upcoming7Total)}</strong> for{" "}
+            <strong>{upcoming7.length} bill</strong> already approved and will be due.{" "}
+            <span className="danger">3 bill berisiko terlambat</span> jika none follow-up internal.
           </p>
-          <p>Mau saya buatkan reminder approval untuk yang berisiko?</p>
+          <p>Want me to create a reminder approval for that berisiko?</p>
           <div className="chat-chips">
-            <ChatChip primary>Buat reminder approval</ChatChip>
-            <ChatChip>Lihat detailnya dulu</ChatChip>
+            <ChatChip primary>Create reminder approval</ChatChip>
+            <ChatChip>View detailnya dulu</ChatChip>
           </div>
         </>
       ),
@@ -246,7 +246,7 @@ export function makeBillsAiContext(bills) {
     if (inReview.length === 0) {
       return {
         role: "ai",
-        content: <p>Tidak ada bill yang menunggu approval saat ini.</p>,
+        content: <p>None bill that awaiting approval saat ini.</p>,
       };
     }
     const sample = inReview.slice(0, 3);
@@ -254,22 +254,22 @@ export function makeBillsAiContext(bills) {
       role: "ai",
       content: (
         <>
-          <p>{inReview.length} bill total senilai <strong>{fmtRpShort(inReviewTotal)}</strong> sedang menunggu approval. Beberapa yang paling besar:</p>
+          <p>{inReview.length} bill total worth <strong>{fmtRpShort(inReviewTotal)}</strong> sedang awaiting approval. Beberapa with the largest:</p>
           <div className="ai-mini-table">
             {sample.map((b) => (
               <div className="ai-mini-row" key={b.id}>
                 <div className="ai-mini-av">{initials(b.vendorName)}</div>
                 <div className="ai-mini-body">
                   <div className="ai-mini-name">{b.vendorName}</div>
-                  <div className="ai-mini-meta">{b.invNo} · jatuh tempo {b.due}</div>
+                  <div className="ai-mini-meta">{b.invNo} · due {b.due}</div>
                 </div>
                 <div className="ai-mini-amt">{fmtRpShort(b.total)}</div>
               </div>
             ))}
           </div>
           <div className="chat-chips">
-            <ChatChip primary>Approve semua</ChatChip>
-            <ChatChip>Review satu per satu</ChatChip>
+            <ChatChip primary>Approve all</ChatChip>
+            <ChatChip>Review satu as of satu</ChatChip>
           </div>
         </>
       ),
@@ -282,12 +282,12 @@ export function makeBillsAiContext(bills) {
       content: (
         <>
           <p>
-            Utang dagang bulan ini <strong>Rp 8,4 M</strong> — turun{" "}
-            <span style={{ color: "var(--color-success-text)", fontWeight: 600 }}>−12%</span> dari bulan lalu (Rp 9,5 M). Pembayaran rutin ke supplier inventory naik 18%, sementara biaya jasa turun 30%.
+            Payables dagang this month <strong>Rp 8,4 M</strong> — down{" "}
+            <span style={{ color: "var(--color-success-text)", fontWeight: 600 }}>−12%</span> from last month (Rp 9,5 M). Payment regular to supplier inventory up 18%, sementara biaya jasa down 30%.
           </p>
           <div className="chat-chips">
-            <ChatChip primary>Per kategori</ChatChip>
-            <ChatChip>Per vendor</ChatChip>
+            <ChatChip primary>As of category</ChatChip>
+            <ChatChip>As of vendor</ChatChip>
           </div>
         </>
       ),
@@ -299,10 +299,10 @@ export function makeBillsAiContext(bills) {
       role: "ai",
       content: (
         <>
-          <p>Saya belum bisa menjawab "{text}" secara spesifik di prototipe ini, tapi saya bisa bantu hal-hal berikut:</p>
+          <p>I can't specifically answer "{text}" in this prototype, but I can help with:</p>
           <div className="chat-chips">
-            <ChatChip>Vendor paling sering telat bayar</ChatChip>
-            <ChatChip>Cashflow keluar minggu ini</ChatChip>
+            <ChatChip>Vendor most often late paying</ChatChip>
+            <ChatChip>Cashflow keluar this week</ChatChip>
             <ChatChip>Antrian approval</ChatChip>
           </div>
         </>
@@ -312,16 +312,16 @@ export function makeBillsAiContext(bills) {
 
   function respond(text, helpers) {
     const t = text.toLowerCase();
-    if (t.includes("vendor") || t.includes("telat bayar") || t.includes("paling banyak")) {
+    if (t.includes("vendor") || t.includes("late paying") || t.includes("most")) {
       return makeTopVendorsResponse(helpers.send);
     }
-    if (t.includes("cashflow") || t.includes("kas keluar") || t.includes("minggu ini") || t.includes("7 hari")) {
+    if (t.includes("cashflow") || t.includes("cash keluar") || t.includes("this week") || t.includes("7 days")) {
       return makeCashflowOutResponse();
     }
     if (t.includes("approval") || t.includes("approve") || t.includes("review")) {
       return makeApprovalQueueResponse();
     }
-    if (t.includes("bulan lalu") || t.includes("bandingkan") || t.includes("mom")) {
+    if (t.includes("last month") || t.includes("bandingkan") || t.includes("mom")) {
       return makeMoMResponse();
     }
     return makeDefaultResponse(text);

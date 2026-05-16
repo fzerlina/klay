@@ -24,10 +24,10 @@ export default function SummaryDrawer({ open, onClose, insights, onAsk }) {
           <SparkleIcon size={14} />
         </div>
         <div className="summary-dh-body">
-          <div className="summary-dh-title">Ringkasan Hari Ini</div>
+          <div className="summary-dh-title">Summary Days Ini</div>
           <div className="summary-dh-meta">{insights.length} insight · diperbarui oleh Klay AI</div>
         </div>
-        <button className="ai-dh-btn" title="Tutup" onClick={onClose}>
+        <button className="ai-dh-btn" title="Close" onClick={onClose}>
           <svg viewBox="0 0 14 14"><path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.6" fill="none" strokeLinecap="round"/></svg>
         </button>
       </div>

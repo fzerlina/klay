@@ -74,7 +74,7 @@ export default function AiChatDrawer({
     }
   }, [open]);
 
-  // Welcome bubble — only shown once per open
+  // Welcome bubble — only shown once as of open
   useEffect(() => {
     if (!open) return;
     if (messages.length > 0) return;
@@ -133,7 +133,7 @@ export default function AiChatDrawer({
     setTimeout(() => {
       const reply = respond
         ? respond(text, { send: sendUserMessage })
-        : { role: "ai", content: <p>(Tidak ada konteks AI untuk halaman ini.)</p> };
+        : { role: "ai", content: <p>(None konteks AI for page ini.)</p> };
       setTyping(false);
       setMessages((prev) => [...prev, reply]);
     }, 900);
@@ -159,10 +159,10 @@ export default function AiChatDrawer({
             terhubung · konteks: {contextLabel}
           </div>
         </div>
-        <button className="ai-dh-btn" title="Riwayat percakapan">
+        <button className="ai-dh-btn" title="History percakapan">
           <svg viewBox="0 0 14 14"><path d="M2 2h10v10H2z M5 5h4 M5 7h4 M5 9h3"/></svg>
         </button>
-        <button className="ai-dh-btn" title="Tutup" onClick={onClose}>
+        <button className="ai-dh-btn" title="Close" onClick={onClose}>
           <svg viewBox="0 0 14 14"><path d="M3 3l8 8M11 3l-8 8"/></svg>
         </button>
       </div>
@@ -181,7 +181,7 @@ export default function AiChatDrawer({
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Tanya apapun tentang halaman ini…"
+            placeholder="Tanya apapun about page ini…"
           />
           <button type="button" className="ai-input-attach" title="Lampirkan file">
             <svg viewBox="0 0 14 14"><path d="M9.5 4L4 9.5a1.5 1.5 0 102.1 2.1l5.4-5.4a3 3 0 10-4.2-4.2L2 7.3"/></svg>
@@ -191,7 +191,7 @@ export default function AiChatDrawer({
           </button>
         </form>
         <div className="ai-input-meta">
-          <span>Klay AI hanya melihat data perusahaan Anda</span>
+          <span>Klay AI hanya meview data perusahaan Anda</span>
           <span>haiku-4-5</span>
         </div>
       </div>

@@ -13,25 +13,25 @@ const CURRENCY_OPTIONS = [
   { v: "SGD", label: "SGD — Dolar Singapura" },
 ];
 const ENTITY_FORMS = [
-  { v: "PT", label: "PT (Perseroan Terbatas)" },
+  { v: "PT", label: "PT (Perseroan Terbfor)" },
   { v: "CV", label: "CV" },
   { v: "UD", label: "UD / PD" },
   { v: "Firma", label: "Firma" },
-  { v: "Koperasi", label: "Koperasi" },
-  { v: "BUMN", label: "BUMN / Instansi Pemerintah" },
+  { v: "Cooperative", label: "Cooperative" },
+  { v: "BUMN", label: "BUMN / Government Entity" },
 ];
 const SCHEDULE_OPTIONS = [
-  { v: "h0", label: "Hari yang sama (H+0)" },
-  { v: "h1", label: "Keesokan hari (H+1)" },
-  { v: "h2", label: "2 hari setelah dibuat" },
-  { v: "eom", label: "Setiap akhir bulan" },
-  { v: "manual", label: "Pilih tanggal & jam manual…" },
+  { v: "h0", label: "Days that same (D+0)" },
+  { v: "h1", label: "Keesokan days (D+1)" },
+  { v: "h2", label: "2 days after creation" },
+  { v: "eom", label: "End of month" },
+  { v: "manual", label: "Choose custom date & teame…" },
 ];
 const REMINDER_OPTIONS = [
-  { v: "none", label: "Tidak ada" },
-  { v: "h3", label: "3 hari sebelum jatuh tempo" },
-  { v: "h7", label: "7 hari sebelum jatuh tempo" },
-  { v: "h3h1", label: "H-3 dan H-1 jatuh tempo" },
+  { v: "none", label: "None" },
+  { v: "h3", label: "3 days before due" },
+  { v: "h7", label: "7 days before due" },
+  { v: "h3h1", label: "D-3 and D-1 before due" },
 ];
 
 function blankContact(primary = false) {
@@ -54,7 +54,7 @@ export default function CustomerCreatePage() {
   const [photo, setPhoto] = useState(null);
   const photoRef = useRef(null);
 
-  // Identitas
+  // Information
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
   const [legalName, setLegalName] = useState("");
@@ -62,15 +62,15 @@ export default function CustomerCreatePage() {
   const [npwp, setNpwp] = useState("");
   const [address, setAddress] = useState("");
 
-  // Term & kredit
+  // Term & credit
   const [top, setTop] = useState("NET 30");
   const [creditLimit, setCreditLimit] = useState("");
   const [currency, setCurrency] = useState("IDR");
 
-  // Kontak
+  // Contact
   const [contacts, setContacts] = useState([blankContact(true)]);
 
-  // Pengiriman invoice
+  // Delivery invoice
   const [invMode, setInvMode] = useState("manual");
   const [chEmail, setChEmail] = useState(false);
   const [chWa, setChWa] = useState(false);
@@ -126,18 +126,18 @@ export default function CustomerCreatePage() {
   }
 
   function onSave() {
-    if (!name.trim()) { showToast(entityType === "perusahaan" ? "Nama perusahaan wajib diisi" : "Nama lengkap wajib diisi"); return; }
-    if (!address.trim()) { showToast("Alamat penagihan wajib diisi"); return; }
+    if (!name.trim()) { showToast(entityType === "perusahaan" ? "Name perusahaan are required" : "Name complete are required"); return; }
+    if (!address.trim()) { showToast("Address penagihan are required"); return; }
     const primary = contacts[0];
     if (!primary.name.trim() || !primary.phone.trim() || !primary.email.trim()) {
-      showToast("Kontak utama wajib: nama, telepon, dan email");
+      showToast("Primary contact required: name, phone, and email");
       return;
     }
     const channels = [];
     if (chEmail) channels.push("Email");
     if (chWa) channels.push("WhatsApp");
     if (invMode === "auto" && channels.length === 0) {
-      showToast("Pilih minimal satu channel pengiriman");
+      showToast("Pick at least one delivery channel");
       return;
     }
 
@@ -164,41 +164,41 @@ export default function CustomerCreatePage() {
     setTimeout(() => navigate("/customers"), 700);
   }
 
-  const isPerusahaan = entityType === "perusahaan";
+  const isCompany = entityType === "perusahaan";
 
   // ── STEP 0: Entity Picker ──────────────────────────────────────────────
   if (!entityType) {
     return (
       <div className="addpage">
         <div className="ap-head">
-          <button className="ap-close" onClick={() => navigate("/customers")} aria-label="Tutup">
+          <button className="ap-close" onClick={() => navigate("/customers")} aria-label="Close">
             <svg viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
           </button>
-          <div className="ap-title">Tambah Customer Baru</div>
-          <div className="ap-hint" style={{ flex: 1, marginLeft: 4 }}>— Pilih tipe entitas terlebih dahulu</div>
-          <button className="ap-close" onClick={() => navigate("/customers")} aria-label="Batal">
+          <div className="ap-title">Add New Customer</div>
+          <div className="ap-hint" style={{ flex: 1, marginLeft: 4 }}>— Pick entity type first</div>
+          <button className="ap-close" onClick={() => navigate("/customers")} aria-label="Cancel">
             <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
         <div className="entity-step0">
-          <h2>Daftarkan customer sebagai apa?</h2>
-          <p>Pilihan ini menentukan field yang perlu diisi</p>
+          <h2>Register customer as what?</h2>
+          <p>Pickan ini menentukan field that needs diisi</p>
           <div className="entity-cards">
             <div className="ec" onClick={() => setEntityType("perusahaan")}>
               <div className="ec-icon">
                 <svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>
               </div>
-              <div className="ec-title">Perusahaan</div>
-              <div className="ec-desc">Memiliki badan hukum atau usaha terdaftar</div>
-              <div className="ec-eg">PT, CV, UD, Firma, Koperasi, BUMN</div>
+              <div className="ec-title">Company</div>
+              <div className="ec-desc">Has legal entity or registered business</div>
+              <div className="ec-eg">PT, CV, UD, Firma, Cooperative, BUMN</div>
             </div>
             <div className="ec" onClick={() => setEntityType("individu")}>
               <div className="ec-icon">
                 <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
               </div>
-              <div className="ec-title">Individu</div>
-              <div className="ec-desc">Perorangan, bukan atas nama badan usaha</div>
-              <div className="ec-eg">Freelancer, reseller perorangan, konsumen langsung</div>
+              <div className="ec-title">Individual</div>
+              <div className="ec-desc">Individual, not under a legal entity</div>
+              <div className="ec-eg">Freelancer, individual reseller, direct consumer</div>
             </div>
           </div>
         </div>
@@ -211,16 +211,16 @@ export default function CustomerCreatePage() {
   return (
     <div className="addpage">
       <div className="ap-head">
-        <button className="ap-close" onClick={backToStep0} aria-label="Ganti tipe">
+        <button className="ap-close" onClick={backToStep0} aria-label="Change type">
           <svg viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
         </button>
-        <div className="ap-title">Tambah Customer Baru</div>
+        <div className="ap-title">Add New Customer</div>
         <span className={`entity-pill ${entityType}`} onClick={backToStep0}>
-          {isPerusahaan ? "🏢 Perusahaan" : "👤 Individu"}
+          {isCompany ? "🏢 Company" : "👤 Individual"}
           <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </span>
-        <div className="ap-hint" style={{ flex: 1, marginLeft: 4 }}>Field bertanda <span style={{ color: "var(--color-danger-text)", fontWeight: 700 }}>*</span> wajib diisi</div>
-        <button className="ap-close" onClick={() => navigate("/customers")} aria-label="Batal">
+        <div className="ap-hint" style={{ flex: 1, marginLeft: 4 }}>Fields marked <span style={{ color: "var(--color-danger-text)", fontWeight: 700 }}>*</span> are required</div>
+        <button className="ap-close" onClick={() => navigate("/customers")} aria-label="Cancel">
           <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
@@ -228,7 +228,7 @@ export default function CustomerCreatePage() {
       <div className="ap-s1" style={{ alignItems: "stretch", padding: "32px 24px 80px" }}>
         <div style={{ width: "100%", maxWidth: 720, margin: "0 auto" }}>
 
-          {/* Foto */}
+          {/* Photo */}
           <div className="form-sec card">
             <div className="vc-photo">
               <div className="vc-photo-preview" onClick={() => photoRef.current?.click()}>
@@ -240,46 +240,46 @@ export default function CustomerCreatePage() {
               </div>
               <div className="vc-photo-info">
                 <div className="vc-photo-title">
-                  {isPerusahaan ? "Foto Perusahaan / Logo" : "Foto Profil"}
+                  {isCompany ? "Company Photo / Logo" : "Profile Photo"}
                   <span className="vc-photo-optional">(opsional)</span>
                 </div>
-                <div className="vc-photo-sub">Akan ditampilkan di tabel dan detail customer. JPG/PNG, maks. 2 MB.</div>
+                <div className="vc-photo-sub">Akan dishow di tabel and detail customer. JPG/PNG, maks. 2 MB.</div>
               </div>
-              <button className="vc-photo-btn" onClick={() => photoRef.current?.click()}>Pilih Foto</button>
+              <button className="vc-photo-btn" onClick={() => photoRef.current?.click()}>Pick Photo</button>
               <input type="file" ref={photoRef} accept="image/*" style={{ display: "none" }} onChange={onPhotoChange} />
             </div>
           </div>
 
-          {/* Identitas */}
+          {/* Information */}
           <div className="form-sec card">
-            <div className="form-sec-title">{isPerusahaan ? "Identitas Perusahaan" : "Identitas Customer"}</div>
+            <div className="form-sec-title">{isCompany ? "Company Information" : "Customer Information"}</div>
             <div className="fg2">
               <div className="form-fld">
-                <label>Kode Customer</label>
+                <label>Customer Code</label>
                 <input type="text" value={code} onChange={(e) => setCode(e.target.value)} placeholder="C-071" style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }} />
-                <span className="vc-hint">Kosongkan untuk auto-generate</span>
+                <span className="vc-hint">Kosongkan for auto-generate</span>
               </div>
               <div className="form-fld">
-                <label>{isPerusahaan ? "Nama Perusahaan" : "Nama Lengkap"} <span className="vc-req">*</span></label>
-                <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder={isPerusahaan ? "PT Maju Bersama" : "Budi Santoso"} />
+                <label>{isCompany ? "Company Name" : "Full Name"} <span className="vc-req">*</span></label>
+                <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder={isCompany ? "PT Maju Bersame" : "Budi Santoso"} />
               </div>
             </div>
-            {isPerusahaan ? (
+            {isCompany ? (
               <>
                 <div className="form-fld" style={{ marginBottom: 10 }}>
-                  <label>Nama Legal (sesuai akta / NPWP)</label>
-                  <input type="text" value={legalName} onChange={(e) => setLegalName(e.target.value)} placeholder="PT Maju Bersama Sejahtera" />
-                  <span className="vc-hint">Kosongkan jika sama dengan nama di atas</span>
+                  <label>Legal Name (as of akta / NPWP)</label>
+                  <input type="text" value={legalName} onChange={(e) => setLegalName(e.target.value)} placeholder="PT Maju Bersame Sejahtera" />
+                  <span className="vc-hint">Kosongkan jika same with nama di for</span>
                 </div>
                 <div className="fg2">
                   <div className="form-fld">
-                    <label>Jenis Badan Usaha</label>
+                    <label>Entity Type</label>
                     <select value={entityForm} onChange={(e) => setEntityForm(e.target.value)}>
                       {ENTITY_FORMS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
                     </select>
                   </div>
                   <div className="form-fld">
-                    <label>NPWP Perusahaan</label>
+                    <label>NPWP Company</label>
                     <input type="text" value={npwp} onChange={(e) => setNpwp(e.target.value)} placeholder="01.234.567.8-001.000" style={{ fontFamily: "var(--font-mono)" }} />
                   </div>
                 </div>
@@ -292,14 +292,14 @@ export default function CustomerCreatePage() {
               </div>
             )}
             <div className="form-fld" style={{ marginBottom: 0 }}>
-              <label>Alamat Penagihan <span className="vc-req">*</span></label>
-              <textarea value={address} onChange={(e) => setAddress(e.target.value)} rows={2} placeholder={isPerusahaan ? "Jl. Sudirman No. 1, Jakarta Selatan 12930" : "Jl. Kemang Raya No. 8, Jakarta Selatan 12730"} />
+              <label>Billing Address <span className="vc-req">*</span></label>
+              <textarea value={address} onChange={(e) => setAddress(e.target.value)} rows={2} placeholder={isCompany ? "Jl. Sudirman No. 1, Jakarta Selatan 12930" : "Jl. Kemang Raya No. 8, Jakarta Selatan 12730"} />
             </div>
           </div>
 
-          {/* Term Pembayaran & Kredit */}
+          {/* Payment Terms & Credit */}
           <div className="form-sec card">
-            <div className="form-sec-title">Term Pembayaran &amp; Kredit</div>
+            <div className="form-sec-title">Payment Terms &amp; Credit</div>
             <div className="fg3">
               <div className="form-fld">
                 <label>Term of Payment <span className="vc-req">*</span></label>
@@ -308,12 +308,12 @@ export default function CustomerCreatePage() {
                 </select>
               </div>
               <div className="form-fld">
-                <label>Batas Kredit (IDR)</label>
+                <label>Credit Limit (IDR)</label>
                 <input type="text" value={fmtCurrency(creditLimit)} onChange={(e) => setCreditLimit(e.target.value)} placeholder="50.000.000" style={{ fontFamily: "var(--font-mono)" }} />
-                <span className="vc-hint">Kosongkan = tidak ada batas</span>
+                <span className="vc-hint">Kosongkan = none bfor</span>
               </div>
               <div className="form-fld">
-                <label>Mata Uang</label>
+                <label>Currency</label>
                 <select value={currency} onChange={(e) => setCurrency(e.target.value)}>
                   {CURRENCY_OPTIONS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
                 </select>
@@ -321,31 +321,31 @@ export default function CustomerCreatePage() {
             </div>
           </div>
 
-          {/* Kontak */}
+          {/* Contact */}
           <div className="form-sec card">
-            <div className="form-sec-title">Kontak</div>
+            <div className="form-sec-title">Contact</div>
             <div className="ct-list">
               {contacts.map((c, i) => (
                 <div className="ctcard" key={i}>
                   <div className="ctcard-head">
                     <div className="ctcard-lbl">
                       <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                      {c.primary ? "Kontak Utama" : `Kontak ${i + 1}`}
+                      {c.primary ? "Primary Contact" : `Contact ${i + 1}`}
                     </div>
                     {c.primary ? (
-                      <span className="primary-badge">Utama</span>
+                      <span className="primary-badge">Primary</span>
                     ) : (
-                      <button className="btn-del-bank" onClick={() => delContact(i)} aria-label="Hapus kontak">
+                      <button className="btn-del-bank" onClick={() => delContact(i)} aria-label="Delete contact">
                         <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                       </button>
                     )}
                   </div>
                   <div className="fg2">
                     <div className="form-fld">
-                      <label>Nama <span className="vc-req">*</span></label>
-                      <input type="text" value={c.name} onChange={(e) => updateContact(i, { name: e.target.value })} placeholder={c.primary ? "Nama kontak utama" : "Nama kontak"} />
+                      <label>Name <span className="vc-req">*</span></label>
+                      <input type="text" value={c.name} onChange={(e) => updateContact(i, { name: e.target.value })} placeholder={c.primary ? "Primary contact name" : "Contact name"} />
                     </div>
-                    {isPerusahaan ? (
+                    {isCompany ? (
                       <div className="form-fld">
                         <label>Jabatan</label>
                         <input type="text" value={c.title} onChange={(e) => updateContact(i, { title: e.target.value })} placeholder="Finance Manager" />
@@ -358,7 +358,7 @@ export default function CustomerCreatePage() {
                       <input type="tel" value={c.phone} onChange={(e) => updateContact(i, { phone: e.target.value })} placeholder="+62 812-3456-7890" style={{ fontFamily: "var(--font-mono)" }} />
                       <label className="wa-chk">
                         <input type="checkbox" checked={c.waSame} onChange={(e) => updateContact(i, { waSame: e.target.checked })} />
-                        Nomor ini juga WA
+                        Number ini juga WA
                       </label>
                     </div>
                   </div>
@@ -367,9 +367,9 @@ export default function CustomerCreatePage() {
                       <label>Email <span className="vc-req">*</span></label>
                       <input type="email" value={c.email} onChange={(e) => updateContact(i, { email: e.target.value })} placeholder="nama@perusahaan.co.id" />
                     </div>
-                    {isPerusahaan ? (
+                    {isCompany ? (
                       <div className="form-fld">
-                        <label>Email Finance / AP</label>
+                        <label>Finance / AP Email</label>
                         <input type="email" value={c.emailFin} onChange={(e) => updateContact(i, { emailFin: e.target.value })} placeholder="finance@perusahaan.co.id" />
                         <span className="vc-hint">Khusus terima invoice</span>
                       </div>
@@ -378,17 +378,17 @@ export default function CustomerCreatePage() {
                 </div>
               ))}
             </div>
-            {isPerusahaan && (
+            {isCompany && (
               <button className="btn-add-bank" onClick={addContact}>
                 <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                Tambah Kontak
+                Add Contact
               </button>
             )}
           </div>
 
-          {/* Pengiriman Invoice */}
+          {/* Invoice Delivery */}
           <div className="form-sec card">
-            <div className="form-sec-title">Pengiriman Invoice</div>
+            <div className="form-sec-title">Invoice Delivery</div>
             <div className="inv-opts">
               <div className={`inv-opt${invMode === "manual" ? " sel" : ""}`} onClick={() => setInvMode("manual")}>
                 <div className="inv-opt-title">
@@ -397,23 +397,23 @@ export default function CustomerCreatePage() {
                   </div>
                   Manual
                 </div>
-                <div className="inv-opt-sub">Finance kirim sendiri dari menu Invoices</div>
+                <div className="inv-opt-sub">Finance sends manually from Invoices menu</div>
               </div>
               <div className={`inv-opt${invMode === "auto" ? " sel" : ""}`} onClick={() => setInvMode("auto")}>
                 <div className="inv-opt-title">
                   <div className="inv-opt-icon">
                     <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
                   </div>
-                  Otomatis
+                  Automatic
                 </div>
-                <div className="inv-opt-sub">Sistem kirim sesuai jadwal & channel</div>
+                <div className="inv-opt-sub">System sends as of schedule & channel</div>
               </div>
             </div>
 
             {invMode === "auto" && (
               <div className="auto-fields">
                 <div style={{ marginBottom: 12, marginTop: 14 }}>
-                  <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--color-text-tertiary)", marginBottom: 6 }}>Kirim via</div>
+                  <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--color-text-tertiary)", marginBottom: 6 }}>Send via</div>
                   <div className="ch-chips">
                     <div className={`ch-chip${chEmail ? " on" : ""}`} onClick={() => setChEmail(!chEmail)}>
                       <svg viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22 6 12 13 2 6"/></svg>
@@ -427,9 +427,9 @@ export default function CustomerCreatePage() {
                 </div>
                 {chEmail && (
                   <div className="form-fld" style={{ marginBottom: 10 }}>
-                    <label>Email tujuan <span className="vc-req">*</span></label>
+                    <label>Recipient Email <span className="vc-req">*</span></label>
                     <input type="text" value={destEmail} onChange={(e) => setDestEmail(e.target.value)} placeholder="finance@perusahaan.co.id" />
-                    <span className="vc-hint">Pisahkan beberapa alamat dengan koma</span>
+                    <span className="vc-hint">Pisahkan beberapa alongt with koma</span>
                   </div>
                 )}
                 {chWa && (
@@ -440,25 +440,25 @@ export default function CustomerCreatePage() {
                 )}
                 <div className="fg2">
                   <div className="form-fld">
-                    <label>Kirim pada</label>
+                    <label>Send pada</label>
                     <select value={schWhen} onChange={(e) => setSchWhen(e.target.value)}>
                       {SCHEDULE_OPTIONS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
                     </select>
                   </div>
                   <div className="form-fld">
                     <label>Jam pengiriman</label>
-                    <input type="time" value={schTime} onChange={(e) => setSchTime(e.target.value)} style={{ fontFamily: "var(--font-mono)" }} />
+                    <input type="teame" value={schTime} onChange={(e) => setSchTime(e.target.value)} style={{ fontFamily: "var(--font-mono)" }} />
                   </div>
                 </div>
                 {schWhen === "manual" && (
                   <div className="form-fld" style={{ marginTop: 10 }}>
-                    <label>Tanggal kirim <span className="vc-req">*</span></label>
+                    <label>Date kirim <span className="vc-req">*</span></label>
                     <input type="date" value={schManualDate} onChange={(e) => setSchManualDate(e.target.value)} style={{ fontFamily: "var(--font-mono)" }} />
-                    <span className="vc-hint">Invoice akan dikirim pada tanggal dan jam yang ditentukan</span>
+                    <span className="vc-hint">Invoice akan sent on date and time that ditentukan</span>
                   </div>
                 )}
                 <div className="form-fld" style={{ marginTop: 10, marginBottom: 0 }}>
-                  <label>Reminder jatuh tempo</label>
+                  <label>Reminder due</label>
                   <select value={reminder} onChange={(e) => setReminder(e.target.value)}>
                     {REMINDER_OPTIONS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
                   </select>
@@ -467,12 +467,12 @@ export default function CustomerCreatePage() {
             )}
           </div>
 
-          {/* Catatan Internal */}
+          {/* Internal Notes */}
           <div className="form-sec card">
-            <div className="form-sec-title">Catatan Internal</div>
+            <div className="form-sec-title">Internal Notes</div>
             <div className="form-fld" style={{ marginBottom: 0 }}>
-              <label>Catatan</label>
-              <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} placeholder="Catatan internal tentang customer ini (tidak terlihat customer)" />
+              <label>Notes</label>
+              <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} placeholder="Internal notes about this customer (not visible to customer)" />
             </div>
           </div>
 
@@ -480,11 +480,11 @@ export default function CustomerCreatePage() {
       </div>
 
       <div className="ap-foot">
-        <span className="ap-hint">Customer akan langsung aktif setelah disimpan.</span>
-        <button className="ap-btn" onClick={backToStep0}>Ganti Tipe</button>
+        <span className="ap-hint">Customer will be active immediately after saving.</span>
+        <button className="ap-btn" onClick={backToStep0}>Change Type</button>
         <button className="ap-btn-send" onClick={onSave}>
           <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
-          Simpan Customer
+          Save Customer
         </button>
       </div>
 

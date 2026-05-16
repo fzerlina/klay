@@ -38,7 +38,7 @@ function CustomerCombobox({ value, onChange, customers }) {
             <span className="cust-combo-addr">{selected.address}</span>
           </>
         ) : (
-          <span className="cust-combo-placeholder">Pilih Customer…</span>
+          <span className="cust-combo-placeholder">Pick Customer…</span>
         )}
         <svg className="cust-combo-chev" viewBox="0 0 24 24">
           <polyline points="6 9 12 15 18 9" />
@@ -51,12 +51,12 @@ function CustomerCombobox({ value, onChange, customers }) {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Cari nama atau alamat…"
+              placeholder="Search name or address…"
               autoFocus
             />
           </div>
           <div className="cust-combo-list">
-            {list.length === 0 && <div className="cust-combo-empty">Tidak ada customer cocok</div>}
+            {list.length === 0 && <div className="cust-combo-empty">None customer matching</div>}
             {list.map((c) => (
               <div
                 key={c.id}
@@ -88,7 +88,7 @@ const PRODS = [
   { id: "P4", name: "Produk Divisi B - Kemasan Standar", unit: "unit", price: 175000, sku: "DIV-B-STD" },
   { id: "P5", name: "Produk Divisi B - Paket Grosir", unit: "unit", price: 150000, sku: "DIV-B-GRO" },
   { id: "P6", name: "Jasa Setup & Training", unit: "jasa", price: 2000000, sku: "SVC-SETUP" },
-  { id: "P7", name: "Jasa Konsultasi Bulanan", unit: "jasa", price: 5000000, sku: "SVC-CONS" },
+  { id: "P7", name: "Jasa Konsultasi Monthan", unit: "jasa", price: 5000000, sku: "SVC-CONS" },
 ];
 
 const UNITS = ["unit", "paket", "kg", "jasa", "buah", "set"];
@@ -170,12 +170,12 @@ export default function InvoiceCreatePage() {
     setTimeout(() => goToReview(), 3700);
   }
   function goToReview() {
-    // Prefill from a fake AI result — same anchor as the HTML reference.
+    // Prefill from a fato AI result — same anchor as the HTML reference.
     setCustId("C004");
     setCustPO("PO-HMS-2025-007");
     setDate("2025-04-20");
     setDue("2025-06-14");
-    setMemo("Order rutin Q2 — terima kasih atas kerja samanya.");
+    setMemo("Regular Q2 order — terima cashih for kerja yours.");
     setItems([
       { desc: "Produk Divisi A - Paket Retail Standard", qty: 20, unit: "paket", price: 2200000 },
     ]);
@@ -214,7 +214,7 @@ export default function InvoiceCreatePage() {
     setShowProdDrawer(false);
   }
   function addAttach() {
-    const names = ["dokumen_po.pdf", "lampiran_kontrak.pdf", "bukti_order.jpg"];
+    const names = ["dokumen_po.pdf", "lampiran_contract.pdf", "evidence_order.jpg"];
     setAttachments((p) => [...p, { name: names[Math.floor(Math.random() * names.length)], size: "PDF · 1.2 MB", fromPO: false }]);
   }
   function delAttach(i) {
@@ -247,11 +247,11 @@ export default function InvoiceCreatePage() {
   function onSaveDraft() {
     const draft = buildDraft();
     if (!draft) {
-      showToast("Pilih customer dulu");
+      showToast("Pick customer dulu");
       return;
     }
     if (!items.length) {
-      showToast("Tambahkan minimal 1 item");
+      showToast("Add at least 1 item");
       return;
     }
     addInvoice(draft);
@@ -262,11 +262,11 @@ export default function InvoiceCreatePage() {
   function onOpenSend() {
     const draft = buildDraft();
     if (!draft) {
-      showToast("Pilih customer dulu");
+      showToast("Pick customer dulu");
       return;
     }
     if (!items.length) {
-      showToast("Tambahkan minimal 1 item");
+      showToast("Add at least 1 item");
       return;
     }
     setSendOpen(true);
@@ -299,13 +299,13 @@ export default function InvoiceCreatePage() {
       {/* Header */}
       <div className="ap-head">
         <div className="ap-title">
-          {mode === "upload" ? "Tambah Invoice dari PO" : "Buat Invoice Manual"}
+          {mode === "upload" ? "Add Invoice from PO" : "Create Invoice Manual"}
         </div>
         {mode === "upload" && (
           <div className="ap-stepper">
             {[
               { n: 1, label: "Upload Dokumen", done: step !== "upload", active: step === "upload" },
-              { n: 2, label: "Review & Simpan", done: false, active: step === "review" || step === "scanning" },
+              { n: 2, label: "Review & Save", done: false, active: step === "review" || step === "scanning" },
             ].map((s, i) => (
               <span key={s.n} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                 <div className={`ap-step${s.active ? " active" : ""}${s.done ? " done" : ""}`}>
@@ -337,9 +337,9 @@ export default function InvoiceCreatePage() {
             </div>
             <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Drag & drop file di sini</div>
             <div style={{ fontSize: 12, color: "var(--color-text-tertiary)", marginBottom: 14 }}>
-              atau klik untuk memilih dari perangkat kamu
+              atau klik for memilih from perangkat kamu
             </div>
-            <button className="upload-zone-cta" onClick={(e) => { e.stopPropagation(); simulateScan(); }}>Pilih File</button>
+            <button className="upload-zone-cta" onClick={(e) => { e.stopPropagation(); simulateScan(); }}>Choose File</button>
           </div>
           <div className="ftgrid">
             <div className="ftcard">
@@ -347,15 +347,15 @@ export default function InvoiceCreatePage() {
                 <svg viewBox="0 0 24 24" style={{ stroke: "var(--color-action)" }}><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/></svg>
               </div>
               <div className="ftcard-title">Screenshot</div>
-              <div className="ftcard-sub">WA, email, atau tampilan invoice digital</div>
+              <div className="ftcard-sub">WA, email, atau showingan invoice digital</div>
               <div className="ftcard-ext">JPG · PNG · WEBP</div>
             </div>
             <div className="ftcard">
               <div className="ftcard-icon" style={{ background: "var(--success-surface)" }}>
                 <svg viewBox="0 0 24 24" style={{ stroke: "var(--success-text)" }}><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
               </div>
-              <div className="ftcard-title">Foto Invoice Fisik</div>
-              <div className="ftcard-sub">Foto kamera HP pastikan teks terbaca jelas</div>
+              <div className="ftcard-title">Photo Invoice Fisik</div>
+              <div className="ftcard-sub">Photo kamera HP pastikan teks terbaca jelas</div>
               <div className="ftcard-ext">JPG · PNG · HEIC</div>
             </div>
             <div className="ftcard">
@@ -363,12 +363,12 @@ export default function InvoiceCreatePage() {
                 <svg viewBox="0 0 24 24" style={{ stroke: "var(--danger-text)" }}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
               </div>
               <div className="ftcard-title">PDF Invoice</div>
-              <div className="ftcard-sub">File PDF dari system vendor atau e-faktur</div>
+              <div className="ftcard-sub">File PDF from system vendor atau e-faktur</div>
               <div className="ftcard-ext">PDF, maks. 10 MB</div>
             </div>
           </div>
           <div style={{ fontSize: 12, color: "var(--color-text-tertiary)", textAlign: "center" }}>
-            AI akan mengekstrak semua data otomatis — kamu bisa koreksi sebelum menyimpan
+            AI akan mengekstrak semua data automatic — kamu bisa koreksi before menyimpan
           </div>
         </div>
       )}
@@ -380,7 +380,7 @@ export default function InvoiceCreatePage() {
             <div className="scan-spinner" />
             <div className="scan-loading-title">Memproses Dokumen</div>
             <div className="scan-loading-status">
-              {scanPhase === 0 && "Memverifikasi keamanan file…"}
+              {scanPhase === 0 && "Memverificashi kesafean file…"}
               {scanPhase === 1 && "Mengekstrak data invoice…"}
               {scanPhase >= 2 && "Hampir selesai…"}
             </div>
@@ -402,13 +402,13 @@ export default function InvoiceCreatePage() {
           <div className="ap-form-side">
             {aiFilled && (
               <div className="ai-fill-banner">
-                <div className="ai-fill-banner-title"><AISvg />AI mengisi otomatis dari PO customer</div>
-                <div className="ai-fill-banner-sub">Periksa setiap field. Satu field memiliki akurasi rendah — ditandai kuning.</div>
+                <div className="ai-fill-banner-title"><AISvg />AI mengisi automatic from PO customer</div>
+                <div className="ai-fill-banner-sub">Check each field. Satu field has akurasi rendah — ditandai kuning.</div>
               </div>
             )}
 
             <div className="form-sec card">
-              <div className="form-sec-title">Informasi Umum</div>
+              <div className="form-sec-title">General Information</div>
               <div className="fg2">
                 <div className="form-fld">
                   <label>Customer</label>
@@ -416,54 +416,54 @@ export default function InvoiceCreatePage() {
                 </div>
                 <div className="form-fld">
                   <label>Customer PO</label>
-                  <input type="text" value={custPO} onChange={(e) => setCustPO(e.target.value)} placeholder="No. PO dari customer" />
+                  <input type="text" value={custPO} onChange={(e) => setCustPO(e.target.value)} placeholder="PO No. from customer" />
                 </div>
               </div>
               <div className="fg3">
                 <div className="form-fld">
-                  <label>Nomor Invoice</label>
+                  <label>Invoice Number</label>
                   <input
                     type="text"
                     value={invNo}
                     readOnly
-                    placeholder="Pilih customer dulu"
+                    placeholder="Pick customer dulu"
                     style={{ fontFamily: "var(--font-mono)", color: invNo ? "var(--color-text-primary)" : "var(--color-text-tertiary)" }}
                   />
                 </div>
                 <div className="form-fld">
-                  <label>Tanggal Invoice</label>
+                  <label>Date Invoice</label>
                   <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
                 </div>
                 <div className="form-fld">
-                  <label>Jatuh Tempo</label>
+                  <label>Overdue</label>
                   <input
                     type="date"
                     value={due}
                     onChange={(e) => setDue(e.target.value)}
                     className={dueWarn ? "fld-warn-fill" : ""}
                   />
-                  {dueWarn && <div className="fld-warn-hint">⚠ Periksa kembali tanggal jatuh tempo</div>}
+                  {dueWarn && <div className="fld-warn-hint">⚠ Check kembali date due</div>}
                 </div>
               </div>
             </div>
 
             <div className="form-sec card">
-              <div className="form-sec-title">Item Invoice</div>
+              <div className="form-sec-title">Invoice Items</div>
               <div className="items-wrap">
                 <table>
                   <thead>
                     <tr>
-                      <th style={{ width: "35%" }}>Deskripsi</th>
+                      <th style={{ width: "35%" }}>Description</th>
                       <th style={{ width: "9%" }}>Qty</th>
-                      <th style={{ width: "13%" }}>Satuan</th>
-                      <th className="r" style={{ width: "17%" }}>Harga (Rp)</th>
+                      <th style={{ width: "13%" }}>Unit</th>
+                      <th className="r" style={{ width: "17%" }}>Price (Rp)</th>
                       <th className="r" style={{ width: "17%" }}>Subtotal (Rp)</th>
                       <th style={{ width: "5%" }}></th>
                     </tr>
                   </thead>
                   <tbody>
                     {items.length === 0 && (
-                      <tr><td colSpan={6} style={{ textAlign: "center", color: "var(--color-text-tertiary)", padding: 12, fontSize: 11 }}>Belum ada item</td></tr>
+                      <tr><td colSpan={6} style={{ textAlign: "center", color: "var(--color-text-tertiary)", padding: 12, fontSize: 11 }}>Not yet there is item</td></tr>
                     )}
                     {items.map((it, i) => {
                       const sub = (Number(it.qty) || 0) * (Number(it.price) || 0);
@@ -474,7 +474,7 @@ export default function InvoiceCreatePage() {
                               type="text"
                               value={it.desc}
                               readOnly
-                              placeholder="Klik untuk pilih produk…"
+                              placeholder="Klik for pilih produk…"
                               onClick={() => openProd(i)}
                               style={{ cursor: "pointer", background: it.desc ? "var(--color-surface-sunken)" : "transparent" }}
                             />
@@ -500,7 +500,7 @@ export default function InvoiceCreatePage() {
               </div>
               <button className="btn-add-row" onClick={addRow}>
                 <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                Tambah Baris
+                Add Row
               </button>
               {items.length > 0 && (
                 <div className="total-block">
@@ -520,7 +520,7 @@ export default function InvoiceCreatePage() {
                     <span className="t-row-val" style={{ color: "var(--success-text)" }}>+ {fmtNum(ppn)}</span>
                   </div>
                   <div className="t-row grand">
-                    <span className="t-row-lbl">Total Invoice</span>
+                    <span className="t-row-lbl">Total Invoices</span>
                     <span className="t-row-val">{fmtNum(total)}</span>
                   </div>
                 </div>
@@ -528,7 +528,7 @@ export default function InvoiceCreatePage() {
             </div>
 
             <div className="form-sec card">
-              <div className="form-sec-title">Lampiran</div>
+              <div className="form-sec-title">Attachments</div>
               {attachments.length > 0 && (
                 <div className="attach-list">
                   {attachments.map((a, i) => (
@@ -538,7 +538,7 @@ export default function InvoiceCreatePage() {
                       </div>
                       <div style={{ flex: 1 }}>
                         <div className="attach-name">{a.name}</div>
-                        <div className="attach-size">{a.size}{a.fromPO ? " · dari upload PO" : ""}</div>
+                        <div className="attach-size">{a.size}{a.fromPO ? " · from PO upload" : ""}</div>
                       </div>
                       <button className="attach-rm" onClick={() => delAttach(i)}>
                         <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -549,34 +549,34 @@ export default function InvoiceCreatePage() {
               )}
               <button className="btn-add-attach" onClick={addAttach}>
                 <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                Tambah Lampiran
+                Add Attachment
               </button>
             </div>
 
             <div className="form-sec card">
-              <div className="form-sec-title">Keterangan</div>
+              <div className="form-sec-title">Description</div>
               <div className="form-fld">
-                <label>Catatan / Memo</label>
-                <textarea value={memo} onChange={(e) => setMemo(e.target.value)} rows={3} placeholder="Tambahkan catatan atau instruksi khusus untuk invoice ini…" />
+                <label>Notes / Memo</label>
+                <textarea value={memo} onChange={(e) => setMemo(e.target.value)} rows={3} placeholder="Add notes or special instructions for this invoice…" />
               </div>
             </div>
 
             {total > 0 && (
-              <div className="jurnal-section">
-                <div className="jurnal-lbl">Jurnal Entry</div>
-                <table className="jurnal-table">
+              <div className="journals-section">
+                <div className="journals-lbl">Journal Entry</div>
+                <table className="journals-table">
                   <thead>
                     <tr>
-                      <th>Akun</th>
-                      <th>Nama</th>
+                      <th>Account</th>
+                      <th>Name</th>
                       <th className="r">Debit</th>
-                      <th className="r">Kredit</th>
+                      <th className="r">Credit</th>
                     </tr>
                   </thead>
                   <tbody>
                     <tr>
                       <td className="mono">1-1200</td>
-                      <td>Piutang Usaha</td>
+                      <td>Pipayables Usaha</td>
                       <td className="r">{fmtNum(total)}</td>
                       <td className="dim r">—</td>
                     </tr>
@@ -588,7 +588,7 @@ export default function InvoiceCreatePage() {
                     </tr>
                     <tr>
                       <td className="mono">2-1200</td>
-                      <td>Utang Pajak (PPN)</td>
+                      <td>Payables Tax (PPN)</td>
                       <td className="dim r">—</td>
                       <td className="r">{fmtNum(ppn)}</td>
                     </tr>
@@ -620,8 +620,8 @@ export default function InvoiceCreatePage() {
                 </div>
                 <div className="a4-head-meta">
                   <div className="a4-head-row"><span className="a4-head-lbl">Invoice</span><span className="a4-head-val">{invNo || "—"}</span></div>
-                  <div className="a4-head-row"><span className="a4-head-lbl">Tanggal</span><span className="a4-head-val">{formatDate(date)}</span></div>
-                  <div className="a4-head-row"><span className="a4-head-lbl">Jatuh Tempo</span><span className="a4-head-val">{formatDate(due)}</span></div>
+                  <div className="a4-head-row"><span className="a4-head-lbl">Date</span><span className="a4-head-val">{formatDate(date)}</span></div>
+                  <div className="a4-head-row"><span className="a4-head-lbl">Overdue</span><span className="a4-head-val">{formatDate(due)}</span></div>
                   {custPO && custPO !== "—" && (
                     <div className="a4-head-row"><span className="a4-head-lbl">Customer PO</span><span className="a4-head-val">{custPO}</span></div>
                   )}
@@ -650,7 +650,7 @@ export default function InvoiceCreatePage() {
                   <div className="a4-addr-lbl">DIKIRIM KE</div>
                   <div className="a4-addr-name">{customer?.name || "—"}</div>
                   <div className="a4-addr-line">{customer?.address || ""}</div>
-                  <div className="a4-addr-line a4-addr-muted">Sama dengan alamat tagihan</div>
+                  <div className="a4-addr-line a4-addr-muted">Sama with alongt tagihan</div>
                 </div>
               </div>
 
@@ -668,7 +668,7 @@ export default function InvoiceCreatePage() {
                   </thead>
                   <tbody>
                     {items.filter((it) => it.desc).length === 0 && (
-                      <tr><td colSpan={5} className="empty">Tambahkan item di form kiri</td></tr>
+                      <tr><td colSpan={5} className="empty">Add item di form kiri</td></tr>
                     )}
                     {items.filter((it) => it.desc).map((it, i) => (
                       <tr key={i}>
@@ -701,7 +701,7 @@ export default function InvoiceCreatePage() {
                 <div className="a4-notes-body">
                   {memo
                     ? memo
-                    : <span className="a4-notes-empty">Mohon lakukan pembayaran sebelum tanggal jatuh tempo via transfer ke BCA 8888-123-456 a.n. PT Sejahtera Makmur. Cantumkan nomor invoice sebagai berita transfer.</span>}
+                    : <span className="a4-notes-empty">Mohon lakukan payment before date due via transfer to BCA 8888-123-456 a.n. PT Sejahtera Makmur. Cantumkan nomor invoice as berita transfer.</span>}
                 </div>
               </div>
 
@@ -717,13 +717,13 @@ export default function InvoiceCreatePage() {
                   <div className="a4-sig-lbl">Diterima Oleh,</div>
                   <div className="a4-sig-box" />
                   <div className="a4-sig-name">{customer?.name || "—"}</div>
-                  <div className="a4-sig-role">Tanggal & Tanda Tangan</div>
+                  <div className="a4-sig-role">Date & Tanda Tangan</div>
                 </div>
               </div>
 
               {/* Footer */}
               <div className="a4-footer">
-                Terima kasih atas kepercayaan Anda. · invoice@sejahteramakmur.co.id · +62 21 5550 1234
+                Terima cashih for kepercayaan Anda. · invoice@sejahteramakmur.co.id · +62 21 5550 1234
               </div>
             </div>
           </div>
@@ -732,17 +732,17 @@ export default function InvoiceCreatePage() {
 
       {/* Footer */}
       <div className="ap-foot">
-        <button className="ap-btn" onClick={() => navigate("/invoices")}>Batal</button>
-        <span className="ap-hint">{step === "review" ? "Semua perubahan tersimpan otomatis" : ""}</span>
+        <button className="ap-btn" onClick={() => navigate("/invoices")}>Cancel</button>
+        <span className="ap-hint">{step === "review" ? "All perubahan tersimpan automatic" : ""}</span>
         {step === "review" && (
           <>
             <button className="ap-btn" onClick={onSaveDraft} disabled={!canSubmit}>
               <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v14a2 2 0 01-2 2z"/></svg>
-              Simpan Draft
+              Save Draft
             </button>
             <button className="ap-btn-send" onClick={onOpenSend} disabled={!canSubmit}>
               <svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-              Kirim Invoice
+              Send Invoice
             </button>
           </>
         )}
@@ -755,7 +755,7 @@ export default function InvoiceCreatePage() {
           <div className="drawer" style={{ width: 340 }}>
             <div className="drawer-head">
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="drawer-title">Pilih Produk</div>
+                <div className="drawer-title">Pick Produk</div>
               </div>
               <button className="drawer-close" onClick={() => setShowProdDrawer(false)}>
                 <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -768,7 +768,7 @@ export default function InvoiceCreatePage() {
                   type="text"
                   value={prodSearch}
                   onChange={(e) => setProdSearch(e.target.value)}
-                  placeholder="Cari nama produk…"
+                  placeholder="Search product name…"
                   style={{ border: "none", outline: "none", fontFamily: "var(--font-sans)", fontSize: 12, background: "transparent", width: "100%" }}
                   autoFocus
                 />
@@ -807,15 +807,15 @@ export default function InvoiceCreatePage() {
                 <div className="send-success-icon">
                   <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
                 </div>
-                <div className="send-success-title">Invoice terkirim ✓</div>
-                <div className="send-success-sub">Mengarahkan ke daftar invoice…</div>
+                <div className="send-success-title">Invoice sent ✓</div>
+                <div className="send-success-sub">Mengsidekan to daftar invoice…</div>
               </div>
             ) : (
               <>
-                <div className="modal-title">Kirim Invoice</div>
-                <div className="modal-sub">Invoice akan dikirimkan ke email customer. PDF dilampirkan otomatis.</div>
+                <div className="modal-title">Send Invoice</div>
+                <div className="modal-sub">Invoice akan sentkan to email customer. PDF dilampirkan automatic.</div>
                 <div className="fld">
-                  <label>Kirim ke</label>
+                  <label>Send to</label>
                   <input type="email" value={sendEmail} onChange={(e) => setSendEmail(e.target.value)} placeholder="email@customer.id" />
                 </div>
                 <div className="fld">
@@ -823,18 +823,18 @@ export default function InvoiceCreatePage() {
                   <input type="email" value={sendCC} onChange={(e) => setSendCC(e.target.value)} placeholder="cc@kamu.id" />
                 </div>
                 <div className="fld">
-                  <label>Pesan</label>
+                  <label>Message</label>
                   <textarea value={sendMsg} onChange={(e) => setSendMsg(e.target.value)} />
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "7px 10px", background: "var(--color-surface-sunken)", borderRadius: "var(--radius-sm)", marginTop: 2, fontSize: 11, color: "var(--color-text-tertiary)" }}>
                   <svg width="12" height="12" viewBox="0 0 24 24" style={{ stroke: "var(--color-action)", fill: "none", strokeWidth: 1.5 }}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/></svg>
-                  PDF invoice dilampirkan otomatis
+                  PDF invoice dilampirkan automatic
                 </div>
                 <div className="modal-footer">
-                  <button className="modal-cancel" onClick={() => setSendOpen(false)}>Batal</button>
+                  <button className="modal-cancel" onClick={() => setSendOpen(false)}>Cancel</button>
                   <button className="modal-confirm" onClick={onConfirmSend}>
                     <svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-                    Kirim Sekarang
+                    Send Sekarang
                   </button>
                 </div>
               </>

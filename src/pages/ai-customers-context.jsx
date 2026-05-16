@@ -11,7 +11,7 @@ function fmtRpShort(n) {
 
 function shortName(name) {
   if (!name) return "—";
-  const tokens = name.split(/\s+/).filter((t) => t && !/^(PT|CV|UD|Toko|Koperasi)$/i.test(t));
+  const tokens = name.split(/\s+/).filter((t) => t && !/^(PT|CV|UD|Toko|Cooperative)$/i.test(t));
   return tokens.slice(0, 2).join(" ");
 }
 
@@ -43,12 +43,12 @@ export function computeCustomersInsights(customers) {
           <strong className="lg-ai-strong">{top3.length} customer</strong>{" "}
           ({top3.map((c, i) => (
             <span key={c.id}>{i > 0 ? ", " : ""}{shortName(c.name)}</span>
-          ))}) menyumbang{" "}
-          <strong className="lg-ai-strong">{top3Pct}%</strong> dari{" "}
-          <span className="lg-ai-danger">{fmtRpShort(totalAr)}</span> piutang aktif.
+          ))}) account for{" "}
+          <strong className="lg-ai-strong">{top3Pct}%</strong> of{" "}
+          <span className="lg-ai-danger">{fmtRpShort(totalAr)}</span> receivables active.
         </>
       ),
-      question: "Customer mana yang paling besar piutangnya?",
+      question: "Which customers have the largest receivables?",
     });
   }
 
@@ -57,11 +57,11 @@ export function computeCustomersInsights(customers) {
       id: "overdueCusts",
       node: (
         <>
-          <strong className="lg-ai-strong">{overdue.length} customer</strong> punya invoice yang sudah jatuh tempo,{" "}
-          total <span className="lg-ai-danger">{fmtRpShort(overdueAr)}</span> belum tertagih.
+          <strong className="lg-ai-strong">{overdue.length} customer</strong> have invoices that are overdue,{" "}
+          total <span className="lg-ai-danger">{fmtRpShort(overdueAr)}</span> uncollected.
         </>
       ),
-      question: "Customer mana saja yang invoice-nya overdue?",
+      question: "Which customers have overdue invoices?",
     });
   }
 
@@ -70,10 +70,10 @@ export function computeCustomersInsights(customers) {
       id: "creditExceeded",
       node: (
         <>
-          <strong className="lg-ai-strong">{creditExceeded.length} customer</strong> sudah melewati credit limit — perlu diperhatikan sebelum buat invoice baru.
+          <strong className="lg-ai-strong">{creditExceeded.length} customer</strong> have exceeded credit limit — review before issuing new invoices.
         </>
       ),
-      question: "Customer mana yang melewati credit limit?",
+      question: "Which customer that passes credit limit?",
     });
   }
 
@@ -82,11 +82,11 @@ export function computeCustomersInsights(customers) {
       id: "stale",
       node: (
         <>
-          <strong className="lg-ai-strong">{stale.length} customer</strong> aktif tidak ada invoice baru lebih dari{" "}
-          <strong className="lg-ai-strong">60 hari</strong> — peluang follow-up sales.
+          <strong className="lg-ai-strong">{stale.length} customer</strong> active with no new invoices over{" "}
+          <strong className="lg-ai-strong">60 days</strong> — peluang follow-up sales.
         </>
       ),
-      question: "Customer mana yang sudah lama tidak transaksi?",
+      question: "Which customer that long since had transactions?",
     });
   }
 
@@ -96,19 +96,19 @@ export function computeCustomersInsights(customers) {
       id: "inactiveAr",
       node: (
         <>
-          <strong className="lg-ai-strong">{inactiveWithAr.length} customer non-aktif</strong> masih memiliki saldo piutang{" "}
-          <span className="lg-ai-danger">{fmtRpShort(sum)}</span> — perlu di-review.
+          <strong className="lg-ai-strong">{inactiveWithAr.length} customer inactive</strong> still have balance receivables{" "}
+          <span className="lg-ai-danger">{fmtRpShort(sum)}</span> — needs review.
         </>
       ),
-      question: "Customer non-aktif mana yang masih punya saldo?",
+      question: "Customer inactive which that masih have a balance?",
     });
   }
 
   if (insights.length === 0) {
     insights.push({
       id: "empty",
-      node: <>Tidak ada saldo piutang yang aktif — master customer bersih.</>,
-      question: "Ringkasan customer secara umum",
+      node: <>None balance receivables that active — master customer clean.</>,
+      question: "Summary customer in general",
     });
   }
 
@@ -131,14 +131,14 @@ export function makeCustomersAiContext(customers) {
     .slice(0, 3);
 
   const welcome = (
-    <p>Halo Sarah — saya sudah membaca master customer Anda. Mau saya bantu apa?</p>
+    <p>Hi Sarah — I have reviewed your customer master. How can I help?</p>
   );
 
   const suggestions = [
-    "Customer mana yang paling besar piutangnya?",
-    "Customer mana saja yang invoice-nya overdue?",
-    "Customer mana yang melewati credit limit?",
-    "Customer mana yang sudah lama tidak transaksi?",
+    "Which customers have the largest receivables?",
+    "Which customers have overdue invoices?",
+    "Which customer that passes credit limit?",
+    "Which customer that long since had transactions?",
   ];
 
   function makeTopArCustomersResponse(send) {
@@ -148,7 +148,7 @@ export function makeCustomersAiContext(customers) {
       role: "ai",
       content: (
         <>
-          <p>3 customer dengan piutang aktif terbesar:</p>
+          <p>3 customer with receivables active largest:</p>
           <div className="ai-mini-table">
             {top.map((c) => (
               <div className="ai-mini-row" key={c.id}>
@@ -156,18 +156,18 @@ export function makeCustomersAiContext(customers) {
                 <div className="ai-mini-body">
                   <div className="ai-mini-name">{c.name}</div>
                   <div className="ai-mini-meta">
-                    {c.type === "perusahaan" ? "Perusahaan" : "Individu"} · term {c.top}
-                    {c.arOverdue && <span style={{ color: "var(--color-danger-text)", fontWeight: 600 }}> · ada invoice telat</span>}
+                    {c.type === "perusahaan" ? "Company" : "Individual"} · term {c.top}
+                    {c.arOverdue && <span style={{ color: "var(--color-danger-text)", fontWeight: 600 }}> · with late invoices</span>}
                   </div>
                 </div>
                 <div className="ai-mini-amt">{fmtRpShort(c.amount)}</div>
               </div>
             ))}
           </div>
-          <p>Bersama mereka <strong>{pct}%</strong> dari total piutang aktif. Mau saya buatkan reminder?</p>
+          <p>Together they <strong>{pct}%</strong> from total receivables active. Want me to create a reminder?</p>
           <div className="chat-chips">
-            <ChatChip primary onClick={() => send("Ya, buat draft reminder untuk top 3")}>Buat reminder</ChatChip>
-            <ChatChip onClick={() => send("Lihat detail invoice per customer")}>Lihat detail invoice</ChatChip>
+            <ChatChip primary onClick={() => send("Ya, buat draft reminder for top 3")}>Create reminder</ChatChip>
+            <ChatChip onClick={() => send("View detail invoice as of customer")}>View detail invoice</ChatChip>
           </div>
         </>
       ),
@@ -176,7 +176,7 @@ export function makeCustomersAiContext(customers) {
 
   function makeOverdueResponse() {
     if (overdue.length === 0) {
-      return { role: "ai", content: <p>Tidak ada customer dengan invoice overdue saat ini.</p> };
+      return { role: "ai", content: <p>None customer with invoice overdue saat ini.</p> };
     }
     const sample = overdue.slice(0, 5);
     return {
@@ -184,7 +184,7 @@ export function makeCustomersAiContext(customers) {
       content: (
         <>
           <p>
-            <strong>{overdue.length} customer</strong> punya invoice overdue. Sample:
+            <strong>{overdue.length} customer</strong> have invoices overdue. Sample:
           </p>
           <div className="ai-mini-table">
             {sample.map((c) => (
@@ -199,8 +199,8 @@ export function makeCustomersAiContext(customers) {
             ))}
           </div>
           <div className="chat-chips">
-            <ChatChip primary>Kirim reminder massal</ChatChip>
-            <ChatChip>Lihat semuanya</ChatChip>
+            <ChatChip primary>Send reminder massal</ChatChip>
+            <ChatChip>View semuanya</ChatChip>
           </div>
         </>
       ),
@@ -209,14 +209,14 @@ export function makeCustomersAiContext(customers) {
 
   function makeCreditLimitResponse() {
     if (creditExceeded.length === 0) {
-      return { role: "ai", content: <p>Belum ada customer yang melewati credit limit.</p> };
+      return { role: "ai", content: <p>Not yet there is customer that passes credit limit.</p> };
     }
     return {
       role: "ai",
       content: (
         <>
           <p>
-            <strong>{creditExceeded.length} customer</strong> sudah melewati credit limit:
+            <strong>{creditExceeded.length} customer</strong> already passes credit limit:
           </p>
           <div className="ai-mini-table">
             {creditExceeded.slice(0, 5).map((c) => (
@@ -235,8 +235,8 @@ export function makeCustomersAiContext(customers) {
             ))}
           </div>
           <div className="chat-chips">
-            <ChatChip primary>Naikkan limit</ChatChip>
-            <ChatChip>Pause invoice baru</ChatChip>
+            <ChatChip primary>Increase limit</ChatChip>
+            <ChatChip>Pause new invoices</ChatChip>
           </div>
         </>
       ),
@@ -245,7 +245,7 @@ export function makeCustomersAiContext(customers) {
 
   function makeStaleResponse() {
     if (stale.length === 0) {
-      return { role: "ai", content: <p>Semua customer aktif transaksinya baru.</p> };
+      return { role: "ai", content: <p>All customer active transactionsnya baru.</p> };
     }
     const sample = stale.slice(0, 5);
     return {
@@ -253,7 +253,7 @@ export function makeCustomersAiContext(customers) {
       content: (
         <>
           <p>
-            <strong>{stale.length} customer</strong> aktif tidak ada invoice baru lebih dari 60 hari — kandidat reach-out sales:
+            <strong>{stale.length} customer</strong> active no new invoices over 60 days — sales follow-up candidates:
           </p>
           <div className="ai-mini-table">
             {sample.map((c) => (
@@ -261,14 +261,14 @@ export function makeCustomersAiContext(customers) {
                 <div className="ai-mini-av">{initials(c.name)}</div>
                 <div className="ai-mini-body">
                   <div className="ai-mini-name">{c.name}</div>
-                  <div className="ai-mini-meta">invoice terakhir {c.lastInv} · {daysSince(c.lastInv)} hari lalu</div>
+                  <div className="ai-mini-meta">invoice last {c.lastInv} · {daysSince(c.lastInv)} days ago</div>
                 </div>
               </div>
             ))}
           </div>
           <div className="chat-chips">
-            <ChatChip primary>Daftar lengkap</ChatChip>
-            <ChatChip>Buat campaign reach-out</ChatChip>
+            <ChatChip primary>Full list</ChatChip>
+            <ChatChip>Create campaign reach-out</ChatChip>
           </div>
         </>
       ),
@@ -277,7 +277,7 @@ export function makeCustomersAiContext(customers) {
 
   function makeInactiveResponse() {
     if (inactiveWithAr.length === 0) {
-      return { role: "ai", content: <p>Tidak ada customer non-aktif dengan saldo piutang.</p> };
+      return { role: "ai", content: <p>None customer inactive with balance receivables.</p> };
     }
     const sum = inactiveWithAr.reduce((s, c) => s + (c.ar || 0), 0);
     return {
@@ -285,12 +285,12 @@ export function makeCustomersAiContext(customers) {
       content: (
         <>
           <p>
-            <strong>{inactiveWithAr.length} customer non-aktif</strong> masih punya piutang total{" "}
+            <strong>{inactiveWithAr.length} customer inactive</strong> still have receivables total{" "}
             <span className="danger">{fmtRpShort(sum)}</span>.
           </p>
           <div className="chat-chips">
-            <ChatChip primary>Aktifkan kembali</ChatChip>
-            <ChatChip>Tandai bad debt</ChatChip>
+            <ChatChip primary>Reactivate</ChatChip>
+            <ChatChip>Mark bad debt</ChatChip>
           </div>
         </>
       ),
@@ -302,9 +302,9 @@ export function makeCustomersAiContext(customers) {
       role: "ai",
       content: (
         <>
-          <p>Saya belum bisa menjawab "{text}" di prototipe ini, tapi saya bisa bantu hal-hal berikut:</p>
+          <p>I can't answer "{text}" in this prototype, but I can help with:</p>
           <div className="chat-chips">
-            <ChatChip>Top customer piutang</ChatChip>
+            <ChatChip>Top customer receivables</ChatChip>
             <ChatChip>Customer overdue</ChatChip>
             <ChatChip>Credit limit exceeded</ChatChip>
           </div>
@@ -315,19 +315,19 @@ export function makeCustomersAiContext(customers) {
 
   function respond(text, helpers) {
     const t = text.toLowerCase();
-    if (t.includes("paling besar") || t.includes("paling banyak") || t.includes("top customer") || t.includes("piutangnya")) {
+    if (t.includes("most besar") || t.includes("most") || t.includes("top customer") || t.includes("receivables")) {
       return makeTopArCustomersResponse(helpers.send);
     }
-    if (t.includes("overdue") || t.includes("jatuh tempo") || t.includes("invoice-nya")) {
+    if (t.includes("overdue") || t.includes("due") || t.includes("their invoice")) {
       return makeOverdueResponse();
     }
     if (t.includes("credit limit") || t.includes("limit")) {
       return makeCreditLimitResponse();
     }
-    if (t.includes("lama tidak") || t.includes("dorman") || t.includes("stale")) {
+    if (t.includes("long since") || t.includes("dorman") || t.includes("stale")) {
       return makeStaleResponse();
     }
-    if (t.includes("non-aktif") || t.includes("inaktif")) {
+    if (t.includes("inactive") || t.includes("inactive")) {
       return makeInactiveResponse();
     }
     return makeDefaultResponse(text);
