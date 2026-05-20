@@ -199,13 +199,21 @@ export default function Sidebar() {
         </div>
 
         <div className="sb-search-wrap">
-          <div className="sb-search">
-            <svg viewBox="0 0 24 24">
-              <circle cx="11" cy="11" r="8" />
-              <line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
-            <input type="text" placeholder="Search menu, entries…" />
-          </div>
+          <button
+            type="button"
+            className="sb-klay-btn"
+            title="Ask Klay (⌘J)"
+            onClick={() => window.dispatchEvent(new CustomEvent("klay:open-launcher"))}
+          >
+            <span className="sb-klay-btn-icon">
+              <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M7 1.5l1.3 3.2L11.5 6l-3.2 1L7 10l-1.3-3L2.5 6l3.2-1.3L7 1.5z" />
+                <path d="M11.5 9.5l.5 1.2 1.2.5-1.2.5-.5 1.2-.5-1.2-1.2-.5 1.2-.5.5-1.2z" />
+              </svg>
+            </span>
+            <span className="sb-klay-btn-label">Ask Klay</span>
+            <span className="sb-klay-btn-kbd">⌘J</span>
+          </button>
           <button className="sb-notif-btn" type="button" title="Notifications">
             <svg viewBox="0 0 24 24">
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />

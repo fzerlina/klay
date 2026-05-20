@@ -84,7 +84,7 @@ function klayChipLabel(key, val) {
   return String(val);
 }
 
-function AiSummaryCard({ insights, onOpen }) {
+function AiSummaryCard({ insights, onAsk }) {
   const [idx, setIdx] = useState(0);
   const [fading, setFading] = useState(false);
   useEffect(() => {
@@ -102,12 +102,12 @@ function AiSummaryCard({ insights, onOpen }) {
 
   const current = insights[idx] || insights[0];
   return (
-    <button type="button" className="lg-kpi-cell lg-kpi-cell-summary" onClick={onOpen} aria-label="Open summary digest">
+    <button type="button" className="lg-kpi-cell lg-kpi-cell-summary" onClick={() => onAsk(current)} aria-label="Ask Klay about this insight">
       <div className="lg-kpi-summary-eyebrow"><KlaySparkleIcon /> Summary</div>
       <div className={`lg-kpi-summary-body${fading ? " fading" : ""}`}>{current?.node}</div>
       <div className="lg-kpi-summary-asof">as of {formatDate(TODAY.toISOString().slice(0, 10))}</div>
       <div className="lg-kpi-summary-foot">
-        <span className="lg-kpi-summary-cta">Open digest →</span>
+        <span className="lg-kpi-summary-cta">Ask Klay →</span>
         {insights.length > 1 && (
           <span className="lg-kpi-summary-dots" aria-hidden>
             {insights.map((_, i) => (
@@ -426,8 +426,8 @@ export default function JournalEntryPage() {
     toastTmr.current = setTimeout(() => setToast(""), 1800);
   }
 
-  const insights = useMemo(() => computeJournalInsights(JOURNAL_ENTRIES), []);
-  const aiContext = useMemo(() => makeJournalAiContext(JOURNAL_ENTRIES), []);
+  const insights = useMemo(() => computeJournalInsights(allRows), [allRows]);
+  const aiContext = useMemo(() => makeJournalAiContext(allRows), [allRows]);
 
   function askAi(question) {
     setSummaryOpen(false);
@@ -708,6 +708,28 @@ export default function JournalEntryPage() {
     setFilterValues(emptyFilters);
   }
 
+  // Listen for global launcher submissions
+  useEffect(() => {
+    const onOpenChat = (e) => askAi(e.detail?.question || "");
+    window.addEventListener("klay:open-chat", onOpenChat);
+    return () => window.removeEventListener("klay:open-chat", onOpenChat);
+  }, []);
+
+  // Listen for "open results in table" from chat replies
+  useEffect(() => {
+    const onApply = (e) => {
+      const q = e.detail?.query || "";
+      const parsed = parseKlayFilters(q);
+      setKlayFilters((prev) => ({ ...prev, ...parsed }));
+      setAiOpen(false);
+      setAiSeedQuestion(null);
+      const n = e.detail?.count;
+      showToast(typeof n === "number" ? `${n} journal${n === 1 ? "" : "s"} — filter applied` : "Filter applied");
+    };
+    window.addEventListener("klay:apply-filters", onApply);
+    return () => window.removeEventListener("klay:apply-filters", onApply);
+  }, []);
+
   // ⌘K / Ctrl+K to focus the bar
   useEffect(() => {
     const onKey = (e) => {
@@ -738,13 +760,16 @@ export default function JournalEntryPage() {
   }, [highlightedRef]);
 
   function exportCsv() {
+    const rowsToExport = checked.size > 0
+      ? sortedRows.filter((r) => checked.has(r.je_number))
+      : sortedRows;
     const headers = ["Journal No.", "Date", "Memo", "Status", "Lines", "Debit", "Credit", "Dibuat oleh"];
     const esc = (v) => {
       const s = String(v == null ? "" : v);
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
     };
     const lines = [headers.join(",")];
-    for (const r of sortedRows) {
+    for (const r of rowsToExport) {
       lines.push([r.je_number, r.je_date, r.memo, r.status, r.lines.length, r.debit, r.credit, r.created_by].map(esc).join(","));
     }
     const blob = new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
@@ -757,7 +782,7 @@ export default function JournalEntryPage() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    showToast(`${sortedRows.length} journals exported to CSV`);
+    showToast(`${rowsToExport.length} journals exported to CSV`);
   }
 
   function onRowAction(action, je) {
@@ -797,7 +822,7 @@ export default function JournalEntryPage() {
           </div>
 
           <div className="lg-kpi-strip kpi-5">
-            <AiSummaryCard insights={insights} onOpen={() => setSummaryOpen(true)} />
+            <AiSummaryCard insights={insights} onAsk={(insight) => askAi(insight?.question || "Tell me what stands out")} />
             <button
               type="button"
               className={`lg-kpi-cell lg-kpi-cell-ai${isCardActive("auto") ? " active" : ""}`}
@@ -871,10 +896,6 @@ export default function JournalEntryPage() {
                   </button>
                   {groupPopOpen && <GroupPopover value={effectiveGroup} onPick={(v) => { setGroupChoice(v); setGroupPopOpen(false); }} onClose={() => setGroupPopOpen(false)} />}
                 </div>
-                <button className="lg-filter-export" onClick={exportCsv}>
-                  <svg viewBox="0 0 12 12"><path d="M6 2v6M3 6l3 3 3-3M2 10.5h8" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                  Export CSV
-                </button>
                 {hasActiveFilters && <button className="lg-reset-all" onClick={resetAll}>Reset all</button>}
               </div>
             </div>
@@ -981,6 +1002,11 @@ export default function JournalEntryPage() {
           )}
         </div>
         <div className="lg-footer-right">
+          <button className="lg-footer-export" onClick={exportCsv} title="Export the rows shown above to CSV">
+            <svg viewBox="0 0 12 12"><path d="M6 2v6M3 6l3 3 3-3M2 10.5h8" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            Export {checked.size > 0 ? `${checked.size} selected` : `${filteredRows.length} visible`}
+          </button>
+          <span className="lg-footer-sep">·</span>
           <span className="lg-footer-lbl">{checked.size > 0 ? "Debit selected" : "Debit page"}</span>
           <span className="lg-footer-total">Rp {fmtRp(checked.size > 0 ? selectedDebit : pageDebit)}</span>
         </div>

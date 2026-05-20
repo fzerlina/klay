@@ -229,6 +229,9 @@
 .lg-footer-bulk-btn:hover{background:rgba(255,255,255,.22)}
 .lg-footer-clear{background:transparent;border:none;color:rgba(255,255,255,.5);cursor:pointer;font-size:11px;padding:5px 8px;font-family:var(--font-sans);white-space:nowrap}
 .lg-footer-clear:hover{color:#fff}
+.lg-footer-export{display:inline-flex;align-items:center;gap:5px;font-family:var(--font-sans);font-size:11.5px;font-weight:600;padding:5px 11px;border-radius:var(--radius-sm);cursor:pointer;background:rgba(255,255,255,.10);color:#fff;border:1px solid rgba(255,255,255,.18);transition:background var(--transition-fast),border-color var(--transition-fast);white-space:nowrap}
+.lg-footer-export:hover{background:rgba(255,255,255,.20);border-color:rgba(255,255,255,.30)}
+.lg-footer-export svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:1.7;flex-shrink:0}
 
 /* ── POPOVERS (Sort / Group / Filter) ─────────────────────────────────────── */
 .lg-meta-btn-wrap{position:relative;display:inline-flex}
@@ -451,6 +454,10 @@
 .chat-chip:hover{background:var(--color-surface-sunken);border-color:var(--color-border-strong)}
 .chat-chip.primary{background:var(--color-brand);color:#fff;border-color:var(--color-brand)}
 .chat-chip.primary:hover{background:var(--color-brand-hover);border-color:var(--color-brand-hover)}
+
+/* "Open N results in table" — full-width action CTA after a filter preview */
+.chat-chip.klay-open-in-table{display:flex;align-items:center;justify-content:center;width:100%;background:var(--color-action);border-color:var(--color-action);color:#fff;padding:8px 12px;border-radius:8px;font-size:12px;margin-top:8px;gap:6px}
+.chat-chip.klay-open-in-table:hover{background:var(--color-action-hover);border-color:var(--color-action-hover)}
 
 /* Typing indicator */
 .ai-typing{display:inline-flex;align-items:center;gap:4px}

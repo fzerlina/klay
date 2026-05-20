@@ -160,6 +160,90 @@ export function makeInvoicesAiContext(invoices) {
     };
   }
 
+  // ── Filter-intent detection + preview ──────────────────────────────────
+  const FILTER_LEAD_RE = /^(show me|show|list|find|which|open|filter|all the|give me)\b/i;
+  const FILTER_KEYWORD_RE = /\b(overdue|drafts?|sent|paid|lunas|auto|whats?app|email|this\s+(week|month)|last\s+(week|month)|0-30|30-60|60-90|90\+|days)\b/i;
+  const AMOUNT_RE = /(\d+(?:[.,]\d+)?)\s*[mb]\b/i;
+  function looksLikeFilterRequest(t) {
+    return FILTER_LEAD_RE.test(t) || FILTER_KEYWORD_RE.test(t) || AMOUNT_RE.test(t);
+  }
+
+  function pickMatching(t) {
+    const lower = t.toLowerCase();
+    let list = invoices;
+    if (/\bauto\b/.test(lower)) list = list.filter(i => i.approval === "auto");
+    else if (/\bdrafts?\b/.test(lower)) list = list.filter(i => i.approval === "draft");
+    else if (/\bsent\b/.test(lower)) list = list.filter(i => i.approval === "sent");
+    if (/\boverdue\b/.test(lower) || /\blate\b/.test(lower)) list = list.filter(i => i.payStatus === "overdue");
+    if (/\bpaid\b|\blunas\b/.test(lower)) list = list.filter(i => i.payStatus === "lunas");
+    if (/\bwhats?app\b/.test(lower)) list = list.filter(i => i.ai_source === "whatsapp");
+    if (/\b(from\s+)?email\b/.test(lower) && !/\bwhats?app\b/.test(lower)) list = list.filter(i => i.ai_source === "email");
+    const amt = lower.match(/(\d+(?:[.,]\d+)?)\s*([mb])\b/);
+    if (amt) {
+      const n = parseFloat(amt[1].replace(",", ".")) * (amt[2] === "b" ? 1e9 : 1e6);
+      list = list.filter(i => i.total >= n);
+    }
+    if (/\b90\+\b|over\s*90/.test(lower)) list = list.filter(i => i.payStatus === "overdue" && daysSince(i.due) >= 90);
+    else if (/\b60[-\s]*90\b/.test(lower)) list = list.filter(i => i.payStatus === "overdue" && daysSince(i.due) >= 60 && daysSince(i.due) < 90);
+    else if (/\b30[-\s]*60\b/.test(lower)) list = list.filter(i => i.payStatus === "overdue" && daysSince(i.due) >= 30 && daysSince(i.due) < 60);
+    else if (/\b0[-\s]*30\b/.test(lower)) list = list.filter(i => i.payStatus === "overdue" && daysSince(i.due) >= 0 && daysSince(i.due) < 30);
+    return list;
+  }
+
+  function makeFilterResponse(originalText) {
+    const matches = pickMatching(originalText);
+    if (matches.length === 0) {
+      return {
+        role: "ai",
+        content: (
+          <>
+            <p>None invoice matching <em>"{originalText}"</em> di data ini.</p>
+            <p>Coba lebih spesifik — misalnya "overdue from email" atau "auto whatsapp".</p>
+          </>
+        ),
+      };
+    }
+    const top = matches.slice(0, 3);
+    return {
+      role: "ai",
+      content: (
+        <>
+          <p>
+            Found <strong>{matches.length}</strong> {matches.length === 1 ? "invoice" : "invoices"} matching.{" "}
+            {matches.length > 3 && "Top three:"}
+          </p>
+          <div className="ai-mini-table">
+            {top.map((inv) => {
+              const cust = CUSTOMERS.find((x) => x.id === inv.customer);
+              const dpd = inv.payStatus === "overdue" ? Math.max(0, daysSince(inv.due)) : 0;
+              return (
+                <div className="ai-mini-row" key={inv.id}>
+                  <div className="ai-mini-av">{initials(cust?.name || inv.customerName)}</div>
+                  <div className="ai-mini-body">
+                    <div className="ai-mini-name">{inv.invNo === "—" ? "(Draft)" : inv.invNo}</div>
+                    <div className="ai-mini-meta">
+                      {shortName(inv.customerName)}
+                      {dpd > 0 && <> · <span className="ai-mini-meta-strong">{dpd}d</span> late</>}
+                      {inv.approval === "auto" && inv.ai_source && <> · {inv.ai_source}</>}
+                    </div>
+                  </div>
+                  <div className="ai-mini-amt">{fmtRpShort(inv.total)}</div>
+                </div>
+              );
+            })}
+          </div>
+          <button
+            type="button"
+            className="chat-chip primary klay-open-in-table"
+            onClick={() => window.dispatchEvent(new CustomEvent("klay:apply-filters", { detail: { query: originalText, count: matches.length } }))}
+          >
+            ✦ Open {matches.length} {matches.length === 1 ? "result" : "results"} in table →
+          </button>
+        </>
+      ),
+    };
+  }
+
   function respond(text, helpers) {
     const t = text.toLowerCase();
     if (t.includes("late") || t.includes("sering") || t.includes("customer which")) {
@@ -173,6 +257,9 @@ export function makeInvoicesAiContext(invoices) {
     }
     if (t.includes("last month") || t.includes("bandingkan") || t.includes("mom")) {
       return makeMoMResponse();
+    }
+    if (looksLikeFilterRequest(text)) {
+      return makeFilterResponse(text);
     }
     return makeDefaultResponse(text);
   }

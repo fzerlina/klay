@@ -271,8 +271,72 @@ export function makeJournalAiContext(entries) {
     };
   }
 
+  // ── Filter-intent detection + preview ──────────────────────────────────
+  const FILTER_LEAD_RE = /^(show me|show|list|find|which|open|filter|all the|give me)\b/i;
+  const FILTER_KEYWORD_RE = /\b(auto|flagged|drafts?|pending|posted|voided?|inventory|payroll|this\s+(week|month))\b/i;
+  const AMOUNT_RE = /(\d+(?:[.,]\d+)?)\s*[mb]\b/i;
+  function looksLikeFilterRequest(t) {
+    return FILTER_LEAD_RE.test(t) || (FILTER_KEYWORD_RE.test(t) && /^(show|list|find|which|open|filter|all|give)/i.test(t.trim())) || AMOUNT_RE.test(t);
+  }
+
+  function pickMatching(t) {
+    const lower = t.toLowerCase();
+    let list = entries;
+    if (/\bauto\b/.test(lower)) list = list.filter(e => e.status === "auto");
+    else if (/\bdrafts?\b/.test(lower)) list = list.filter(e => e.status === "draft");
+    else if (/\bpending\b/.test(lower)) list = list.filter(e => e.status === "pending");
+    else if (/\bposted\b/.test(lower)) list = list.filter(e => e.status === "posted");
+    else if (/\bvoided?\b/.test(lower)) list = list.filter(e => e.status === "void");
+    if (/\binventory\b/.test(lower)) {
+      list = list.filter(e => /inventor/i.test(e.memo) || e.lines.some(l => /inventor/i.test(l.account_name || "")));
+    } else if (/\bpayroll\b/.test(lower)) {
+      list = list.filter(e => /payroll|salar|wage/i.test(e.memo) || e.lines.some(l => /payroll|salar|wage/i.test(l.account_name || "")));
+    }
+    const amt = lower.match(/(\d+(?:[.,]\d+)?)\s*([mb])\b/);
+    if (amt) {
+      const n = parseFloat(amt[1].replace(",", ".")) * (amt[2] === "b" ? 1e9 : 1e6);
+      list = list.filter(e => entryDebit(e) >= n);
+    }
+    return list;
+  }
+
+  function makeFilterResponse(originalText) {
+    const matches = pickMatching(originalText);
+    if (matches.length === 0) {
+      return {
+        role: "ai",
+        content: (
+          <>
+            <p>None journals matching <em>"{originalText}"</em>.</p>
+            <p>Coba lebih spesifik — misalnya "show pending inventory" atau "list drafts above 50M".</p>
+          </>
+        ),
+      };
+    }
+    return {
+      role: "ai",
+      content: (
+        <>
+          <p>
+            Found <strong>{matches.length}</strong> {matches.length === 1 ? "journal" : "journals"} matching.{" "}
+            {matches.length > 3 && "Top three:"}
+          </p>
+          {rowList(matches, 3)}
+          <button
+            type="button"
+            className="chat-chip primary klay-open-in-table"
+            onClick={() => window.dispatchEvent(new CustomEvent("klay:apply-filters", { detail: { query: originalText, count: matches.length } }))}
+          >
+            ✦ Open {matches.length} {matches.length === 1 ? "result" : "results"} in table →
+          </button>
+        </>
+      ),
+    };
+  }
+
   function respond(text, helpers) {
     const t = text.toLowerCase();
+    if (looksLikeFilterRequest(text)) return makeFilterResponse(text);
     if (t.includes("draft") || t.includes("post")) return makeDraftResponse(helpers.send);
     if (t.includes("pending") || t.includes("approval") || t.includes("awaiting")) return makePendingResponse();
     if (t.includes("debit") || t.includes("credit") || t.includes("balanced") || t.includes("balance") || t.includes("total")) return makeBalanceResponse();
