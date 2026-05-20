@@ -1,9 +1,9 @@
 @import url("https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@300;400;500;600;700&family=Inconsolata:wght@400;600&family=Playfair+Display:wght@700;900&display=swap");
 
 :root{
-  --color-brand:#B83D08;--color-brand-hover:#A03206;
-  --color-brand-subtle:#EDD5C4;--color-brand-wash:#F7EDE5;--color-brand-deep:#3D1200;
-  --color-action:#1A46C8;--color-action-hover:#1338A8;
+  --color-brand:#B83D08;--color-brand-hover:#A03206;--color-brand-mid:#D4622A;
+  --color-brand-subtle:#F4E6DB;--color-brand-wash:#F7EDE5;--color-brand-deep:#3D1200;
+  --color-action:#1A46C8;--color-action-hover:#1338A8;--color-action-mid:#4D72E0;
   --color-action-subtle:#C8D8FA;--color-action-wash:#EBF0FD;
   --color-text-primary:#080706;--color-text-secondary:#2E2B27;--color-text-tertiary:#8C857C;--color-text-disabled:#C8C2BA;
   --color-surface-base:#FBF8F5;--color-surface-raised:#FFFFFF;--color-surface-sunken:#F4F0EB;--color-surface-overlay:#1A1814;--color-surface-deep:#080706;

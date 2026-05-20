@@ -40,8 +40,77 @@ function shortName(name) {
   return tokens.slice(0, 2).join(" ");
 }
 
-const APPROVAL_LABEL = { sent: "Sent", draft: "Draft" };
+const APPROVAL_LABEL = { sent: "Sent", draft: "Draft", auto: "Auto" };
 const PAY_LABEL = { lunas: "Paid", overdue: "Overdue", belumbayar: "Unpaid" };
+
+// ── Klay command bar: intent + filter parsing (mock; replace with LLM later) ──
+const INV_REF_RE = /^INV-[A-Z0-9]+-\d+$/i;
+const ACTION_VERB_RE = /^(send|remind|draft|generate|create|issue|email|whatsapp)\s+/i;
+const QUESTION_LEAD_RE = /^(what|why|how|when|where|who|which|whose|explain|show|tell|can|could|should|is|are|do|does|did|will|would|may|might)\b/i;
+
+function detectKlayIntent(q) {
+  const trimmed = q.trim();
+  if (!trimmed) return null;
+  if (INV_REF_RE.test(trimmed)) return "lookup";
+  if (trimmed.endsWith("?") || QUESTION_LEAD_RE.test(trimmed)) return "question";
+  if (ACTION_VERB_RE.test(trimmed)) return "action";
+  return "filter";
+}
+
+function parseKlayFilters(q) {
+  const out = {};
+  const lower = q.toLowerCase();
+  if (/\bauto\b/.test(lower)) out.status = "auto";
+  else if (/\bdrafts?\b/.test(lower)) out.status = "draft";
+  else if (/\bsent\b/.test(lower)) out.status = "sent";
+  if (/\boverdue\b/.test(lower) || /\blate\b/.test(lower)) out.payStatus = "overdue";
+  else if (/\bpaid\b|\blunas\b/.test(lower)) out.payStatus = "lunas";
+  if (/\bfrom\s+whats?app\b|\bvia\s+whats?app\b|\bwhats?app\b/.test(lower)) out.source = "whatsapp";
+  else if (/\bfrom\s+email\b|\bvia\s+email\b/.test(lower)) out.source = "email";
+  const mShort = lower.match(/(\d+(?:[.,]\d+)?)\s*([mb])\b/);
+  if (mShort) {
+    const n = parseFloat(mShort[1].replace(",", "."));
+    out.amountMin = Math.round(n * (mShort[2] === "b" ? 1e9 : 1e6));
+  } else {
+    const mLong = lower.match(/(?:above|over|>=?|min(?:imum)?)\s*rp?\s*([\d.,]+)/);
+    if (mLong) out.amountMin = parseInt(mLong[1].replace(/[.,]/g, ""), 10);
+  }
+  if (/\bthis\s+week\b/.test(lower)) out.dateRange = "thisWeek";
+  else if (/\bthis\s+month\b/.test(lower)) out.dateRange = "thisMonth";
+  if (/\b(90\+|over\s*90|>\s*90)\b/.test(lower)) out.aging = "90+";
+  else if (/\b60[-\s]*90\b/.test(lower)) out.aging = "60-90";
+  else if (/\b30[-\s]*60\b/.test(lower)) out.aging = "30-60";
+  else if (/\b0[-\s]*30\b/.test(lower)) out.aging = "0-30";
+  if (Object.keys(out).length === 0) out.freeText = q.trim();
+  return out;
+}
+
+function klayChipLabel(key, val) {
+  if (key === "status") return `Status: ${val[0].toUpperCase()}${val.slice(1)}`;
+  if (key === "payStatus") return `${val === "lunas" ? "Paid" : "Overdue"}`;
+  if (key === "source") return `From ${val === "whatsapp" ? "WhatsApp" : "Email"}`;
+  if (key === "amountMin") return `≥ Rp ${val.toLocaleString("id-ID", { maximumFractionDigits: 0 })}`;
+  if (key === "dateRange") return val === "thisWeek" ? "This week" : "This month";
+  if (key === "aging") return `Aging ${val}`;
+  if (key === "freeText") return `“${val}”`;
+  return String(val);
+}
+
+// Auto-invoices: mock dataset of drafts Klay AI parsed from WhatsApp / email
+const AUTO_PROCESSED_COUNT = 8;
+
+function generateInvoiceAiSummary(inv, source) {
+  const n = inv.items?.length || 1;
+  const cust = inv.customerName || "the customer";
+  const totalShort =
+    inv.total >= 1e9 ? `Rp ${(inv.total / 1e9).toFixed(1)}M`
+    : inv.total >= 1e6 ? `Rp ${(inv.total / 1e6).toFixed(1)}jt`
+    : `Rp ${inv.total?.toLocaleString("id-ID")}`;
+  if (source === "whatsapp") {
+    return `Klay parsed WhatsApp from ${cust} — extracted ${n} line item${n > 1 ? "s" : ""}, total ${totalShort}.`;
+  }
+  return `Klay parsed email from ${cust}${inv.custEmail ? ` (${inv.custEmail})` : ""} — ${n} line item${n > 1 ? "s" : ""}, total ${totalShort}.`;
+}
 
 function payBadgeClass(payStatus) {
   if (payStatus === "lunas") return "badge-lunas";
@@ -214,11 +283,9 @@ function SparkleIcon({ size = 11 }) {
   );
 }
 
-function AiSubtitle({ insights, onOpenSummary, onOpenChat, chatActive, summaryActive }) {
+function AiSummaryCard({ insights, onOpen }) {
   const [idx, setIdx] = useState(0);
   const [fading, setFading] = useState(false);
-
-  // Auto-rotate insights every 7s with a subtle fade transition
   useEffect(() => {
     if (insights.length <= 1) return;
     const id = setInterval(() => {
@@ -230,42 +297,76 @@ function AiSubtitle({ insights, onOpenSummary, onOpenChat, chatActive, summaryAc
     }, 7000);
     return () => clearInterval(id);
   }, [insights.length]);
-
-  // Reset when insight count changes (data shifted)
-  useEffect(() => {
-    if (idx >= insights.length) setIdx(0);
-  }, [insights.length, idx]);
-
+  useEffect(() => { if (idx >= insights.length) setIdx(0); }, [insights.length, idx]);
   const current = insights[idx] || insights[0];
-
   return (
-    <div className={`lg-ai-subtitle${summaryActive || chatActive ? " active" : ""}`}>
-      <p className={`lg-ai-text${fading ? " fading" : ""}`}>
-        <span className="lg-ai-sparkle"><SparkleIcon /></span>
-        {current?.node}
-      </p>
-      <div className="lg-ai-ctas">
-        <button
-          type="button"
-          className={`lg-ai-cta-primary${summaryActive ? " active" : ""}`}
-          onClick={onOpenSummary}
-        >
-          <SparkleIcon /> Summary
-        </button>
-        <button
-          type="button"
-          className={`lg-ai-cta-secondary${chatActive ? " active" : ""}`}
-          onClick={onOpenChat}
-        >
-          {chatActive ? "Continue chat" : "Ask Klay AI"} →
-        </button>
+    <button type="button" className="lg-kpi-cell lg-kpi-cell-summary" onClick={onOpen} aria-label="Open AI summary digest">
+      <div className="lg-kpi-summary-eyebrow"><SparkleIcon /> Summary</div>
+      <div className={`lg-kpi-summary-body${fading ? " fading" : ""}`}>{current?.node}</div>
+      <div className="lg-kpi-summary-asof">as of {formatDate(TODAY.toISOString().slice(0, 10))}</div>
+      <div className="lg-kpi-summary-foot">
+        <span className="lg-kpi-summary-cta">Open digest →</span>
         {insights.length > 1 && (
-          <div className="lg-ai-dots" aria-hidden>
+          <span className="lg-kpi-summary-dots" aria-hidden>
             {insights.map((_, i) => (
-              <span key={i} className={`lg-ai-dot${i === idx ? " on" : ""}`} />
+              <span key={i} className={`lg-kpi-summary-dot${i === idx ? " on" : ""}`} />
             ))}
-          </div>
+          </span>
         )}
+      </div>
+    </button>
+  );
+}
+
+function KlayCommandBar({ inputRef, value, onChange, onSubmit, onClear, chips, onRemoveChip, onClearChips }) {
+  return (
+    <div className="lg-klay-bar">
+      <span className="lg-klay-bar-icon" aria-hidden><SparkleIcon /></span>
+      <input
+        ref={inputRef}
+        className="lg-klay-bar-input"
+        placeholder="Search, filter, or ask Klay…"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") { e.preventDefault(); onSubmit(); }
+          else if (e.key === "Escape") { e.preventDefault(); onClear(); }
+        }}
+      />
+      {chips.map((c) => (
+        <span key={c.id} className="lg-klay-chip">
+          {c.label}
+          <button type="button" className="lg-klay-chip-x" onClick={() => onRemoveChip(c)} aria-label={`Remove ${c.label}`}>
+            <svg viewBox="0 0 10 10"><line x1="2" y1="2" x2="8" y2="8"/><line x1="8" y1="2" x2="2" y2="8"/></svg>
+          </button>
+        </span>
+      ))}
+      {chips.length > 0 && (
+        <button type="button" className="lg-klay-chips-clear" onClick={onClearChips}>Clear all</button>
+      )}
+      <span className="lg-klay-bar-hint" aria-hidden>⌘K</span>
+    </div>
+  );
+}
+
+function KlayActionModal({ intent, onClose }) {
+  if (!intent) return null;
+  return (
+    <div className="lg-klay-modal-backdrop" onClick={onClose}>
+      <div className="lg-klay-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="lg-klay-modal-head">
+          <span className="lg-klay-bar-icon" aria-hidden><SparkleIcon /></span>
+          <div className="lg-klay-modal-title">Draft invoice</div>
+        </div>
+        <div className="lg-klay-modal-body">
+          Klay detected an <strong>action</strong> intent from your query: <code>{intent.query}</code>.
+          <br /><br />
+          The draft invoice flow will open here once it's wired up.
+        </div>
+        <div className="lg-klay-modal-foot">
+          <button className="lg-klay-modal-btn" onClick={onClose}>Close</button>
+          <button className="lg-klay-modal-btn primary" onClick={onClose}>Open draft (soon)</button>
+        </div>
       </div>
     </div>
   );
@@ -287,13 +388,13 @@ function bucketOf(daysOverdue) {
 }
 
 function LedgerRow({ r, bucket, isChecked, onCheck, onClick, onKebab, isSelected, isAlt }) {
-  // Aging mini-bar applies only to overdue rows
   const isOverdue = r.payStatus === "overdue" && r.daysOverdue > 0;
   const isPaid = r.payStatus === "lunas";
   const isDraft = r.approval === "draft";
+  const isAuto = r.approval === "auto";
 
-  // Customer-attention dot color reflects payment state
   const dotTone =
+    isAuto ? "" :
     isOverdue ? (bucket?.tone === "warn" ? "warn" : "") :
     isPaid ? "success" :
     "muted";
@@ -303,7 +404,7 @@ function LedgerRow({ r, bucket, isChecked, onCheck, onClick, onKebab, isSelected
     : 0;
 
   return (
-    <div className={`lg-row${isSelected ? " selected" : ""}${isAlt ? " alt" : ""}`} onClick={onClick}>
+    <div className={`lg-row${isSelected ? " selected" : ""}${isAlt ? " alt" : ""}${isAuto ? " auto" : ""}`} onClick={onClick}>
       <div onClick={(e) => e.stopPropagation()}>
         <input type="checkbox" className="lg-row-check" checked={isChecked} onChange={() => onCheck(r.id)} />
       </div>
@@ -313,7 +414,14 @@ function LedgerRow({ r, bucket, isChecked, onCheck, onClick, onKebab, isSelected
         <span className={`lg-cell-customer-dot${dotTone ? " " + dotTone : ""}`} />
         <div className="lg-cell-customer-body">
           <div className="lg-cell-customer-name">{r.co}</div>
-          <div className="lg-cell-customer-addr">{r.addr}</div>
+          {isAuto && r.raw.ai_summary ? (
+            <div className="je-desc-ai" style={{ marginTop: 1 }}>
+              <SparkleIcon />
+              <span className="je-desc-ai-text">{r.raw.ai_summary}</span>
+            </div>
+          ) : (
+            <div className="lg-cell-customer-addr">{r.addr}</div>
+          )}
         </div>
       </div>
       <div className="lg-cell-days">
@@ -325,7 +433,12 @@ function LedgerRow({ r, bucket, isChecked, onCheck, onClick, onKebab, isSelected
       </div>
       <div className="lg-cell-due">{r.due}</div>
       <div>
-        {isOverdue ? (
+        {isAuto ? (
+          <span className="badge badge-auto">
+            <SparkleIcon />
+            Auto · {r.raw.ai_source === "whatsapp" ? "WA" : "Email"}
+          </span>
+        ) : isOverdue ? (
           <>
             <div className="lg-cell-aging-track">
               <div
@@ -623,10 +736,7 @@ export default function InvoicesPage() {
   const navigate = useNavigate();
   const { invoices, sendInvoice } = useInvoices();
 
-  const [search, setSearch] = useState("");
-  // Unified filter — either driven by a tab or by a KPI card.
-  // kind='tab' | 'card'; value is the key for that kind.
-  const [filter, setFilter] = useState({ kind: "tab", value: "jatuhtempo" });
+  const [filter, setFilter] = useState({ kind: "tab", value: "semua" });
   // Sort + group choices override per-tab defaults when non-null
   const [sortChoice, setSortChoice]   = useState(null);
   const [groupChoice, setGroupChoice] = useState(null);
@@ -664,39 +774,65 @@ export default function InvoicesPage() {
   const [sendMsg, setSendMsg] = useState("Terlampir invoice kami, mohon ditindaklanjuti.");
   const [sendSuccess, setSendSuccess] = useState(false);
 
+  // Klay command bar state
+  const [klayQuery, setKlayQuery] = useState("");
+  const [klayFilters, setKlayFilters] = useState({});
+  const [klayAction, setKlayAction] = useState(null);
+  const [highlightedRef, setHighlightedRef] = useState(null);
+  const klayInputRef = useRef(null);
+
+  // Promote N most-recent drafts to status=auto with a fabricated ai_source + ai_summary
+  const allRows = useMemo(() => {
+    const drafts = invoices
+      .filter((i) => i.approval === "draft")
+      .sort((a, b) => (b.date || "").localeCompare(a.date || ""))
+      .slice(0, AUTO_PROCESSED_COUNT);
+    const autoIds = new Set(drafts.map((i) => i.id));
+    let idx = 0;
+    return invoices.map((inv) => {
+      if (!autoIds.has(inv.id)) return inv;
+      const source = idx++ % 2 === 0 ? "whatsapp" : "email";
+      return {
+        ...inv,
+        approval: "auto",
+        ai_source: source,
+        ai_summary: generateInvoiceAiSummary(inv, source),
+      };
+    });
+  }, [invoices]);
+
   function showToast(msg) {
     setToast(msg);
     if (toastTmr.current) clearTimeout(toastTmr.current);
     toastTmr.current = setTimeout(() => setToast(""), 1800);
   }
 
-  // ── Tab counts (derived from full invoices list, before filters) ────────
+  // ── Tab counts (derived from allRows so auto is reflected) ──────────────
   const tabCounts = useMemo(() => ({
-    semua:      invoices.length,
-    sent:   invoices.filter(i => i.approval === "sent").length,
-    draft:      invoices.filter(i => i.approval === "draft").length,
-    jatuhtempo: invoices.filter(i => i.payStatus === "overdue").length,
-    lunas:      invoices.filter(i => i.payStatus === "lunas").length,
-  }), [invoices]);
+    semua:      allRows.length,
+    auto:       allRows.filter(i => i.approval === "auto").length,
+    sent:       allRows.filter(i => i.approval === "sent").length,
+    draft:      allRows.filter(i => i.approval === "draft").length,
+    jatuhtempo: allRows.filter(i => i.payStatus === "overdue").length,
+    lunas:      allRows.filter(i => i.payStatus === "lunas").length,
+  }), [allRows]);
 
   const monthPfx = useMemo(() => `${TODAY.getFullYear()}-${String(TODAY.getMonth() + 1).padStart(2, "0")}`, []);
 
-  // ── KPI strip ───────────────────────────────────────────────────────────
+  // ── KPI strip — keep 3 standard cells; AI Summary + Processed-by-AI prepended in JSX ─
   const kpis = useMemo(() => {
-    const totalPipayables     = invoices.filter(i => i.payStatus !== "lunas").reduce((s, i) => s + i.total, 0);
-    const overdue          = invoices.filter(i => i.payStatus === "overdue");
-    const overdueThisMonth = invoices.filter(i => i.payStatus === "overdue" && i.due && i.due.startsWith(monthPfx));
-    const thisMonth        = invoices.filter(i => i.date && i.date.startsWith(monthPfx));
+    const totalPipayables  = allRows.filter(i => i.payStatus !== "lunas").reduce((s, i) => s + i.total, 0);
+    const overdue          = allRows.filter(i => i.payStatus === "overdue");
+    const overdueThisMonth = allRows.filter(i => i.payStatus === "overdue" && i.due && i.due.startsWith(monthPfx));
     return [
-      { lbl: "Total AR",         card: "total",          val: "Rp " + fmtRp(totalPipayables),                                       sub: invoices.filter(i => i.payStatus !== "lunas").length + " invoice active", tone: "primary" },
-      { lbl: "Overdue",           card: "overdue",        val: "Rp " + fmtRp(overdue.reduce((s, i) => s + i.total, 0)),           sub: overdue.length + " invoice late",                                       tone: "danger"  },
-      { lbl: "Overdue Month Ini", card: "overdueMonth",   val: String(overdueThisMonth.length),                                   sub: "Rp " + fmtRp(overdueThisMonth.reduce((s, i) => s + i.total, 0)),         tone: "warn"    },
-      { lbl: "Created This Month",      card: "thisMonth",      val: "Rp " + fmtRp(thisMonth.reduce((s, i) => s + i.total, 0)),         sub: thisMonth.length + " new invoices",                                      tone: "primary" },
+      { lbl: "Total AR",          card: "total",        val: "Rp " + fmtRp(totalPipayables),                       sub: allRows.filter(i => i.payStatus !== "lunas").length + " invoice active",         tone: "primary" },
+      { lbl: "Overdue",           card: "overdue",      val: "Rp " + fmtRp(overdue.reduce((s, i) => s + i.total, 0)), sub: overdue.length + " invoice late",                                              tone: "danger"  },
+      { lbl: "Overdue This Month", card: "overdueMonth", val: String(overdueThisMonth.length),                      sub: "Rp " + fmtRp(overdueThisMonth.reduce((s, i) => s + i.total, 0)),               tone: "warn"    },
     ];
-  }, [invoices, monthPfx]);
+  }, [allRows, monthPfx]);
 
-  const insights = useMemo(() => computeInsights(invoices, TODAY), [invoices]);
-  const aiContext = useMemo(() => makeInvoicesAiContext(invoices), [invoices]);
+  const insights = useMemo(() => computeInsights(allRows, TODAY), [allRows]);
+  const aiContext = useMemo(() => makeInvoicesAiContext(allRows), [allRows]);
 
   function askAi(question) {
     setSummaryOpen(false);
@@ -706,19 +842,19 @@ export default function InvoicesPage() {
 
   // ── Step 1: corpus (pill / card filter only) ────────────────────────────
   const corpus = useMemo(() => {
-    let list = invoices;
+    let list = allRows;
     if (filter.kind === "tab") {
-      if (filter.value === "sent")        list = list.filter(i => i.approval === "sent");
+      if (filter.value === "auto")            list = list.filter(i => i.approval === "auto");
+      else if (filter.value === "sent")       list = list.filter(i => i.approval === "sent");
       else if (filter.value === "draft")      list = list.filter(i => i.approval === "draft");
       else if (filter.value === "jatuhtempo") list = list.filter(i => i.payStatus === "overdue");
       else if (filter.value === "lunas")      list = list.filter(i => i.payStatus === "lunas");
     } else if (filter.kind === "card") {
       if (filter.value === "total")             list = list.filter(i => i.payStatus !== "lunas");
       else if (filter.value === "overdueMonth") list = list.filter(i => i.payStatus === "overdue" && i.due && i.due.startsWith(monthPfx));
-      else if (filter.value === "thisMonth")    list = list.filter(i => i.date && i.date.startsWith(monthPfx));
     }
     return list;
-  }, [invoices, filter, monthPfx]);
+  }, [allRows, filter, monthPfx]);
 
   // ── Customers present in the current corpus (for Filter popover list) ───
   const customersInCorpus = useMemo(() => {
@@ -733,6 +869,8 @@ export default function InvoicesPage() {
     return Array.from(counts.values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [corpus]);
 
+  const klayFilterKeys = useMemo(() => Object.keys(klayFilters), [klayFilters]);
+
   // ── Has-any-filter flag for the "Reset all" affordance ────────────────
   const hasActiveFilters = useMemo(() => {
     return (
@@ -742,12 +880,12 @@ export default function InvoicesPage() {
       filterValues.dateFrom !== "" ||
       filterValues.dateTo !== "" ||
       filterValues.source !== "all" ||
+      klayFilterKeys.length > 0 ||
       sortChoice !== null ||
       groupChoice !== null
     );
-  }, [filterValues, sortChoice, groupChoice]);
+  }, [filterValues, klayFilterKeys, sortChoice, groupChoice]);
 
-  // Number of advanced-filter dimensions active (for badge on Filter button)
   const activeFilterCount = useMemo(() => {
     let n = 0;
     if (filterValues.customers.size > 0) n++;
@@ -757,36 +895,84 @@ export default function InvoicesPage() {
     return n;
   }, [filterValues]);
 
-  // ── Step 2: apply advanced filter + text search to the corpus ───────────
+  // Unified chip list — Klay-parsed + manual FilterPopover values
+  const activeChips = useMemo(() => {
+    const chips = [];
+    for (const key of klayFilterKeys) {
+      chips.push({ id: `klay:${key}`, source: "klay", key, label: klayChipLabel(key, klayFilters[key]) });
+    }
+    if (filterValues.customers.size > 0) {
+      chips.push({ id: "manual:customers", source: "manual", key: "customers", label: `${filterValues.customers.size} customer` });
+    }
+    if (filterValues.minAmount !== "" || filterValues.maxAmount !== "") {
+      const lo = filterValues.minAmount !== "" ? `Rp ${Number(filterValues.minAmount).toLocaleString("id-ID")}` : "—";
+      const hi = filterValues.maxAmount !== "" ? `Rp ${Number(filterValues.maxAmount).toLocaleString("id-ID")}` : "—";
+      chips.push({ id: "manual:amount", source: "manual", key: "amount", label: `${lo} – ${hi}` });
+    }
+    if (filterValues.dateFrom !== "" || filterValues.dateTo !== "") {
+      chips.push({ id: "manual:date", source: "manual", key: "date", label: `${filterValues.dateFrom || "—"} → ${filterValues.dateTo || "—"}` });
+    }
+    if (filterValues.source !== "all") {
+      chips.push({ id: "manual:source", source: "manual", key: "source", label: filterValues.source === "ai" ? "Source: AI" : "Source: Manual" });
+    }
+    return chips;
+  }, [klayFilters, klayFilterKeys, filterValues]);
+
+  // ── Step 2: apply advanced filter + Klay parsed filters to the corpus ───
   const filteredRows = useMemo(() => {
     let list = corpus;
 
-    // Customer multi-select
-    if (filterValues.customers.size > 0) {
-      list = list.filter(i => filterValues.customers.has(i.customer));
-    }
-    // Amount range
+    // Manual filter popover
+    if (filterValues.customers.size > 0) list = list.filter(i => filterValues.customers.has(i.customer));
     const min = filterValues.minAmount === "" ? null : Number(filterValues.minAmount);
     const max = filterValues.maxAmount === "" ? null : Number(filterValues.maxAmount);
     if (min != null && !isNaN(min)) list = list.filter(i => i.total >= min);
     if (max != null && !isNaN(max)) list = list.filter(i => i.total <= max);
-    // Date range (applied to either invoice date or due date)
     if (filterValues.dateFrom) list = list.filter(i => (i[filterValues.dateField] || "") >= filterValues.dateFrom);
     if (filterValues.dateTo)   list = list.filter(i => (i[filterValues.dateField] || "") <= filterValues.dateTo);
-    // Source
-    if (filterValues.source === "ai")     list = list.filter(i => i.isAI === true);
-    if (filterValues.source === "manual") list = list.filter(i => !i.isAI);
+    if (filterValues.source === "ai")     list = list.filter(i => i.isAI === true || i.approval === "auto");
+    if (filterValues.source === "manual") list = list.filter(i => !i.isAI && i.approval !== "auto");
 
-    // Text search
-    const q = search.toLowerCase().trim();
-    if (q) list = list.filter(i =>
-      i.invNo.toLowerCase().includes(q) ||
-      i.customerName.toLowerCase().includes(q) ||
-      (i.custPO && i.custPO.toLowerCase().includes(q)),
-    );
+    // Klay-parsed filters
+    if (klayFilters.status === "auto")      list = list.filter(i => i.approval === "auto");
+    else if (klayFilters.status === "sent") list = list.filter(i => i.approval === "sent");
+    else if (klayFilters.status === "draft")list = list.filter(i => i.approval === "draft");
+    if (klayFilters.payStatus === "overdue") list = list.filter(i => i.payStatus === "overdue");
+    if (klayFilters.payStatus === "lunas")   list = list.filter(i => i.payStatus === "lunas");
+    if (klayFilters.source === "whatsapp")   list = list.filter(i => i.ai_source === "whatsapp");
+    if (klayFilters.source === "email")      list = list.filter(i => i.ai_source === "email");
+    if (typeof klayFilters.amountMin === "number") list = list.filter(i => i.total >= klayFilters.amountMin);
+    if (klayFilters.dateRange === "thisMonth") {
+      const ym = `${TODAY.getFullYear()}-${String(TODAY.getMonth() + 1).padStart(2, "0")}`;
+      list = list.filter(i => (i.date || "").startsWith(ym));
+    } else if (klayFilters.dateRange === "thisWeek") {
+      const t = new Date(TODAY); const wAgo = new Date(t); wAgo.setDate(wAgo.getDate() - 7);
+      const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      const lo = fmt(wAgo); const hi = fmt(t);
+      list = list.filter(i => i.date >= lo && i.date <= hi);
+    }
+    if (klayFilters.aging) {
+      list = list.filter(i => {
+        if (i.payStatus !== "overdue") return false;
+        const d = daysSince(i.due);
+        if (klayFilters.aging === "90+") return d >= 90;
+        if (klayFilters.aging === "60-90") return d >= 60 && d < 90;
+        if (klayFilters.aging === "30-60") return d >= 30 && d < 60;
+        if (klayFilters.aging === "0-30") return d >= 0 && d < 30;
+        return true;
+      });
+    }
+    if (klayFilters.freeText) {
+      const ft = klayFilters.freeText.toLowerCase();
+      list = list.filter(i =>
+        (i.invNo || "").toLowerCase().includes(ft) ||
+        (i.customerName || "").toLowerCase().includes(ft) ||
+        (i.custPO || "").toLowerCase().includes(ft),
+      );
+    }
 
     return list.map(toRow);
-  }, [corpus, filterValues, search]);
+  }, [corpus, filterValues, klayFilters]);
 
   // ── Sort + Group derivation ─────────────────────────────────────────────
   const onJatuhTempo = filter.kind === "tab" && filter.value === "jatuhtempo";
@@ -801,16 +987,25 @@ export default function InvoicesPage() {
 
   const sortedRows = useMemo(() => {
     const arr = [...filteredRows];
-    switch (effectiveSort) {
-      case "days-late-desc": arr.sort((a, b) => b.daysOverdue - a.daysOverdue); break;
-      case "date-desc":    arr.sort((a, b) => (b.raw.date || "").localeCompare(a.raw.date || "")); break;
-      case "date-asc":     arr.sort((a, b) => (a.raw.date || "").localeCompare(b.raw.date || "")); break;
-      case "total-desc":      arr.sort((a, b) => b.total - a.total); break;
-      case "total-asc":       arr.sort((a, b) => a.total - b.total); break;
-      case "customer-asc":    arr.sort((a, b) => a.co.localeCompare(b.co)); break;
-      case "customer-desc":   arr.sort((a, b) => b.co.localeCompare(a.co)); break;
-      default: break;
-    }
+    const cmpBy = (a, b) => {
+      switch (effectiveSort) {
+        case "days-late-desc": return b.daysOverdue - a.daysOverdue;
+        case "date-desc":      return (b.raw.date || "").localeCompare(a.raw.date || "");
+        case "date-asc":       return (a.raw.date || "").localeCompare(b.raw.date || "");
+        case "total-desc":     return b.total - a.total;
+        case "total-asc":      return a.total - b.total;
+        case "customer-asc":   return a.co.localeCompare(b.co);
+        case "customer-desc":  return b.co.localeCompare(a.co);
+        default: return 0;
+      }
+    };
+    // Pin Auto rows to the top so AI-drafted items surface first
+    arr.sort((a, b) => {
+      const aAuto = a.approval === "auto" ? 0 : 1;
+      const bAuto = b.approval === "auto" ? 0 : 1;
+      if (aAuto !== bAuto) return aAuto - bAuto;
+      return cmpBy(a, b);
+    });
     return arr;
   }, [filteredRows, effectiveSort]);
 
@@ -820,14 +1015,16 @@ export default function InvoicesPage() {
   function selectTab(t) { setFilter({ kind: "tab", value: t }); clearChecks(); }
   function selectCard(c) {
     if (c === null) setFilter({ kind: "tab", value: "semua" });
-    // 'overdue' card is just a shortcut to the jatuhtempo tab so they share UI state
+    // 'overdue' and 'auto' cards route to their tabs so they share UI state
     else if (c === "overdue") setFilter({ kind: "tab", value: "jatuhtempo" });
+    else if (c === "auto")    setFilter({ kind: "tab", value: "auto" });
     else setFilter({ kind: "card", value: c });
     clearChecks();
   }
   const isTabActive  = (t) => filter.kind === "tab"  && filter.value === t;
   const isCardActive = (c) => {
     if (c === "overdue") return filter.value === "jatuhtempo";
+    if (c === "auto")    return filter.value === "auto";
     return filter.kind === "card" && filter.value === c;
   };
 
@@ -852,6 +1049,7 @@ export default function InvoicesPage() {
       if (effectiveGroup === "customer") return r.co;
       if (effectiveGroup === "bulan") return (r.raw.date || "").slice(0, 7); // YYYY-MM
       if (effectiveGroup === "status") {
+        if (r.approval === "auto") return "Auto";
         if (r.payStatus === "lunas") return "Paid";
         if (r.payStatus === "overdue") return "Overdue";
         if (r.approval === "draft") return "Draft";
@@ -876,7 +1074,7 @@ export default function InvoicesPage() {
   }, [effectiveGroup, sortedRows]);
 
   // ── Selected rows summary ───────────────────────────────────────────────
-  const selected = invoices.find((i) => i.id === selectedId);
+  const selected = allRows.find((i) => i.id === selectedId);
   const selectedCustomer = selected ? customers.find((c) => c.id === selected.customer) : null;
 
   const pageTotal = filteredRows.reduce((s, r) => s + r.total, 0);
@@ -902,8 +1100,87 @@ export default function InvoicesPage() {
     setSortChoice(null);
     setGroupChoice(null);
     setFilterValues(emptyFilters);
-    setSearch("");
+    setKlayFilters({});
+    setKlayQuery("");
   }
+
+  // ── Klay command bar handlers ─────────────────────────────────────────
+  function submitKlayQuery() {
+    const q = klayQuery.trim();
+    if (!q) return;
+    const intent = detectKlayIntent(q);
+    if (intent === "lookup") {
+      const upper = q.toUpperCase();
+      const hit = allRows.find((i) => (i.invNo || "").toUpperCase() === upper);
+      if (!hit) { showToast(`${q} not found`); return; }
+      setFilter({ kind: "tab", value: "semua" });
+      setFilterValues(emptyFilters);
+      setKlayFilters({});
+      setHighlightedRef(hit.id);
+      setKlayQuery("");
+    } else if (intent === "question") {
+      askAi(q);
+      setKlayQuery("");
+    } else if (intent === "action") {
+      console.log("[Klay] action intent:", { query: q, verb: q.match(ACTION_VERB_RE)?.[1]?.toLowerCase() });
+      setKlayAction({ query: q });
+      setKlayQuery("");
+    } else if (intent === "filter") {
+      const parsed = parseKlayFilters(q);
+      setKlayFilters((prev) => ({ ...prev, ...parsed }));
+      setKlayQuery("");
+    }
+  }
+
+  function removeChip(chip) {
+    if (chip.source === "klay") {
+      setKlayFilters((prev) => { const next = { ...prev }; delete next[chip.key]; return next; });
+    } else if (chip.source === "manual") {
+      if (chip.key === "customers") setFilterValues((v) => ({ ...v, customers: new Set() }));
+      else if (chip.key === "amount") setFilterValues((v) => ({ ...v, minAmount: "", maxAmount: "" }));
+      else if (chip.key === "date") setFilterValues((v) => ({ ...v, dateFrom: "", dateTo: "" }));
+      else if (chip.key === "source") setFilterValues((v) => ({ ...v, source: "all" }));
+    }
+  }
+
+  function clearAllChips() {
+    setKlayFilters({});
+    setFilterValues(emptyFilters);
+  }
+
+  function onAutoAction(action, inv) {
+    if (action === "confirm") showToast(`${inv.invNo === "—" ? inv.id : inv.invNo} confirmed and ready to send`);
+    else if (action === "reject") showToast(`${inv.invNo === "—" ? inv.id : inv.invNo} rejected — Klay will re-learn`);
+  }
+
+  // ⌘K / Ctrl+K to focus the bar
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
+        e.preventDefault();
+        klayInputRef.current?.focus();
+        klayInputRef.current?.select();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // Scroll to + flash the highlighted row after a lookup
+  useEffect(() => {
+    if (!highlightedRef) return;
+    const el = document.querySelector(`[data-inv-row="${highlightedRef}"]`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.classList.add("lg-klay-flash");
+      const tmr = setTimeout(() => {
+        el.classList.remove("lg-klay-flash");
+        setHighlightedRef(null);
+      }, 2400);
+      return () => clearTimeout(tmr);
+    }
+    setHighlightedRef(null);
+  }, [highlightedRef]);
 
   function exportCsv() {
     const headers = ["Invoice", "Date", "Customer", "Address", "Overdue", "Days Overdue", "Total", "Status Invoice", "Status Bayar"];
@@ -963,11 +1240,12 @@ export default function InvoicesPage() {
   }
 
   const tabs = [
-    { k: "semua",      lbl: "All",       count: tabCounts.semua },
-    { k: "sent",   lbl: "Sent",    count: tabCounts.sent },
-    { k: "draft",      lbl: "Draft",       count: tabCounts.draft },
+    { k: "semua",      lbl: "All",     count: tabCounts.semua },
+    { k: "auto",       lbl: "Auto",    count: tabCounts.auto },
+    { k: "sent",       lbl: "Sent",    count: tabCounts.sent },
+    { k: "draft",      lbl: "Draft",   count: tabCounts.draft },
     { k: "jatuhtempo", lbl: "Overdue", count: tabCounts.jatuhtempo },
-    { k: "lunas",      lbl: "Paid",       count: tabCounts.lunas },
+    { k: "lunas",      lbl: "Paid",    count: tabCounts.lunas },
   ];
 
   return (
@@ -978,13 +1256,6 @@ export default function InvoicesPage() {
         <div className="lg-head-top">
           <div style={{ flex: 1, minWidth: 0 }}>
             <h1 className="lg-title">Invoices</h1>
-            <AiSubtitle
-              insights={insights}
-              onOpenSummary={() => setSummaryOpen(true)}
-              onOpenChat={() => setAiOpen(true)}
-              chatActive={aiOpen}
-              summaryActive={summaryOpen}
-            />
           </div>
           <div className="lg-head-actions">
             <button className="lg-btn-brand" onClick={() => setChoiceOpen(true)}>
@@ -994,12 +1265,24 @@ export default function InvoicesPage() {
           </div>
         </div>
 
-        {/* KPI strip — 4 cells, hairline-divided, clickable */}
-        <div className="lg-kpi-strip">
+        {/* KPI strip — Summary + Processed-by-AI prepended; standard cells follow */}
+        <div className="lg-kpi-strip kpi-5">
+          <AiSummaryCard insights={insights} onOpen={() => setSummaryOpen(true)} />
+          <button
+            type="button"
+            className={`lg-kpi-cell lg-kpi-cell-ai${isCardActive("auto") ? " active" : ""}`}
+            onClick={() => selectCard(isCardActive("auto") ? null : "auto")}
+            aria-pressed={isCardActive("auto")}
+          >
+            <div className="lg-kpi-ai-eyebrow"><SparkleIcon /> Processed by AI</div>
+            <div className="lg-kpi-ai-val">{tabCounts.auto}</div>
+            <div className="lg-kpi-ai-sub">Klay drafted {tabCounts.auto} from WhatsApp / email — awaiting your confirmation</div>
+            <div className="lg-kpi-ai-cta">Review →</div>
+          </button>
           {kpis.map((k) => (
             <button
               type="button"
-              className={`lg-kpi-cell${isCardActive(k.card) ? " active" : ""}`}
+              className={`lg-kpi-cell${k.card === "total" ? " lg-kpi-cell-neutral" : ""}${isCardActive(k.card) ? " active" : ""}`}
               key={k.lbl}
               onClick={() => selectCard(isCardActive(k.card) ? null : k.card)}
               aria-pressed={isCardActive(k.card)}
@@ -1030,16 +1313,18 @@ export default function InvoicesPage() {
             ))}
           </div>
 
-          {/* Search + Filter / Sort row */}
+          {/* Klay command bar + Filter / Sort row */}
           <div className="lg-filter-row">
-            <div className="lg-search">
-              <svg viewBox="0 0 14 14"><circle cx="6" cy="6" r="3.5"/><path d="M9 9l3 3" strokeLinecap="round"/></svg>
-              <input
-                placeholder="Search invoice number or customer…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
+            <KlayCommandBar
+              inputRef={klayInputRef}
+              value={klayQuery}
+              onChange={setKlayQuery}
+              onSubmit={submitKlayQuery}
+              onClear={() => setKlayQuery("")}
+              chips={activeChips}
+              onRemoveChip={removeChip}
+              onClearChips={clearAllChips}
+            />
             <div className="lg-filter-meta">
               <div className="lg-meta-btn-wrap">
                 <button
@@ -1110,7 +1395,7 @@ export default function InvoicesPage() {
             <div>Customer</div>
             <div style={{ textAlign: "right" }}>Days Overdue</div>
             <div style={{ paddingLeft: 12 }}>Overdue</div>
-            <div>Aging</div>
+            <div>Status</div>
             <div style={{ textAlign: "right" }}>Total · IDR</div>
             <div />
           </div>
@@ -1148,7 +1433,7 @@ export default function InvoicesPage() {
                         } : null
                       );
                       return (
-                        <div key={r.id} style={{ position: "relative" }}>
+                        <div key={r.id} data-inv-row={r.id} style={{ position: "relative" }}>
                           <LedgerRow
                             r={r}
                             bucket={rowBucket}
@@ -1185,7 +1470,7 @@ export default function InvoicesPage() {
                       }
                     : null;
                   return (
-                    <div key={r.id} style={{ position: "relative" }}>
+                    <div key={r.id} data-inv-row={r.id} style={{ position: "relative" }}>
                       <LedgerRow
                         r={r}
                         bucket={bucket}
@@ -1260,6 +1545,15 @@ export default function InvoicesPage() {
             <div className="drawer-body">
               {drawerTab === "detail" && (
                 <>
+                  {selected.approval === "auto" && selected.ai_summary && (
+                    <div className="drawer-ai-callout">
+                      <div className="drawer-ai-eyebrow"><SparkleIcon /> Klay's interpretation</div>
+                      <p className="drawer-ai-text">{selected.ai_summary}</p>
+                      <div className="drawer-ai-meta">
+                        Auto-drafted from {selected.ai_source === "whatsapp" ? "WhatsApp" : "email"} on {formatDate(selected.date)} · awaiting your confirmation
+                      </div>
+                    </div>
+                  )}
                   <div className="drawer-stat-row">
                     <div className="drawer-stat-card">
                       <div className="drawer-stat-lbl">Total Invoices</div>
@@ -1387,6 +1681,24 @@ export default function InvoicesPage() {
                   Mark Paid
                 </button>
               )}
+              {selected.approval === "auto" && (
+                <>
+                  <button
+                    className="drawer-btn ghost"
+                    onClick={() => { onAutoAction("reject", selected); setSelectedId(null); }}
+                  >
+                    <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    Reject
+                  </button>
+                  <button
+                    className="drawer-btn primary klay"
+                    onClick={() => { onAutoAction("confirm", selected); openSendForSelected(); }}
+                  >
+                    <SparkleIcon />
+                    Confirm &amp; send
+                  </button>
+                </>
+              )}
               <button className="drawer-btn ghost">
                 <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                 Edit
@@ -1468,6 +1780,8 @@ export default function InvoicesPage() {
           </div>
         </div>
       )}
+
+      <KlayActionModal intent={klayAction} onClose={() => setKlayAction(null)} />
 
       {toast && <div className="toast show">{toast}</div>}
 

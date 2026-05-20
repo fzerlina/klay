@@ -295,6 +295,102 @@
 .lg-group-head.muted .lg-group-lbl{color:var(--color-text-secondary)}
 .lg-group-head.muted .lg-group-count{background:var(--color-surface-sunken);color:var(--color-text-secondary)}
 
+/* ── KLAY COMMAND BAR (inline in toolbar row) ──────────────────────── */
+/* Interactive surfaces use the action-blue family; the sparkle stays AI-orange to keep brand identity. */
+.lg-klay-bar{flex:1;min-width:0;display:flex;align-items:center;flex-wrap:wrap;gap:8px;background:var(--color-surface-raised);border:1px solid var(--color-border-subtle);border-radius:var(--radius-md);padding:6px 8px;transition:border-color var(--transition-fast),box-shadow var(--transition-fast)}
+.lg-klay-bar:focus-within{border-color:var(--color-action);box-shadow:0 0 0 3px rgba(26,70,200,.10)}
+.lg-klay-bar-icon{width:24px;height:24px;border-radius:7px;background:var(--color-brand-wash);color:var(--color-brand);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.lg-klay-bar-icon svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linejoin:round;stroke-linecap:round}
+.lg-klay-bar-input{flex:1;min-width:120px;border:none;outline:none;background:transparent;font-family:var(--font-sans);font-size:12.5px;color:var(--color-text-primary);font-weight:400;padding:2px 0}
+.lg-klay-bar-input::placeholder{color:var(--color-text-tertiary);font-weight:300}
+.lg-klay-bar-hint{display:inline-flex;align-items:center;gap:3px;font-family:var(--font-mono);font-size:10.5px;font-weight:600;color:var(--color-text-tertiary);background:var(--color-surface-sunken);border:1px solid var(--color-border-default);border-radius:5px;padding:2px 6px;flex-shrink:0;user-select:none}
+
+/* Filter chips inline in bar — chips are filter state from user actions, so blue */
+.lg-klay-chip{display:inline-flex;align-items:center;gap:4px;background:var(--color-action-wash);color:var(--color-action);border:1px solid var(--color-action-subtle);border-radius:9999px;padding:2px 3px 2px 9px;font-size:11px;font-weight:500;font-family:var(--font-sans);line-height:1.4;white-space:nowrap;flex-shrink:0}
+.lg-klay-chip-x{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:9999px;border:none;background:transparent;color:var(--color-action);cursor:pointer;padding:0;opacity:.7;transition:opacity var(--transition-fast),background var(--transition-fast)}
+.lg-klay-chip-x:hover{opacity:1;background:rgba(26,70,200,.12)}
+.lg-klay-chip-x svg{width:8px;height:8px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round}
+.lg-klay-chips-clear{font-size:11px;font-weight:600;color:var(--color-action);background:transparent;border:none;cursor:pointer;font-family:var(--font-sans);padding:2px 4px;flex-shrink:0}
+.lg-klay-chips-clear:hover{text-decoration:underline;text-underline-offset:2px;color:var(--color-action-hover)}
+
+/* Summary card — leftmost, lightest brand wash */
+.lg-kpi-cell-summary{background:linear-gradient(160deg,var(--color-brand-wash) 0%,var(--color-surface-raised) 100%)!important;cursor:pointer;display:flex;flex-direction:column;justify-content:center;gap:6px;text-align:left;position:relative;overflow:hidden}
+.lg-kpi-cell-summary:hover{background:linear-gradient(160deg,var(--color-brand-subtle) 0%,var(--color-brand-wash) 100%)!important}
+.lg-kpi-summary-eyebrow{display:flex;align-items:center;gap:6px;font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--color-brand)}
+.lg-kpi-summary-eyebrow svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linejoin:round;stroke-linecap:round;flex-shrink:0}
+.lg-kpi-summary-body{font-size:12px;color:var(--color-text-secondary);line-height:1.4;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;transition:opacity .22s ease}
+.lg-kpi-summary-body.fading{opacity:0}
+.lg-kpi-summary-body strong{font-weight:700;color:var(--color-text-primary)}
+.lg-kpi-summary-asof{font-size:10.5px;font-style:italic;color:var(--color-brand-mid);opacity:.85;letter-spacing:.01em}
+.lg-kpi-summary-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:auto}
+.lg-kpi-summary-cta{font-size:11px;font-weight:700;color:var(--color-brand)}
+.lg-kpi-summary-dots{display:inline-flex;align-items:center;gap:4px}
+.lg-kpi-summary-dot{width:5px;height:5px;border-radius:9999px;background:var(--color-brand-subtle);transition:background .15s ease,width .15s ease}
+.lg-kpi-summary-dot.on{background:var(--color-brand);width:14px;border-radius:3px}
+
+/* Neutral KPI cell — no active background tint (used for Total Journals) */
+.lg-kpi-cell-neutral.active{background:transparent!important}
+.lg-kpi-cell-neutral.active::after{display:none}
+.lg-kpi-cell-neutral:hover{background:var(--color-surface-sunken)}
+
+/* Processed-by-AI card — uses brand-mid for the warmer/saturated end, distinct from Summary card */
+.lg-kpi-cell-ai{background:linear-gradient(160deg,var(--color-brand-subtle) 0%,var(--color-brand-wash) 100%)!important;cursor:pointer;display:flex;flex-direction:column;justify-content:center;gap:5px;text-align:left;position:relative;border-left:1px solid var(--color-brand-mid)!important}
+.lg-kpi-cell-ai:hover{background:linear-gradient(160deg,rgba(212,98,42,.30) 0%,var(--color-brand-subtle) 100%)!important}
+.lg-kpi-cell-ai.active{background:linear-gradient(160deg,rgba(212,98,42,.45) 0%,rgba(212,98,42,.18) 100%)!important}
+.lg-kpi-cell-ai.active::after{background:var(--color-brand)!important}
+.lg-kpi-ai-eyebrow{display:flex;align-items:center;gap:6px;font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--color-brand)}
+.lg-kpi-ai-eyebrow svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linejoin:round;stroke-linecap:round;flex-shrink:0}
+.lg-kpi-ai-val{font-family:var(--font-mono);font-size:22px;font-weight:700;letter-spacing:-.02em;color:var(--color-brand-deep);line-height:1}
+.lg-kpi-ai-sub{font-size:11px;color:var(--color-brand-deep);opacity:.82}
+.lg-kpi-ai-cta{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:var(--color-brand);margin-top:2px}
+
+/* Auto status badge — brand orange (AI identity) */
+.badge-auto{background:var(--color-brand-wash);color:var(--color-brand-deep);border-color:var(--color-brand-subtle);gap:4px}
+.badge-auto svg{width:9px;height:9px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linejoin:round;stroke-linecap:round;flex-shrink:0}
+
+/* JE row description cell — 2-line variant for AI rows */
+.je-desc-cell{min-width:0;display:flex;flex-direction:column;gap:2px;justify-content:center;overflow:hidden}
+.je-desc-memo{font-size:12px;color:var(--color-text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.35}
+.je-desc-ai{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--color-brand);font-style:italic;overflow:hidden;line-height:1.3}
+.je-desc-ai svg{width:9px;height:9px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linejoin:round;stroke-linecap:round;flex-shrink:0}
+.je-desc-ai-text{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* Soft orange tint on Auto row — ties to the Processed-by-AI card */
+.lg-row.auto{background:rgba(184,61,8,.03)}
+.lg-row.auto:hover{background:rgba(184,61,8,.07)}
+
+/* Drawer AI callout — Klay's interpretation of an Auto journal (brand identity) */
+.drawer-ai-callout{background:linear-gradient(160deg,var(--color-brand-wash) 0%,var(--color-surface-raised) 100%);border:1px solid var(--color-brand-subtle);border-radius:var(--radius-md);padding:12px 14px;margin-bottom:14px}
+.drawer-ai-eyebrow{display:flex;align-items:center;gap:6px;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--color-brand);margin-bottom:6px}
+.drawer-ai-eyebrow svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linejoin:round;stroke-linecap:round;flex-shrink:0}
+.drawer-ai-text{font-size:12.5px;color:var(--color-brand-deep);line-height:1.5;font-style:italic;margin:0}
+.drawer-ai-meta{font-size:11px;color:var(--color-brand);opacity:.78;margin-top:8px}
+
+/* Drawer Confirm-&-post button (action — primary blue) */
+.drawer-btn.primary.klay{background:var(--color-action);border-color:var(--color-action);color:#fff}
+.drawer-btn.primary.klay:hover{background:var(--color-action-hover);border-color:var(--color-action-hover)}
+.drawer-btn.primary.klay svg{stroke:#fff;fill:none}
+
+/* Row highlight pulse for lookup intent — brand orange (AI-found) */
+@keyframes lgKlayPulse{
+  0%{background:var(--color-brand-wash);box-shadow:inset 3px 0 0 var(--color-brand)}
+  100%{background:transparent;box-shadow:inset 3px 0 0 transparent}
+}
+[data-je-row].lg-klay-flash{animation:lgKlayPulse 2.4s ease-out}
+
+/* Action intent placeholder modal */
+.lg-klay-modal-backdrop{position:fixed;inset:0;background:rgba(8,7,6,.42);z-index:200;display:flex;align-items:center;justify-content:center;padding:24px}
+.lg-klay-modal{background:var(--color-surface-raised);border:1px solid var(--color-border-default);border-radius:var(--radius-lg);width:min(440px,100%);box-shadow:0 12px 40px rgba(8,7,6,.18);overflow:hidden}
+.lg-klay-modal-head{display:flex;align-items:center;gap:10px;padding:16px 18px 12px;border-bottom:1px solid var(--color-border-subtle)}
+.lg-klay-modal-head .lg-klay-bar-icon{width:28px;height:28px}
+.lg-klay-modal-title{font-family:var(--font-display);font-size:17px;font-weight:700;color:var(--color-text-primary);letter-spacing:-.01em}
+.lg-klay-modal-body{padding:14px 18px 6px;font-size:12.5px;color:var(--color-text-secondary);line-height:1.6}
+.lg-klay-modal-body code{font-family:var(--font-mono);font-size:11.5px;background:var(--color-action-wash);color:var(--color-action);padding:1px 6px;border-radius:4px}
+.lg-klay-modal-foot{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px 16px}
+.lg-klay-modal-btn{font-family:var(--font-sans);font-size:12.5px;font-weight:600;padding:7px 14px;border-radius:var(--radius-sm);cursor:pointer;border:1px solid var(--color-border-default);background:var(--color-surface-raised);color:var(--color-text-secondary)}
+.lg-klay-modal-btn.primary{background:var(--color-action);border-color:var(--color-action);color:#fff}
+.lg-klay-modal-btn.primary:hover{background:var(--color-action-hover);border-color:var(--color-action-hover)}
+
 /* ── KLAY AI DRAWER ───────────────────────────────────────────────────────── */
 .ai-backdrop{position:absolute;inset:0;background:rgba(8,7,6,.18);opacity:0;pointer-events:none;transition:opacity .2s ease;z-index:80}
 .ai-backdrop.open{opacity:1;pointer-events:auto}

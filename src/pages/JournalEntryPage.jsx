@@ -22,19 +22,69 @@ function lineSums(je) {
   return { debit, credit };
 }
 
-const STATUS_LABEL = { posted: "Posted", draft: "Draft", pending: "Pending", void: "Void" };
-const STATUS_BADGE_CLASS = { posted: "approved", draft: "draft", pending: "review", void: "rejected" };
+const STATUS_LABEL = { posted: "Posted", draft: "Draft", pending: "Pending", void: "Void", auto: "Auto" };
+const STATUS_BADGE_CLASS = { posted: "approved", draft: "draft", pending: "review", void: "rejected", auto: "auto" };
 
-function SparkleIcon({ size = 11 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M6 1.5l1.1 2.7L9.8 5l-2.7 0.8L6 8.5l-1.1-2.7L2.2 5l2.7-0.8L6 1.5z" />
-      <path d="M10 8.5l0.4 1L11.5 10l-1.1 0.4L10 11.5l-0.4-1.1L8.5 10l1.1-0.5L10 8.5z" />
-    </svg>
-  );
+const AUTO_PROCESSED_COUNT = 8;
+
+function generateAiSummary(je) {
+  const memo = (je.memo || "").toLowerCase();
+  const n = je.lines.length;
+  if (memo.includes("payroll")) return `Klay matched ${n} employees against the payroll register; debits balance to net pay.`;
+  if (memo.includes("inventory") || memo.includes("goods")) return `Klay reconciled the receipt to PO and auto-balanced inventory + AP.`;
+  if (memo.includes("depreciation")) return `Klay computed straight-line depreciation across ${n} asset accounts per schedule.`;
+  if (memo.includes("interest") || memo.includes("loan") || memo.includes("bank")) return `Klay matched the bank charge against the loan schedule for the period.`;
+  if (memo.includes("revenue") || memo.includes("sales") || memo.includes("invoice")) return `Klay tied the revenue line to the source invoice batch and applied tax.`;
+  return `Klay reconciled ${n} lines against the source document; debits match credits.`;
 }
 
-function AiSubtitle({ insights, onOpenSummary, onOpenChat, chatActive, summaryActive }) {
+// ── Klay command bar: intent + filter parsing (mock; replace with LLM later) ──
+const JE_REF_RE = /^JE-\d{4}-\d{4}$/i;
+const ACTION_VERB_RE = /^(record|create|post|draft|generate|make)\s+/i;
+const QUESTION_LEAD_RE = /^(what|why|how|when|where|who|which|whose|explain|show|tell|can|could|should|is|are|do|does|did|will|would|may|might)\b/i;
+
+function detectKlayIntent(q) {
+  const trimmed = q.trim();
+  if (!trimmed) return null;
+  if (JE_REF_RE.test(trimmed)) return "lookup";
+  if (trimmed.endsWith("?") || QUESTION_LEAD_RE.test(trimmed)) return "question";
+  if (ACTION_VERB_RE.test(trimmed)) return "action";
+  return "filter";
+}
+
+function parseKlayFilters(q) {
+  const out = {};
+  const lower = q.toLowerCase();
+  if (/\bflagged\b/.test(lower)) out.status = "flagged";
+  else if (/\bdrafts?\b/.test(lower)) out.status = "draft";
+  else if (/\bpending\b/.test(lower)) out.status = "pending";
+  else if (/\bposted\b/.test(lower)) out.status = "posted";
+  if (/\binventory\b/.test(lower)) out.category = "inventory";
+  else if (/\bpayroll\b/.test(lower)) out.category = "payroll";
+  const mShort = lower.match(/(\d+(?:[.,]\d+)?)\s*([mb])\b/);
+  if (mShort) {
+    const n = parseFloat(mShort[1].replace(",", "."));
+    out.amountMin = Math.round(n * (mShort[2] === "b" ? 1e9 : 1e6));
+  } else {
+    const mLong = lower.match(/(?:above|over|>=?|min(?:imum)?)\s*rp?\s*([\d.,]+)/);
+    if (mLong) out.amountMin = parseInt(mLong[1].replace(/[.,]/g, ""), 10);
+  }
+  if (/\bthis\s+week\b/.test(lower)) out.dateRange = "thisWeek";
+  else if (/\bthis\s+month\b/.test(lower)) out.dateRange = "thisMonth";
+  if (Object.keys(out).length === 0) out.freeText = q.trim();
+  return out;
+}
+
+function klayChipLabel(key, val) {
+  if (key === "status") return `Status: ${val[0].toUpperCase()}${val.slice(1)}`;
+  if (key === "category") return `Category: ${val[0].toUpperCase()}${val.slice(1)}`;
+  if (key === "amountMin") return `≥ Rp ${val.toLocaleString("id-ID", { maximumFractionDigits: 0 })}`;
+  if (key === "dateRange") return val === "thisWeek" ? "This week" : "This month";
+  if (key === "freeText") return `“${val}”`;
+  return String(val);
+}
+
+function AiSummaryCard({ insights, onOpen }) {
   const [idx, setIdx] = useState(0);
   const [fading, setFading] = useState(false);
   useEffect(() => {
@@ -52,38 +102,41 @@ function AiSubtitle({ insights, onOpenSummary, onOpenChat, chatActive, summaryAc
 
   const current = insights[idx] || insights[0];
   return (
-    <div className={`lg-ai-subtitle${summaryActive || chatActive ? " active" : ""}`}>
-      <p className={`lg-ai-text${fading ? " fading" : ""}`}>
-        <span className="lg-ai-sparkle"><SparkleIcon /></span>
-        {current?.node}
-      </p>
-      <div className="lg-ai-ctas">
-        <button type="button" className={`lg-ai-cta-primary${summaryActive ? " active" : ""}`} onClick={onOpenSummary}>
-          <SparkleIcon /> Summary
-        </button>
-        <button type="button" className={`lg-ai-cta-secondary${chatActive ? " active" : ""}`} onClick={onOpenChat}>
-          {chatActive ? "Continue chat" : "Ask Klay AI"} →
-        </button>
+    <button type="button" className="lg-kpi-cell lg-kpi-cell-summary" onClick={onOpen} aria-label="Open summary digest">
+      <div className="lg-kpi-summary-eyebrow"><KlaySparkleIcon /> Summary</div>
+      <div className={`lg-kpi-summary-body${fading ? " fading" : ""}`}>{current?.node}</div>
+      <div className="lg-kpi-summary-asof">as of {formatDate(TODAY.toISOString().slice(0, 10))}</div>
+      <div className="lg-kpi-summary-foot">
+        <span className="lg-kpi-summary-cta">Open digest →</span>
         {insights.length > 1 && (
-          <div className="lg-ai-dots" aria-hidden>
-            {insights.map((_, i) => <span key={i} className={`lg-ai-dot${i === idx ? " on" : ""}`} />)}
-          </div>
+          <span className="lg-kpi-summary-dots" aria-hidden>
+            {insights.map((_, i) => (
+              <span key={i} className={`lg-kpi-summary-dot${i === idx ? " on" : ""}`} />
+            ))}
+          </span>
         )}
       </div>
-    </div>
+    </button>
   );
 }
 
 function JeRow({ r, isChecked, onCheck, onClick, onKebab, isSelected, isAlt }) {
+  const isAuto = r.status === "auto";
   return (
-    <div className={`lg-row${isSelected ? " selected" : ""}${isAlt ? " alt" : ""}`} onClick={onClick}>
+    <div className={`lg-row${isSelected ? " selected" : ""}${isAlt ? " alt" : ""}${isAuto ? " auto" : ""}`} onClick={onClick}>
       <div onClick={(e) => e.stopPropagation()}>
         <input type="checkbox" className="lg-row-check" checked={isChecked} onChange={() => onCheck(r.je_number)} />
       </div>
       <div className="lg-cell-date">{formatDate(r.je_date)}</div>
       <div className="lg-cell-no">{r.je_number}</div>
-      <div style={{ minWidth: 0, fontSize: 12, color: "var(--color-text-secondary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-        {r.memo}
+      <div className="je-desc-cell">
+        <div className="je-desc-memo">{r.memo}</div>
+        {isAuto && r.ai_summary && (
+          <div className="je-desc-ai">
+            <KlaySparkleIcon />
+            <span className="je-desc-ai-text">{r.ai_summary}</span>
+          </div>
+        )}
       </div>
       <div style={{ fontSize: 11, color: "var(--color-text-tertiary)", textAlign: "right", fontFamily: "var(--font-mono)" }}>
         {r.lines.length}
@@ -95,7 +148,10 @@ function JeRow({ r, isChecked, onCheck, onClick, onKebab, isSelected, isAlt }) {
         {r.credit > 0 ? <><span className="lg-cell-total-rp">Rp</span>{fmtRp(r.credit)}</> : <span className="lg-cell-em-dash">—</span>}
       </div>
       <div>
-        <span className={`badge badge-${STATUS_BADGE_CLASS[r.status]}`}>{STATUS_LABEL[r.status]}</span>
+        <span className={`badge badge-${STATUS_BADGE_CLASS[r.status]}`}>
+          {isAuto && <KlaySparkleIcon />}
+          {STATUS_LABEL[r.status]}
+        </span>
       </div>
       <div className="lg-cell-kebab" onClick={(e) => e.stopPropagation()}>
         <button className="lg-kebab" onClick={() => onKebab(r.je_number)}>
@@ -258,18 +314,95 @@ function FilterPopover({ values, onChange, onClose }) {
   );
 }
 
-export default function JournalEntryPage() {
-  const allRows = useMemo(() => JOURNAL_ENTRIES.map((je) => {
-    const { debit, credit } = lineSums(je);
-    return { ...je, debit, credit };
-  }), []);
+function KlaySparkleIcon() {
+  return (
+    <svg viewBox="0 0 14 14"><path d="M7 1.5l1.3 3.2L11.5 6l-3.2 1L7 10.2 5.7 7 2.5 6l3.2-1.3L7 1.5z"/><path d="M11.5 10l.4 1.1L13 11.5l-1.1.4-.4 1.1-.4-1.1-1.1-.4 1.1-.4.4-1.1z"/></svg>
+  );
+}
 
-  const [search, setSearch] = useState("");
+function KlayCommandBar({ inputRef, value, onChange, onSubmit, onClear, chips, onRemoveChip, onClearChips }) {
+  return (
+    <div className="lg-klay-bar">
+      <span className="lg-klay-bar-icon" aria-hidden><KlaySparkleIcon /></span>
+      <input
+        ref={inputRef}
+        className="lg-klay-bar-input"
+        placeholder="Search, filter, or ask Klay…"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") { e.preventDefault(); onSubmit(); }
+          else if (e.key === "Escape") { e.preventDefault(); onClear(); }
+        }}
+      />
+      {chips.map((c) => (
+        <span key={c.id} className="lg-klay-chip">
+          {c.label}
+          <button type="button" className="lg-klay-chip-x" onClick={() => onRemoveChip(c)} aria-label={`Remove ${c.label}`}>
+            <svg viewBox="0 0 10 10"><line x1="2" y1="2" x2="8" y2="8"/><line x1="8" y1="2" x2="2" y2="8"/></svg>
+          </button>
+        </span>
+      ))}
+      {chips.length > 0 && (
+        <button type="button" className="lg-klay-chips-clear" onClick={onClearChips}>Clear all</button>
+      )}
+      <span className="lg-klay-bar-hint" aria-hidden>⌘K</span>
+    </div>
+  );
+}
+
+function KlayActionModal({ intent, onClose }) {
+  if (!intent) return null;
+  return (
+    <div className="lg-klay-modal-backdrop" onClick={onClose}>
+      <div className="lg-klay-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="lg-klay-modal-head">
+          <span className="lg-klay-bar-icon" aria-hidden><KlaySparkleIcon /></span>
+          <div className="lg-klay-modal-title">Draft entry</div>
+        </div>
+        <div className="lg-klay-modal-body">
+          Klay detected an <strong>action</strong> intent from your query: <code>{intent.query}</code>.
+          <br /><br />
+          The draft entry panel will open here once it's wired up.
+        </div>
+        <div className="lg-klay-modal-foot">
+          <button className="lg-klay-modal-btn" onClick={onClose}>Close</button>
+          <button className="lg-klay-modal-btn primary" onClick={onClose}>Open draft (soon)</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function JournalEntryPage() {
+  const allRows = useMemo(() => {
+    // Mark the AUTO_PROCESSED_COUNT most-recent pending JEs as auto-processed by Klay AI
+    const pendingByDateDesc = JOURNAL_ENTRIES
+      .filter((je) => je.status === "pending")
+      .sort((a, b) => (b.je_date || "").localeCompare(a.je_date || ""))
+      .slice(0, AUTO_PROCESSED_COUNT);
+    const autoIds = new Set(pendingByDateDesc.map((je) => je.je_number));
+    return JOURNAL_ENTRIES.map((je) => {
+      const { debit, credit } = lineSums(je);
+      if (autoIds.has(je.je_number)) {
+        return { ...je, debit, credit, status: "auto", ai_summary: generateAiSummary(je) };
+      }
+      return { ...je, debit, credit };
+    });
+  }, []);
+
   const [filter, setFilter] = useState({ kind: "tab", value: "semua" });
   const [sortChoice, setSortChoice] = useState(null);
   const [groupChoice, setGroupChoice] = useState(null);
   const emptyFilters = { creators: new Set(), minAmt: "", maxAmt: "", dateFrom: "", dateTo: "" };
   const [filterValues, setFilterValues] = useState(emptyFilters);
+
+  // Klay command bar state
+  const [klayQuery, setKlayQuery] = useState("");
+  const [klayFilters, setKlayFilters] = useState({});
+  const [klayAction, setKlayAction] = useState(null); // { query } when action modal open
+  const [highlightedRef, setHighlightedRef] = useState(null);
+  const klayInputRef = useRef(null);
 
   const [selectedId, setSelectedId] = useState(null);
   const [drawerTab, setDrawerTab] = useState("detail");
@@ -304,7 +437,7 @@ export default function JournalEntryPage() {
 
   // ── KPIs ───────────────────────────────────────────────────────────────
   const counts = useMemo(() => {
-    const c = { posted: 0, draft: 0, pending: 0, void: 0 };
+    const c = { posted: 0, draft: 0, pending: 0, void: 0, auto: 0 };
     allRows.forEach((r) => { c[r.status] = (c[r.status] || 0) + 1; });
     return c;
   }, [allRows]);
@@ -313,18 +446,19 @@ export default function JournalEntryPage() {
     { lbl: "Total Journals",       card: "all",     val: String(allRows.length),  sub: `${counts.posted} posted`,    tone: "primary" },
     { lbl: "Draft",              card: "draft",   val: String(counts.draft),    sub: "not yet posted to GL",                tone: "warn"    },
     { lbl: "Pending Approval",   card: "pending", val: String(counts.pending),  sub: "awaiting decision",                 tone: "danger"  },
-    { lbl: "Void",               card: "void",    val: String(counts.void),     sub: "dibatalkan",                         tone: "primary" },
   ];
 
   const tabCounts = useMemo(() => ({
     semua:   allRows.length,
+    auto:    counts.auto,
     pending: counts.pending,
     draft:   counts.draft,
     posted:  counts.posted,
     void:    counts.void,
   }), [allRows, counts]);
   const tabs = [
-    { k: "semua",   lbl: "All",   count: tabCounts.semua },
+    { k: "semua",   lbl: "All",     count: tabCounts.semua },
+    { k: "auto",    lbl: "Auto",    count: tabCounts.auto },
     { k: "pending", lbl: "Pending", count: tabCounts.pending },
     { k: "draft",   lbl: "Draft",   count: tabCounts.draft },
     { k: "posted",  lbl: "Posted",  count: tabCounts.posted },
@@ -338,15 +472,18 @@ export default function JournalEntryPage() {
     return list;
   }, [allRows, filter]);
 
+  const klayFilterKeys = useMemo(() => Object.keys(klayFilters), [klayFilters]);
+
   const hasActiveFilters = useMemo(() => (
     filterValues.creators.size > 0 ||
     filterValues.minAmt !== "" ||
     filterValues.maxAmt !== "" ||
     filterValues.dateFrom !== "" ||
     filterValues.dateTo !== "" ||
+    klayFilterKeys.length > 0 ||
     sortChoice !== null ||
     groupChoice !== null
-  ), [filterValues, sortChoice, groupChoice]);
+  ), [filterValues, klayFilterKeys, sortChoice, groupChoice]);
 
   const activeFilterCount = useMemo(() => {
     let n = 0;
@@ -356,7 +493,30 @@ export default function JournalEntryPage() {
     return n;
   }, [filterValues]);
 
-  // ── Apply filter + search ─────────────────────────────────────────────
+  // Unified chip list (Klay-parsed + manual FilterPopover values) — same shape, removable
+  const activeChips = useMemo(() => {
+    const chips = [];
+    for (const key of klayFilterKeys) {
+      chips.push({ id: `klay:${key}`, source: "klay", key, label: klayChipLabel(key, klayFilters[key]) });
+    }
+    if (filterValues.creators.size > 0) {
+      const list = Array.from(filterValues.creators).join(", ");
+      chips.push({ id: "manual:creators", source: "manual", key: "creators", label: `Created by: ${list}` });
+    }
+    if (filterValues.minAmt !== "" || filterValues.maxAmt !== "") {
+      const min = filterValues.minAmt !== "" ? `Rp ${Number(filterValues.minAmt).toLocaleString("id-ID")}` : "—";
+      const max = filterValues.maxAmt !== "" ? `Rp ${Number(filterValues.maxAmt).toLocaleString("id-ID")}` : "—";
+      chips.push({ id: "manual:amount", source: "manual", key: "amount", label: `Debit ${min} – ${max}` });
+    }
+    if (filterValues.dateFrom !== "" || filterValues.dateTo !== "") {
+      const from = filterValues.dateFrom || "—";
+      const to = filterValues.dateTo || "—";
+      chips.push({ id: "manual:date", source: "manual", key: "date", label: `Date ${from} → ${to}` });
+    }
+    return chips;
+  }, [klayFilters, klayFilterKeys, filterValues]);
+
+  // ── Apply filters ─────────────────────────────────────────────────────
   const filteredRows = useMemo(() => {
     let list = corpus;
     if (filterValues.creators.size > 0) list = list.filter((r) => filterValues.creators.has(r.created_by));
@@ -366,13 +526,40 @@ export default function JournalEntryPage() {
     if (max != null && !isNaN(max)) list = list.filter((r) => r.debit <= max);
     if (filterValues.dateFrom) list = list.filter((r) => r.je_date >= filterValues.dateFrom);
     if (filterValues.dateTo) list = list.filter((r) => r.je_date <= filterValues.dateTo);
-    const q = search.toLowerCase().trim();
-    if (q) list = list.filter((r) =>
-      r.je_number.toLowerCase().includes(q) ||
-      r.memo.toLowerCase().includes(q),
-    );
+
+    // Klay-parsed filters
+    if (klayFilters.status === "flagged") list = list.filter((r) => r.status === "pending");
+    else if (klayFilters.status) list = list.filter((r) => r.status === klayFilters.status);
+    if (klayFilters.category === "inventory") {
+      list = list.filter((r) =>
+        /inventor/i.test(r.memo) || r.lines.some((l) => /inventor/i.test(l.account_name || "")),
+      );
+    } else if (klayFilters.category === "payroll") {
+      list = list.filter((r) =>
+        /payroll|salar|wage/i.test(r.memo) || r.lines.some((l) => /payroll|salar|wage/i.test(l.account_name || "")),
+      );
+    }
+    if (typeof klayFilters.amountMin === "number") {
+      list = list.filter((r) => r.debit >= klayFilters.amountMin);
+    }
+    if (klayFilters.dateRange === "thisMonth") {
+      const ym = `${TODAY.getFullYear()}-${String(TODAY.getMonth() + 1).padStart(2, "0")}`;
+      list = list.filter((r) => (r.je_date || "").startsWith(ym));
+    } else if (klayFilters.dateRange === "thisWeek") {
+      const t = new Date(TODAY); const wAgo = new Date(t); wAgo.setDate(wAgo.getDate() - 7);
+      const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      const lo = fmt(wAgo); const hi = fmt(t);
+      list = list.filter((r) => r.je_date >= lo && r.je_date <= hi);
+    }
+    if (klayFilters.freeText) {
+      const ft = klayFilters.freeText.toLowerCase();
+      list = list.filter((r) =>
+        r.je_number.toLowerCase().includes(ft) ||
+        (r.memo || "").toLowerCase().includes(ft),
+      );
+    }
     return list;
-  }, [corpus, filterValues, search]);
+  }, [corpus, filterValues, klayFilters]);
 
   // ── Sort + Group ───────────────────────────────────────────────────────
   const effectiveSort = sortChoice || "date-desc";
@@ -380,16 +567,25 @@ export default function JournalEntryPage() {
 
   const sortedRows = useMemo(() => {
     const arr = [...filteredRows];
-    switch (effectiveSort) {
-      case "date-desc":  arr.sort((a, b) => (b.je_date || "").localeCompare(a.je_date || "")); break;
-      case "date-asc":   arr.sort((a, b) => (a.je_date || "").localeCompare(b.je_date || "")); break;
-      case "ref-asc":    arr.sort((a, b) => a.je_number.localeCompare(b.je_number)); break;
-      case "ref-desc":   arr.sort((a, b) => b.je_number.localeCompare(a.je_number)); break;
-      case "debit-desc": arr.sort((a, b) => b.debit - a.debit); break;
-      case "debit-asc":  arr.sort((a, b) => a.debit - b.debit); break;
-      case "lines-desc": arr.sort((a, b) => b.lines.length - a.lines.length); break;
-      default: break;
-    }
+    const cmpBy = (a, b) => {
+      switch (effectiveSort) {
+        case "date-desc":  return (b.je_date || "").localeCompare(a.je_date || "");
+        case "date-asc":   return (a.je_date || "").localeCompare(b.je_date || "");
+        case "ref-asc":    return a.je_number.localeCompare(b.je_number);
+        case "ref-desc":   return b.je_number.localeCompare(a.je_number);
+        case "debit-desc": return b.debit - a.debit;
+        case "debit-asc":  return a.debit - b.debit;
+        case "lines-desc": return b.lines.length - a.lines.length;
+        default: return 0;
+      }
+    };
+    // Pin Auto rows to the top so AI-processed items always surface first
+    arr.sort((a, b) => {
+      const aAuto = a.status === "auto" ? 0 : 1;
+      const bAuto = b.status === "auto" ? 0 : 1;
+      if (aAuto !== bAuto) return aAuto - bAuto;
+      return cmpBy(a, b);
+    });
     return arr;
   }, [filteredRows, effectiveSort]);
 
@@ -457,8 +653,89 @@ export default function JournalEntryPage() {
     setSortChoice(null);
     setGroupChoice(null);
     setFilterValues(emptyFilters);
-    setSearch("");
+    setKlayFilters({});
+    setKlayQuery("");
   }
+
+  // ── Klay command bar handlers ─────────────────────────────────────────
+  function submitKlayQuery() {
+    const q = klayQuery.trim();
+    if (!q) return;
+    const intent = detectKlayIntent(q);
+    if (intent === "lookup") {
+      const upper = q.toUpperCase();
+      const hit = allRows.find((r) => r.je_number.toUpperCase() === upper);
+      if (!hit) {
+        showToast(`${q} not found`);
+        return;
+      }
+      // Clear filter state so the row is guaranteed visible
+      setFilter({ kind: "tab", value: "semua" });
+      setFilterValues(emptyFilters);
+      setKlayFilters({});
+      setHighlightedRef(hit.je_number);
+      setKlayQuery("");
+    } else if (intent === "question") {
+      askAi(q);
+      setKlayQuery("");
+    } else if (intent === "action") {
+      console.log("[Klay] action intent:", { query: q, verb: q.match(ACTION_VERB_RE)?.[1]?.toLowerCase() });
+      setKlayAction({ query: q });
+      setKlayQuery("");
+    } else if (intent === "filter") {
+      const parsed = parseKlayFilters(q);
+      setKlayFilters((prev) => ({ ...prev, ...parsed }));
+      setKlayQuery("");
+    }
+  }
+
+  function removeChip(chip) {
+    if (chip.source === "klay") {
+      setKlayFilters((prev) => {
+        const next = { ...prev };
+        delete next[chip.key];
+        return next;
+      });
+    } else if (chip.source === "manual") {
+      if (chip.key === "creators") setFilterValues((v) => ({ ...v, creators: new Set() }));
+      else if (chip.key === "amount") setFilterValues((v) => ({ ...v, minAmt: "", maxAmt: "" }));
+      else if (chip.key === "date") setFilterValues((v) => ({ ...v, dateFrom: "", dateTo: "" }));
+    }
+  }
+
+  function clearAllChips() {
+    setKlayFilters({});
+    setFilterValues(emptyFilters);
+  }
+
+  // ⌘K / Ctrl+K to focus the bar
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
+        e.preventDefault();
+        klayInputRef.current?.focus();
+        klayInputRef.current?.select();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // Scroll to + flash the highlighted row after lookup
+  useEffect(() => {
+    if (!highlightedRef) return;
+    const el = document.querySelector(`[data-je-row="${highlightedRef}"]`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.classList.add("lg-klay-flash");
+      const tmr = setTimeout(() => {
+        el.classList.remove("lg-klay-flash");
+        setHighlightedRef(null);
+      }, 2400);
+      return () => clearTimeout(tmr);
+    }
+    setHighlightedRef(null);
+  }, [highlightedRef]);
 
   function exportCsv() {
     const headers = ["Journal No.", "Date", "Memo", "Status", "Lines", "Debit", "Credit", "Dibuat oleh"];
@@ -491,6 +768,10 @@ export default function JournalEntryPage() {
     else if (action === "edit") showToast(`Edit ${je.je_number} (demo)`);
     else if (action === "void") showToast(`${je.je_number} voided`);
   }
+  function onAutoAction(action, je) {
+    if (action === "confirm") showToast(`${je.je_number} confirmed and posted to GL`);
+    else if (action === "reject") showToast(`${je.je_number} rejected — Klay will re-learn`);
+  }
   function onBulk(action) {
     const count = checked.size;
     if (action === "post") showToast(`${count} journals posted to GL`);
@@ -506,13 +787,6 @@ export default function JournalEntryPage() {
           <div className="lg-head-top">
             <div style={{ flex: 1, minWidth: 0 }}>
               <h1 className="lg-title">Journal Entry</h1>
-              <AiSubtitle
-                insights={insights}
-                onOpenSummary={() => setSummaryOpen(true)}
-                onOpenChat={() => setAiOpen(true)}
-                chatActive={aiOpen}
-                summaryActive={summaryOpen}
-              />
             </div>
             <div className="lg-head-actions">
               <button className="lg-btn-brand" onClick={() => showToast("New Journal Entry — coming soon")}>
@@ -522,11 +796,23 @@ export default function JournalEntryPage() {
             </div>
           </div>
 
-          <div className="lg-kpi-strip">
+          <div className="lg-kpi-strip kpi-5">
+            <AiSummaryCard insights={insights} onOpen={() => setSummaryOpen(true)} />
+            <button
+              type="button"
+              className={`lg-kpi-cell lg-kpi-cell-ai${isCardActive("auto") ? " active" : ""}`}
+              onClick={() => selectCard(isCardActive("auto") ? null : "auto")}
+              aria-pressed={isCardActive("auto")}
+            >
+              <div className="lg-kpi-ai-eyebrow"><KlaySparkleIcon /> Processed by AI</div>
+              <div className="lg-kpi-ai-val">{counts.auto}</div>
+              <div className="lg-kpi-ai-sub">Since you left, Klay AI has processed {counts.auto} and needs your confirmation</div>
+              <div className="lg-kpi-ai-cta">Review →</div>
+            </button>
             {kpis.map((k) => (
               <button
                 type="button"
-                className={`lg-kpi-cell${isCardActive(k.card) ? " active" : ""}`}
+                className={`lg-kpi-cell${k.card === "all" ? " lg-kpi-cell-neutral" : ""}${isCardActive(k.card) ? " active" : ""}`}
                 key={k.lbl}
                 onClick={() => selectCard(isCardActive(k.card) ? null : k.card)}
                 aria-pressed={isCardActive(k.card)}
@@ -552,10 +838,16 @@ export default function JournalEntryPage() {
             </div>
 
             <div className="lg-filter-row">
-              <div className="lg-search">
-                <svg viewBox="0 0 14 14"><circle cx="6" cy="6" r="3.5"/><path d="M9 9l3 3" strokeLinecap="round"/></svg>
-                <input placeholder="Search journal number or memo…" value={search} onChange={(e) => setSearch(e.target.value)} />
-              </div>
+              <KlayCommandBar
+                inputRef={klayInputRef}
+                value={klayQuery}
+                onChange={setKlayQuery}
+                onSubmit={submitKlayQuery}
+                onClear={() => setKlayQuery("")}
+                chips={activeChips}
+                onRemoveChip={removeChip}
+                onClearChips={clearAllChips}
+              />
               <div className="lg-filter-meta">
                 <div className="lg-meta-btn-wrap">
                   <button className={`lg-meta-btn${activeFilterCount > 0 ? " active" : ""}`} onClick={() => { setFilterPopOpen(!filterPopOpen); setSortPopOpen(false); setGroupPopOpen(false); }}>
@@ -619,7 +911,7 @@ export default function JournalEntryPage() {
                         )}
                       </div>
                       {!isCollapsed && g.rows.map((r, i) => (
-                        <div key={r.je_number} style={{ position: "relative" }}>
+                        <div key={r.je_number} data-je-row={r.je_number} style={{ position: "relative" }}>
                           <JeRow
                             r={r}
                             isChecked={checked.has(r.je_number)}
@@ -643,7 +935,7 @@ export default function JournalEntryPage() {
                 <>
                   {sortedRows.length === 0 && <div className="lg-empty">None journals matching</div>}
                   {sortedRows.map((r, i) => (
-                    <div key={r.je_number} style={{ position: "relative" }}>
+                    <div key={r.je_number} data-je-row={r.je_number} style={{ position: "relative" }}>
                       <JeRow
                         r={r}
                         isChecked={checked.has(r.je_number)}
@@ -723,6 +1015,13 @@ export default function JournalEntryPage() {
             <div className="drawer-body">
               {drawerTab === "detail" && (
                 <>
+                  {selected.status === "auto" && selected.ai_summary && (
+                    <div className="drawer-ai-callout">
+                      <div className="drawer-ai-eyebrow"><KlaySparkleIcon /> Klay's interpretation</div>
+                      <p className="drawer-ai-text">{selected.ai_summary}</p>
+                      <div className="drawer-ai-meta">Auto-drafted by Klay · awaiting your confirmation</div>
+                    </div>
+                  )}
                   <div className="drawer-stat-row">
                     <div className="drawer-stat-card">
                       <div className="drawer-stat-lbl">Total Debit</div>
@@ -839,6 +1138,24 @@ export default function JournalEntryPage() {
                   Approve
                 </button>
               )}
+              {selected.status === "auto" && (
+                <>
+                  <button
+                    className="drawer-btn ghost"
+                    onClick={() => { onAutoAction("reject", selected); setSelectedId(null); }}
+                  >
+                    <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    Reject
+                  </button>
+                  <button
+                    className="drawer-btn primary klay"
+                    onClick={() => { onAutoAction("confirm", selected); setSelectedId(null); }}
+                  >
+                    <KlaySparkleIcon />
+                    Confirm &amp; post
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </>
@@ -859,6 +1176,8 @@ export default function JournalEntryPage() {
         context={aiContext}
         contextLabel="Journal Entry"
       />
+
+      <KlayActionModal intent={klayAction} onClose={() => setKlayAction(null)} />
 
       {toast && <div className="toast show">{toast}</div>}
     </div>
