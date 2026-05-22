@@ -1,0 +1,79 @@
+/* ── BANK ACCOUNTS — SETTINGS PAGE ──────────────────────────────────── */
+
+/* 3-column KPI strip variant (Invoices uses kpi-5; we use 3) */
+.lg-kpi-strip.kpi-3{grid-template-columns:1fr 1fr 1fr}
+.lg-kpi-strip.kpi-3 .lg-kpi-cell{padding:14px 18px}
+.lg-kpi-strip.kpi-3 .lg-kpi-val{font-size:22px}
+
+/* Settings sub-text rendered as the page intro under the title */
+.bank-accounts-page .settings-sub{margin-top:4px;max-width:680px}
+
+/* Grid template for the bank-accounts table — matches Invoices row pattern */
+.lg-card.lg-table-bank-accounts .lg-row,
+.lg-card.lg-table-bank-accounts .lg-col-header{
+  grid-template-columns:
+    100px           /* bank logo + code */
+    minmax(180px,1.6fr)  /* account name */
+    120px           /* number */
+    140px           /* group */
+    70px            /* currency */
+    minmax(200px,1.4fr)  /* GL link */
+    140px           /* opening balance */
+    70px;           /* edit chevron */
+  padding:10px 24px;
+}
+.lg-card.lg-table-bank-accounts .lg-col-header{padding:9px 24px}
+
+/* Bank cell: logo + code */
+.ba-bank-cell{display:flex;align-items:center;gap:8px;min-width:0}
+.ba-bank-logo{width:26px;height:26px;border-radius:6px;color:#fff;font-family:var(--font-display);font-weight:900;font-size:13px;display:flex;align-items:center;justify-content:center;flex-shrink:0;letter-spacing:-.02em}
+.ba-bank-code{font-family:var(--font-mono);font-size:11.5px;font-weight:700;color:var(--color-text-secondary)}
+
+.ba-name{font-weight:600;color:var(--color-text-primary);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ba-mono{font-family:var(--font-mono);font-size:11.5px;color:var(--color-text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.ba-gl-cell{display:flex;flex-direction:column;gap:1px;min-width:0;overflow:hidden}
+.ba-gl-code{color:var(--color-action);font-weight:700;font-size:11.5px}
+.ba-gl-name{font-size:10.5px;color:var(--color-text-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ba-gl-warn{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:var(--color-warning-text);background:var(--color-warning-surface);border:1px solid var(--color-warning-border);border-radius:9999px;padding:3px 10px;white-space:nowrap}
+.ba-gl-warn svg{width:9px;height:9px;color:var(--color-warning-text);flex-shrink:0}
+
+.ba-row-edit{display:flex;justify-content:flex-end}
+.ba-edit-link{font-size:11.5px;font-weight:700;color:var(--color-action);opacity:0;transition:opacity var(--transition-fast)}
+.lg-row:hover .ba-edit-link{opacity:1}
+
+/* Empty-state styled like Invoices' "None invoice matching" */
+.bank-accounts-page .lg-empty{padding:30px 24px;text-align:center;font-size:12.5px;color:var(--color-text-tertiary);font-style:italic}
+
+/* KPI val tone — used for "Unlinked to GL" when count > 0 */
+.lg-kpi-val.warn{color:var(--color-warning-text)}
+
+/* ── DRAWER FORM ─────────────────────────────────────────────────────── */
+.ba-drawer .drawer-av.bank{font-family:var(--font-display);font-weight:900;font-size:14px;letter-spacing:-.02em}
+
+.ba-section{padding:16px 0;border-bottom:1px solid var(--color-border-subtle)}
+.ba-section:last-of-type{border-bottom:none}
+.ba-section-title{font-size:10px;font-weight:700;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px}
+
+.ba-field{display:flex;flex-direction:column;gap:5px;margin-bottom:14px}
+.ba-field:last-child{margin-bottom:0}
+.ba-field label{font-size:11.5px;font-weight:600;color:var(--color-text-secondary)}
+.ba-field input,
+.ba-field select{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary);background:var(--color-surface-raised);border:1px solid var(--color-border-default);border-radius:var(--radius-sm);padding:8px 10px;outline:none;transition:border-color var(--transition-fast);width:100%}
+.ba-field input:focus,
+.ba-field select:focus{border-color:var(--color-action);box-shadow:0 0 0 3px rgba(26,70,200,.08)}
+.ba-help{font-size:11px;color:var(--color-text-tertiary);line-height:1.45}
+.ba-help strong{color:var(--color-text-secondary);font-weight:600;font-family:var(--font-mono);font-size:10.5px}
+.ba-req{color:var(--color-danger-text)}
+
+.ba-field-row{display:grid;grid-template-columns:1fr 110px;gap:10px;margin-bottom:14px}
+.ba-field-row .ba-field{margin-bottom:0}
+
+.ba-warn{display:flex;align-items:flex-start;gap:6px;font-size:11.5px;color:var(--color-warning-text);background:var(--color-warning-surface);border:1px solid var(--color-warning-border);border-radius:6px;padding:8px 10px;line-height:1.45;margin-top:2px}
+.ba-warn svg{width:11px;height:11px;color:var(--color-warning-text);fill:currentColor;flex-shrink:0;margin-top:2px}
+
+.ba-toggle{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--color-text-primary);cursor:pointer;user-select:none}
+.ba-toggle input{width:14px;height:14px;cursor:pointer;accent-color:var(--color-action)}
+
+.ba-archive-btn{background:transparent;color:var(--color-danger-text);border:1px solid var(--color-danger-border);border-radius:var(--radius-sm);padding:7px 14px;font-family:var(--font-sans);font-size:12px;font-weight:600;cursor:pointer;transition:background var(--transition-fast);margin-bottom:6px}
+.ba-archive-btn:hover{background:var(--color-danger-surface)}

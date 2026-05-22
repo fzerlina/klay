@@ -13,6 +13,9 @@ import CustomersPage from "./pages/CustomersPage";
 import CustomerCreatePage from "./pages/CustomerCreatePage";
 import GeneralLedgerPage from "./pages/GeneralLedgerPage";
 import TrialBalancePage from "./pages/TrialBalancePage";
+import CloseManagementPage from "./pages/CloseManagementPage";
+import BankReconciliationPage from "./pages/BankReconciliationPage";
+import BankAccountsSettingsPage from "./pages/BankAccountsSettingsPage";
 import { InvoicesProvider } from "./state/InvoicesContext";
 import { BillsProvider } from "./state/BillsContext";
 import { VendorsProvider } from "./state/VendorsContext";
@@ -48,6 +51,9 @@ export default function App() {
                 <Route path="/customers" element={<CustomersPage />} />
                 <Route path="/customers/new" element={<CustomerCreatePage />} />
                 <Route path="/trial-balance" element={<TrialBalancePage />} />
+                <Route path="/close" element={<CloseManagementPage />} />
+                <Route path="/bank-reconciliation" element={<BankReconciliationPage />} />
+                <Route path="/bank-accounts" element={<BankAccountsSettingsPage />} />
                 <Route path="*" element={<Navigate to="/journal-entry" replace />} />
               </Route>
             </Routes>

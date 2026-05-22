@@ -4,6 +4,7 @@ import { TODAY } from "../lib/clock";
 import { formatDate } from "../lib/format";
 import AiChatDrawer from "./AiChatDrawer";
 import SummaryDrawer from "./SummaryDrawer";
+import ReconReviewModal, { RECON_TOTAL, RECON_MATCHED, RECON_UNMATCHED } from "../components/ReconReviewModal";
 import { computeJournalInsights, makeJournalAiContext } from "./ai-journal-context";
 import "./modules.css";
 import "./invoices-ledger.css";
@@ -22,20 +23,47 @@ function lineSums(je) {
   return { debit, credit };
 }
 
-const STATUS_LABEL = { posted: "Posted", draft: "Draft", pending: "Pending", void: "Void", auto: "Auto" };
-const STATUS_BADGE_CLASS = { posted: "approved", draft: "draft", pending: "review", void: "rejected", auto: "auto" };
+const STATUS_LABEL = { posted: "Posted", draft: "Draft", pending: "Pending", void: "Void", auto: "Auto", anomaly: "Anomaly" };
+const STATUS_BADGE_CLASS = { posted: "approved", draft: "draft", pending: "review", void: "rejected", auto: "auto", anomaly: "anomaly" };
 
 const AUTO_PROCESSED_COUNT = 8;
+const ANOMALY_COUNT = 4;
+
+function generateAnomaly(je, idx) {
+  const accountName = je.lines[0]?.account_name || "this account";
+  const amt = (je.lines[0]?.debit || je.lines[0]?.credit || 0) / 1e6;
+  const templates = [
+    `Unusual amount: Rp ${amt.toFixed(1)} jt is 3.2× typical for ${accountName} in this period.`,
+    `Possible duplicate — same memo + amount as a JE booked 2 days ago.`,
+    `PO total doesn't match the bill — Rp ${(amt * 0.86).toFixed(1)} jt vs Rp ${amt.toFixed(1)} jt (14% variance).`,
+    `Recurring pattern broken — no prior JE in ${accountName} in the last 90 days.`,
+  ];
+  return templates[idx % templates.length];
+}
 
 function generateAiSummary(je) {
   const memo = (je.memo || "").toLowerCase();
   const n = je.lines.length;
-  if (memo.includes("payroll")) return `Klay matched ${n} employees against the payroll register; debits balance to net pay.`;
-  if (memo.includes("inventory") || memo.includes("goods")) return `Klay reconciled the receipt to PO and auto-balanced inventory + AP.`;
-  if (memo.includes("depreciation")) return `Klay computed straight-line depreciation across ${n} asset accounts per schedule.`;
-  if (memo.includes("interest") || memo.includes("loan") || memo.includes("bank")) return `Klay matched the bank charge against the loan schedule for the period.`;
-  if (memo.includes("revenue") || memo.includes("sales") || memo.includes("invoice")) return `Klay tied the revenue line to the source invoice batch and applied tax.`;
-  return `Klay reconciled ${n} lines against the source document; debits match credits.`;
+  const conf = 90 + (parseInt(je.je_number.slice(-2), 10) % 9);
+  if (memo.includes("payroll")) {
+    return `Matched ${n} payroll lines to April register · Dr Salary Expense / Cr Bank · totals tie to Rp ${(je.lines[0]?.debit / 1e6 || 0).toFixed(1)} jt net pay. ${conf}% match to prior month.`;
+  }
+  if (memo.includes("inventory") || memo.includes("goods")) {
+    return `Reconciled GRN to PO + vendor bill · Dr Inventory / Cr AP · quantities and prices match the PO line items. ${conf}% confidence.`;
+  }
+  if (memo.includes("depreciation")) {
+    return `Straight-line depreciation across ${n} asset accounts per schedule · monthly amount unchanged from prior period. ${conf}% match to schedule.`;
+  }
+  if (memo.includes("interest") || memo.includes("loan")) {
+    return `Bank interest charge tied to loan schedule · period and rate match · Dr Interest Expense / Cr Bank.`;
+  }
+  if (memo.includes("bank") || memo.includes("service charge")) {
+    return `Bank service fee from statement · auto-classified to bank charges based on description pattern. ${conf}% match.`;
+  }
+  if (memo.includes("revenue") || memo.includes("sales") || memo.includes("invoice")) {
+    return `Revenue from customer invoice batch · Dr AR / Cr Revenue + Cr PPN Output · taxable line items reconciled to invoice totals.`;
+  }
+  return `Reconciled ${n} lines against source documents · debits tie to credits · ${conf}% match to historical pattern.`;
 }
 
 // ── Klay command bar: intent + filter parsing (mock; replace with LLM later) ──
@@ -122,8 +150,9 @@ function AiSummaryCard({ insights, onAsk }) {
 
 function JeRow({ r, isChecked, onCheck, onClick, onKebab, isSelected, isAlt }) {
   const isAuto = r.status === "auto";
+  const isAnomaly = r.status === "anomaly";
   return (
-    <div className={`lg-row${isSelected ? " selected" : ""}${isAlt ? " alt" : ""}${isAuto ? " auto" : ""}`} onClick={onClick}>
+    <div className={`lg-row${isSelected ? " selected" : ""}${isAlt ? " alt" : ""}${isAuto ? " auto" : ""}${isAnomaly ? " anomaly" : ""}`} onClick={onClick}>
       <div onClick={(e) => e.stopPropagation()}>
         <input type="checkbox" className="lg-row-check" checked={isChecked} onChange={() => onCheck(r.je_number)} />
       </div>
@@ -135,6 +164,12 @@ function JeRow({ r, isChecked, onCheck, onClick, onKebab, isSelected, isAlt }) {
           <div className="je-desc-ai">
             <KlaySparkleIcon />
             <span className="je-desc-ai-text">{r.ai_summary}</span>
+          </div>
+        )}
+        {isAnomaly && r.anomaly && (
+          <div className="je-desc-anomaly">
+            <svg viewBox="0 0 12 12"><path d="M6 1.5l5 8.5h-10z" fill="currentColor" stroke="none"/><line x1="6" y1="5" x2="6" y2="7.5" stroke="#fff" strokeWidth="1.4"/><circle cx="6" cy="8.8" r="0.6" fill="#fff" stroke="none"/></svg>
+            <span className="je-desc-ai-text">{r.anomaly}</span>
           </div>
         )}
       </div>
@@ -150,6 +185,7 @@ function JeRow({ r, isChecked, onCheck, onClick, onKebab, isSelected, isAlt }) {
       <div>
         <span className={`badge badge-${STATUS_BADGE_CLASS[r.status]}`}>
           {isAuto && <KlaySparkleIcon />}
+          {isAnomaly && <svg viewBox="0 0 12 12"><path d="M6 1.5l5 8.5h-10z" fill="currentColor" stroke="none"/><line x1="6" y1="5" x2="6" y2="7.5" stroke="#fff" strokeWidth="1.4"/><circle cx="6" cy="8.8" r="0.6" fill="#fff" stroke="none"/></svg>}
           {STATUS_LABEL[r.status]}
         </span>
       </div>
@@ -351,6 +387,21 @@ function KlayCommandBar({ inputRef, value, onChange, onSubmit, onClear, chips, o
   );
 }
 
+function ReconStrip({ matched, total, unmatched, onReview, onDismiss }) {
+  return (
+    <div className="lg-recon-strip">
+      <span className="lg-recon-icon"><KlaySparkleIcon /></span>
+      <div className="lg-recon-text">
+        <strong>Klay reconciled {matched} of {total} bank entries</strong> this morning · {unmatched} unmatched need your review
+      </div>
+      <button type="button" className="lg-recon-cta" onClick={onReview}>Review {unmatched} →</button>
+      <button type="button" className="lg-recon-dismiss" onClick={onDismiss} aria-label="Dismiss">
+        <svg viewBox="0 0 12 12"><line x1="2" y1="2" x2="10" y2="10"/><line x1="10" y1="2" x2="2" y2="10"/></svg>
+      </button>
+    </div>
+  );
+}
+
 function KlayActionModal({ intent, onClose }) {
   if (!intent) return null;
   return (
@@ -382,10 +433,19 @@ export default function JournalEntryPage() {
       .sort((a, b) => (b.je_date || "").localeCompare(a.je_date || ""))
       .slice(0, AUTO_PROCESSED_COUNT);
     const autoIds = new Set(pendingByDateDesc.map((je) => je.je_number));
+    // Pick ANOMALY_COUNT anomalies from posted/draft (so the alert is varied)
+    const anomalyCandidates = JOURNAL_ENTRIES
+      .filter((je) => !autoIds.has(je.je_number) && (je.status === "posted" || je.status === "draft"))
+      .sort((a, b) => (b.je_date || "").localeCompare(a.je_date || ""));
+    const anomalyArr = anomalyCandidates.slice(0, ANOMALY_COUNT);
+    const anomalyIndex = new Map(anomalyArr.map((je, i) => [je.je_number, i]));
     return JOURNAL_ENTRIES.map((je) => {
       const { debit, credit } = lineSums(je);
       if (autoIds.has(je.je_number)) {
         return { ...je, debit, credit, status: "auto", ai_summary: generateAiSummary(je) };
+      }
+      if (anomalyIndex.has(je.je_number)) {
+        return { ...je, debit, credit, status: "anomaly", anomaly: generateAnomaly(je, anomalyIndex.get(je.je_number)) };
       }
       return { ...je, debit, credit };
     });
@@ -403,6 +463,14 @@ export default function JournalEntryPage() {
   const [klayAction, setKlayAction] = useState(null); // { query } when action modal open
   const [highlightedRef, setHighlightedRef] = useState(null);
   const klayInputRef = useRef(null);
+
+  // Bank-reconciliation strip + review modal
+  const [reconDismissed, setReconDismissed] = useState(false);
+  const [reconReviewOpen, setReconReviewOpen] = useState(false);
+  function onReconItemAction(action, item) {
+    if (action === "match") showToast(`${item.id} matched — Klay will learn the pattern`);
+    else if (action === "skip") showToast(`${item.id} skipped for now`);
+  }
 
   const [selectedId, setSelectedId] = useState(null);
   const [drawerTab, setDrawerTab] = useState("detail");
@@ -437,7 +505,7 @@ export default function JournalEntryPage() {
 
   // ── KPIs ───────────────────────────────────────────────────────────────
   const counts = useMemo(() => {
-    const c = { posted: 0, draft: 0, pending: 0, void: 0, auto: 0 };
+    const c = { posted: 0, draft: 0, pending: 0, void: 0, auto: 0, anomaly: 0 };
     allRows.forEach((r) => { c[r.status] = (c[r.status] || 0) + 1; });
     return c;
   }, [allRows]);
@@ -450,6 +518,7 @@ export default function JournalEntryPage() {
 
   const tabCounts = useMemo(() => ({
     semua:   allRows.length,
+    anomaly: counts.anomaly,
     auto:    counts.auto,
     pending: counts.pending,
     draft:   counts.draft,
@@ -458,6 +527,7 @@ export default function JournalEntryPage() {
   }), [allRows, counts]);
   const tabs = [
     { k: "semua",   lbl: "All",     count: tabCounts.semua },
+    { k: "anomaly", lbl: "Anomaly", count: tabCounts.anomaly },
     { k: "auto",    lbl: "Auto",    count: tabCounts.auto },
     { k: "pending", lbl: "Pending", count: tabCounts.pending },
     { k: "draft",   lbl: "Draft",   count: tabCounts.draft },
@@ -579,11 +649,11 @@ export default function JournalEntryPage() {
         default: return 0;
       }
     };
-    // Pin Auto rows to the top so AI-processed items always surface first
+    // Pin Anomaly first (urgent), then Auto (needs confirmation), then chosen sort
+    const tier = (r) => r.status === "anomaly" ? 0 : r.status === "auto" ? 1 : 2;
     arr.sort((a, b) => {
-      const aAuto = a.status === "auto" ? 0 : 1;
-      const bAuto = b.status === "auto" ? 0 : 1;
-      if (aAuto !== bAuto) return aAuto - bAuto;
+      const ta = tier(a), tb = tier(b);
+      if (ta !== tb) return ta - tb;
       return cmpBy(a, b);
     });
     return arr;
@@ -826,13 +896,29 @@ export default function JournalEntryPage() {
             <button
               type="button"
               className={`lg-kpi-cell lg-kpi-cell-ai${isCardActive("auto") ? " active" : ""}`}
-              onClick={() => selectCard(isCardActive("auto") ? null : "auto")}
+              onClick={() => {
+                const target = counts.anomaly > 0 ? "anomaly" : "auto";
+                selectCard(isCardActive(target) ? null : target);
+              }}
               aria-pressed={isCardActive("auto")}
             >
               <div className="lg-kpi-ai-eyebrow"><KlaySparkleIcon /> Processed by AI</div>
-              <div className="lg-kpi-ai-val">{counts.auto}</div>
-              <div className="lg-kpi-ai-sub">Since you left, Klay AI has processed {counts.auto} and needs your confirmation</div>
-              <div className="lg-kpi-ai-cta">Review →</div>
+              <div className="lg-kpi-ai-val">
+                {counts.auto}
+                {counts.anomaly > 0 && (
+                  <span className="lg-kpi-ai-anomaly-pip" aria-label={`${counts.anomaly} anomalies flagged`}>
+                    <svg viewBox="0 0 12 12"><path d="M6 1.5l5 8.5h-10z" fill="currentColor" stroke="none"/><line x1="6" y1="5" x2="6" y2="7.5" stroke="#fff" strokeWidth="1.4"/><circle cx="6" cy="8.8" r="0.6" fill="#fff" stroke="none"/></svg>
+                    {counts.anomaly}
+                  </span>
+                )}
+              </div>
+              <div className="lg-kpi-ai-sub">
+                Klay drafted {counts.auto} awaiting your confirmation
+                {counts.anomaly > 0 && (
+                  <><br />Plus {counts.anomaly} {counts.anomaly === 1 ? "anomaly" : "anomalies"} needing review</>
+                )}
+              </div>
+              <div className="lg-kpi-ai-cta">Review all →</div>
             </button>
             {kpis.map((k) => (
               <button
@@ -849,6 +935,17 @@ export default function JournalEntryPage() {
             ))}
           </div>
         </div>
+
+        {/* ── Bank-reconciliation strip (Klay's morning recon summary) ─── */}
+        {!reconDismissed && (
+          <ReconStrip
+            matched={RECON_MATCHED}
+            total={RECON_TOTAL}
+            unmatched={RECON_UNMATCHED.length}
+            onReview={() => setReconReviewOpen(true)}
+            onDismiss={() => setReconDismissed(true)}
+          />
+        )}
 
         {/* ── Table card ─────────────────────────────────────────────── */}
         <div className="lg-table-wrap">
@@ -1048,6 +1145,16 @@ export default function JournalEntryPage() {
                       <div className="drawer-ai-meta">Auto-drafted by Klay · awaiting your confirmation</div>
                     </div>
                   )}
+                  {selected.status === "anomaly" && selected.anomaly && (
+                    <div className="drawer-anomaly-callout">
+                      <div className="drawer-anomaly-eyebrow">
+                        <svg viewBox="0 0 12 12"><path d="M6 1.5l5 8.5h-10z" fill="currentColor" stroke="none"/><line x1="6" y1="5" x2="6" y2="7.5" stroke="#fff" strokeWidth="1.4"/><circle cx="6" cy="8.8" r="0.6" fill="#fff" stroke="none"/></svg>
+                        Anomaly flagged by Klay
+                      </div>
+                      <p className="drawer-anomaly-text">{selected.anomaly}</p>
+                      <div className="drawer-anomaly-meta">Needs your review before period close</div>
+                    </div>
+                  )}
                   <div className="drawer-stat-row">
                     <div className="drawer-stat-card">
                       <div className="drawer-stat-lbl">Total Debit</div>
@@ -1182,6 +1289,23 @@ export default function JournalEntryPage() {
                   </button>
                 </>
               )}
+              {selected.status === "anomaly" && (
+                <>
+                  <button
+                    className="drawer-btn ghost"
+                    onClick={() => { showToast(`${selected.je_number} dismissed — Klay will learn`); setSelectedId(null); }}
+                  >
+                    Dismiss
+                  </button>
+                  <button
+                    className="drawer-btn primary danger"
+                    onClick={() => { showToast(`Investigating ${selected.je_number}`); setSelectedId(null); }}
+                  >
+                    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    Investigate
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </>
@@ -1204,6 +1328,13 @@ export default function JournalEntryPage() {
       />
 
       <KlayActionModal intent={klayAction} onClose={() => setKlayAction(null)} />
+
+      <ReconReviewModal
+        open={reconReviewOpen}
+        items={RECON_UNMATCHED}
+        onClose={() => setReconReviewOpen(false)}
+        onAction={onReconItemAction}
+      />
 
       {toast && <div className="toast show">{toast}</div>}
     </div>

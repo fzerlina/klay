@@ -40,7 +40,7 @@ function shortName(name) {
   return tokens.slice(0, 2).join(" ");
 }
 
-const APPROVAL_LABEL = { sent: "Sent", draft: "Draft", auto: "Auto" };
+const APPROVAL_LABEL = { sent: "Sent", draft: "Draft", auto: "Auto", anomaly: "Anomaly" };
 const PAY_LABEL = { lunas: "Paid", overdue: "Overdue", belumbayar: "Unpaid" };
 
 // ── Klay command bar: intent + filter parsing (mock; replace with LLM later) ──
@@ -98,18 +98,37 @@ function klayChipLabel(key, val) {
 
 // Auto-invoices: mock dataset of drafts Klay AI parsed from WhatsApp / email
 const AUTO_PROCESSED_COUNT = 8;
+const ANOMALY_COUNT = 4;
+
+function generateInvoiceAnomaly(inv, idx) {
+  const cust = inv.customerName || "this customer";
+  const totalShort = inv.total >= 1e9 ? `${(inv.total / 1e9).toFixed(1)} M` : `${(inv.total / 1e6).toFixed(1)} jt`;
+  const templates = [
+    `PO total Rp ${(inv.total * 0.78 / 1e6).toFixed(1)} jt doesn't match invoice total Rp ${totalShort} (22% variance).`,
+    `Possible duplicate — same customer + amount as an invoice sent 4 days ago.`,
+    `Unusual amount: 2.5× ${cust}'s typical order size in the last 6 months.`,
+    `Customer terms say NET 30 but due date set to 14 days — confirm with ${cust}.`,
+  ];
+  return templates[idx % templates.length];
+}
 
 function generateInvoiceAiSummary(inv, source) {
   const n = inv.items?.length || 1;
   const cust = inv.customerName || "the customer";
+  const po = inv.custPO && inv.custPO !== "—" ? inv.custPO : null;
   const totalShort =
-    inv.total >= 1e9 ? `Rp ${(inv.total / 1e9).toFixed(1)}M`
-    : inv.total >= 1e6 ? `Rp ${(inv.total / 1e6).toFixed(1)}jt`
+    inv.total >= 1e9 ? `Rp ${(inv.total / 1e9).toFixed(1)} M`
+    : inv.total >= 1e6 ? `Rp ${(inv.total / 1e6).toFixed(1)} jt`
     : `Rp ${inv.total?.toLocaleString("id-ID")}`;
+  const conf = Math.round(88 + (parseInt(String(inv.id).replace(/\D/g, ""), 10) % 11));
   if (source === "whatsapp") {
-    return `Klay parsed WhatsApp from ${cust} — extracted ${n} line item${n > 1 ? "s" : ""}, total ${totalShort}.`;
+    return po
+      ? `Matched ${n} line items to PO ${po} from ${cust}. Applied 11% PPN. ${conf}% match to this customer's prior orders.`
+      : `Parsed ${n} line items from ${cust}'s WhatsApp. Applied 11% PPN. ${conf}% pattern match to recent invoices.`;
   }
-  return `Klay parsed email from ${cust}${inv.custEmail ? ` (${inv.custEmail})` : ""} — ${n} line item${n > 1 ? "s" : ""}, total ${totalShort}.`;
+  return po
+    ? `Extracted ${n} line items + PO ${po} from ${cust} email. Applied 11% PPN. ${conf}% match to ${cust}'s billing template.`
+    : `Parsed ${n} line items from ${cust}'s email${inv.custEmail ? ` (${inv.custEmail})` : ""}. Applied 11% PPN. ${conf}% confidence.`;
 }
 
 function payBadgeClass(payStatus) {
@@ -392,8 +411,10 @@ function LedgerRow({ r, bucket, isChecked, onCheck, onClick, onKebab, isSelected
   const isPaid = r.payStatus === "lunas";
   const isDraft = r.approval === "draft";
   const isAuto = r.approval === "auto";
+  const isAnomaly = r.approval === "anomaly";
 
   const dotTone =
+    isAnomaly ? "" :
     isAuto ? "" :
     isOverdue ? (bucket?.tone === "warn" ? "warn" : "") :
     isPaid ? "success" :
@@ -404,7 +425,7 @@ function LedgerRow({ r, bucket, isChecked, onCheck, onClick, onKebab, isSelected
     : 0;
 
   return (
-    <div className={`lg-row${isSelected ? " selected" : ""}${isAlt ? " alt" : ""}${isAuto ? " auto" : ""}`} onClick={onClick}>
+    <div className={`lg-row${isSelected ? " selected" : ""}${isAlt ? " alt" : ""}${isAuto ? " auto" : ""}${isAnomaly ? " anomaly" : ""}`} onClick={onClick}>
       <div onClick={(e) => e.stopPropagation()}>
         <input type="checkbox" className="lg-row-check" checked={isChecked} onChange={() => onCheck(r.id)} />
       </div>
@@ -414,7 +435,12 @@ function LedgerRow({ r, bucket, isChecked, onCheck, onClick, onKebab, isSelected
         <span className={`lg-cell-customer-dot${dotTone ? " " + dotTone : ""}`} />
         <div className="lg-cell-customer-body">
           <div className="lg-cell-customer-name">{r.co}</div>
-          {isAuto && r.raw.ai_summary ? (
+          {isAnomaly && r.raw.anomaly ? (
+            <div className="je-desc-anomaly" style={{ marginTop: 1 }}>
+              <svg viewBox="0 0 12 12"><path d="M6 1.5l5 8.5h-10z" fill="currentColor" stroke="none"/><line x1="6" y1="5" x2="6" y2="7.5" stroke="#fff" strokeWidth="1.4"/><circle cx="6" cy="8.8" r="0.6" fill="#fff" stroke="none"/></svg>
+              <span className="je-desc-ai-text">{r.raw.anomaly}</span>
+            </div>
+          ) : isAuto && r.raw.ai_summary ? (
             <div className="je-desc-ai" style={{ marginTop: 1 }}>
               <SparkleIcon />
               <span className="je-desc-ai-text">{r.raw.ai_summary}</span>
@@ -433,7 +459,12 @@ function LedgerRow({ r, bucket, isChecked, onCheck, onClick, onKebab, isSelected
       </div>
       <div className="lg-cell-due">{r.due}</div>
       <div>
-        {isAuto ? (
+        {isAnomaly ? (
+          <span className="badge badge-anomaly">
+            <svg viewBox="0 0 12 12"><path d="M6 1.5l5 8.5h-10z" fill="currentColor" stroke="none"/><line x1="6" y1="5" x2="6" y2="7.5" stroke="#fff" strokeWidth="1.4"/><circle cx="6" cy="8.8" r="0.6" fill="#fff" stroke="none"/></svg>
+            Anomaly
+          </span>
+        ) : isAuto ? (
           <span className="badge badge-auto">
             <SparkleIcon />
             Auto · {r.raw.ai_source === "whatsapp" ? "WA" : "Email"}
@@ -781,23 +812,28 @@ export default function InvoicesPage() {
   const [highlightedRef, setHighlightedRef] = useState(null);
   const klayInputRef = useRef(null);
 
-  // Promote N most-recent drafts to status=auto with a fabricated ai_source + ai_summary
+  // Promote N drafts to auto, then flag a few non-auto invoices as anomalies
   const allRows = useMemo(() => {
     const drafts = invoices
       .filter((i) => i.approval === "draft")
       .sort((a, b) => (b.date || "").localeCompare(a.date || ""))
       .slice(0, AUTO_PROCESSED_COUNT);
     const autoIds = new Set(drafts.map((i) => i.id));
-    let idx = 0;
+    const anomalyCandidates = invoices
+      .filter((i) => !autoIds.has(i.id) && (i.approval === "sent" || i.approval === "draft"))
+      .sort((a, b) => (b.date || "").localeCompare(a.date || ""))
+      .slice(0, ANOMALY_COUNT);
+    const anomalyIndex = new Map(anomalyCandidates.map((i, k) => [i.id, k]));
+    let autoIdx = 0;
     return invoices.map((inv) => {
-      if (!autoIds.has(inv.id)) return inv;
-      const source = idx++ % 2 === 0 ? "whatsapp" : "email";
-      return {
-        ...inv,
-        approval: "auto",
-        ai_source: source,
-        ai_summary: generateInvoiceAiSummary(inv, source),
-      };
+      if (autoIds.has(inv.id)) {
+        const source = autoIdx++ % 2 === 0 ? "whatsapp" : "email";
+        return { ...inv, approval: "auto", ai_source: source, ai_summary: generateInvoiceAiSummary(inv, source) };
+      }
+      if (anomalyIndex.has(inv.id)) {
+        return { ...inv, approval: "anomaly", anomaly: generateInvoiceAnomaly(inv, anomalyIndex.get(inv.id)) };
+      }
+      return inv;
     });
   }, [invoices]);
 
@@ -810,6 +846,7 @@ export default function InvoicesPage() {
   // ── Tab counts (derived from allRows so auto is reflected) ──────────────
   const tabCounts = useMemo(() => ({
     semua:      allRows.length,
+    anomaly:    allRows.filter(i => i.approval === "anomaly").length,
     auto:       allRows.filter(i => i.approval === "auto").length,
     sent:       allRows.filter(i => i.approval === "sent").length,
     draft:      allRows.filter(i => i.approval === "draft").length,
@@ -844,7 +881,8 @@ export default function InvoicesPage() {
   const corpus = useMemo(() => {
     let list = allRows;
     if (filter.kind === "tab") {
-      if (filter.value === "auto")            list = list.filter(i => i.approval === "auto");
+      if (filter.value === "anomaly")         list = list.filter(i => i.approval === "anomaly");
+      else if (filter.value === "auto")       list = list.filter(i => i.approval === "auto");
       else if (filter.value === "sent")       list = list.filter(i => i.approval === "sent");
       else if (filter.value === "draft")      list = list.filter(i => i.approval === "draft");
       else if (filter.value === "jatuhtempo") list = list.filter(i => i.payStatus === "overdue");
@@ -999,11 +1037,11 @@ export default function InvoicesPage() {
         default: return 0;
       }
     };
-    // Pin Auto rows to the top so AI-drafted items surface first
+    // Pin Anomaly first (urgent), then Auto (needs confirmation), then chosen sort
+    const tier = (r) => r.approval === "anomaly" ? 0 : r.approval === "auto" ? 1 : 2;
     arr.sort((a, b) => {
-      const aAuto = a.approval === "auto" ? 0 : 1;
-      const bAuto = b.approval === "auto" ? 0 : 1;
-      if (aAuto !== bAuto) return aAuto - bAuto;
+      const ta = tier(a), tb = tier(b);
+      if (ta !== tb) return ta - tb;
       return cmpBy(a, b);
     });
     return arr;
@@ -1015,9 +1053,10 @@ export default function InvoicesPage() {
   function selectTab(t) { setFilter({ kind: "tab", value: t }); clearChecks(); }
   function selectCard(c) {
     if (c === null) setFilter({ kind: "tab", value: "semua" });
-    // 'overdue' and 'auto' cards route to their tabs so they share UI state
+    // 'overdue', 'auto', 'anomaly' route to their tabs so they share UI state
     else if (c === "overdue") setFilter({ kind: "tab", value: "jatuhtempo" });
     else if (c === "auto")    setFilter({ kind: "tab", value: "auto" });
+    else if (c === "anomaly") setFilter({ kind: "tab", value: "anomaly" });
     else setFilter({ kind: "card", value: c });
     clearChecks();
   }
@@ -1025,6 +1064,7 @@ export default function InvoicesPage() {
   const isCardActive = (c) => {
     if (c === "overdue") return filter.value === "jatuhtempo";
     if (c === "auto")    return filter.value === "auto";
+    if (c === "anomaly") return filter.value === "anomaly";
     return filter.kind === "card" && filter.value === c;
   };
 
@@ -1266,6 +1306,7 @@ export default function InvoicesPage() {
 
   const tabs = [
     { k: "semua",      lbl: "All",     count: tabCounts.semua },
+    { k: "anomaly",    lbl: "Anomaly", count: tabCounts.anomaly },
     { k: "auto",       lbl: "Auto",    count: tabCounts.auto },
     { k: "sent",       lbl: "Sent",    count: tabCounts.sent },
     { k: "draft",      lbl: "Draft",   count: tabCounts.draft },
@@ -1296,13 +1337,29 @@ export default function InvoicesPage() {
           <button
             type="button"
             className={`lg-kpi-cell lg-kpi-cell-ai${isCardActive("auto") ? " active" : ""}`}
-            onClick={() => selectCard(isCardActive("auto") ? null : "auto")}
+            onClick={() => {
+              const target = tabCounts.anomaly > 0 ? "anomaly" : "auto";
+              selectCard(isCardActive(target) ? null : target);
+            }}
             aria-pressed={isCardActive("auto")}
           >
             <div className="lg-kpi-ai-eyebrow"><SparkleIcon /> Processed by AI</div>
-            <div className="lg-kpi-ai-val">{tabCounts.auto}</div>
-            <div className="lg-kpi-ai-sub">Klay drafted {tabCounts.auto} from WhatsApp / email — awaiting your confirmation</div>
-            <div className="lg-kpi-ai-cta">Review →</div>
+            <div className="lg-kpi-ai-val">
+              {tabCounts.auto}
+              {tabCounts.anomaly > 0 && (
+                <span className="lg-kpi-ai-anomaly-pip" aria-label={`${tabCounts.anomaly} anomalies flagged`}>
+                  <svg viewBox="0 0 12 12"><path d="M6 1.5l5 8.5h-10z" fill="currentColor" stroke="none"/><line x1="6" y1="5" x2="6" y2="7.5" stroke="#fff" strokeWidth="1.4"/><circle cx="6" cy="8.8" r="0.6" fill="#fff" stroke="none"/></svg>
+                  {tabCounts.anomaly}
+                </span>
+              )}
+            </div>
+            <div className="lg-kpi-ai-sub">
+              Klay drafted {tabCounts.auto} from WhatsApp / email
+              {tabCounts.anomaly > 0 && (
+                <><br />Plus {tabCounts.anomaly} {tabCounts.anomaly === 1 ? "anomaly" : "anomalies"} needing review</>
+              )}
+            </div>
+            <div className="lg-kpi-ai-cta">Review all →</div>
           </button>
           {kpis.map((k) => (
             <button
@@ -1580,6 +1637,16 @@ export default function InvoicesPage() {
                       </div>
                     </div>
                   )}
+                  {selected.approval === "anomaly" && selected.anomaly && (
+                    <div className="drawer-anomaly-callout">
+                      <div className="drawer-anomaly-eyebrow">
+                        <svg viewBox="0 0 12 12"><path d="M6 1.5l5 8.5h-10z" fill="currentColor" stroke="none"/><line x1="6" y1="5" x2="6" y2="7.5" stroke="#fff" strokeWidth="1.4"/><circle cx="6" cy="8.8" r="0.6" fill="#fff" stroke="none"/></svg>
+                        Anomaly flagged by Klay
+                      </div>
+                      <p className="drawer-anomaly-text">{selected.anomaly}</p>
+                      <div className="drawer-anomaly-meta">Needs your review before period close</div>
+                    </div>
+                  )}
                   <div className="drawer-stat-row">
                     <div className="drawer-stat-card">
                       <div className="drawer-stat-lbl">Total Invoices</div>
@@ -1722,6 +1789,23 @@ export default function InvoicesPage() {
                   >
                     <SparkleIcon />
                     Confirm &amp; send
+                  </button>
+                </>
+              )}
+              {selected.approval === "anomaly" && (
+                <>
+                  <button
+                    className="drawer-btn ghost"
+                    onClick={() => { showToast(`${selected.invNo === "—" ? selected.id : selected.invNo} dismissed — Klay will learn`); setSelectedId(null); }}
+                  >
+                    Dismiss
+                  </button>
+                  <button
+                    className="drawer-btn primary danger"
+                    onClick={() => { showToast(`Investigating ${selected.invNo === "—" ? selected.id : selected.invNo}`); setSelectedId(null); }}
+                  >
+                    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    Investigate
                   </button>
                 </>
               )}

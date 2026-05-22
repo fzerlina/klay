@@ -35,6 +35,11 @@ const navSections = [
         to: "/invoices",
         icon: <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>,
       },
+      {
+        label: "Bank Reconciliation",
+        to: "/bank-reconciliation",
+        icon: <svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><path d="M6 15h4M14 15h4"/></svg>,
+      },
     ],
   },
   {
@@ -65,6 +70,11 @@ const navSections = [
         to: "/pl",
         icon: <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/></svg>,
       },
+      {
+        label: "Close Management",
+        to: "/close",
+        icon: <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="14" x2="13" y2="18"/><line x1="13" y1="14" x2="9" y2="18"/></svg>,
+      },
     ],
   },
 ];
@@ -76,6 +86,7 @@ const settingsSections = [
     icon: <svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>,
     items: [
       { label: "Chart of accounts", to: "/chart-of-accounts" },
+      { label: "Bank accounts", to: "/bank-accounts" },
       { label: "Dimensions", to: "/dimensions" },
       { label: "Fiscal year" },
       { label: "Currency" },

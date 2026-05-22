@@ -343,13 +343,79 @@
 .lg-kpi-cell-ai.active::after{background:var(--color-brand)!important}
 .lg-kpi-ai-eyebrow{display:flex;align-items:center;gap:6px;font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--color-brand)}
 .lg-kpi-ai-eyebrow svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linejoin:round;stroke-linecap:round;flex-shrink:0}
-.lg-kpi-ai-val{font-family:var(--font-mono);font-size:22px;font-weight:700;letter-spacing:-.02em;color:var(--color-brand-deep);line-height:1}
-.lg-kpi-ai-sub{font-size:11px;color:var(--color-brand-deep);opacity:.82}
+.lg-kpi-ai-val{font-family:var(--font-mono);font-size:22px;font-weight:700;letter-spacing:-.02em;color:var(--color-brand-deep);line-height:1;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.lg-kpi-ai-anomaly-pip{display:inline-flex;align-items:center;gap:3px;font-family:var(--font-sans);font-size:12px;font-weight:700;color:var(--color-danger-text);background:var(--color-danger-surface);border:1px solid var(--color-danger-border);border-radius:9999px;padding:2px 8px 2px 6px;line-height:1.2}
+.lg-kpi-ai-anomaly-pip svg{width:9px;height:9px;color:var(--color-danger-text);flex-shrink:0}
+.lg-kpi-ai-sub{font-size:11px;color:var(--color-brand-deep);opacity:.82;line-height:1.4}
 .lg-kpi-ai-cta{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:var(--color-brand);margin-top:2px}
 
 /* Auto status badge — brand orange (AI identity) */
 .badge-auto{background:var(--color-brand-wash);color:var(--color-brand-deep);border-color:var(--color-brand-subtle);gap:4px}
 .badge-auto svg{width:9px;height:9px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linejoin:round;stroke-linecap:round;flex-shrink:0}
+
+/* Anomaly status badge — danger red (AI flagged something off) */
+.badge-anomaly{background:var(--color-danger-surface);color:var(--color-danger-text);border-color:var(--color-danger-border);gap:4px}
+.badge-anomaly svg{width:9px;height:9px;color:var(--color-danger-text);flex-shrink:0}
+
+/* Anomaly description line inside row — italic, danger color, triangle icon */
+.je-desc-anomaly{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--color-danger-text);font-style:italic;overflow:hidden;line-height:1.3}
+.je-desc-anomaly svg{width:10px;height:10px;color:var(--color-danger-text);flex-shrink:0}
+
+/* Soft red tint on Anomaly rows — sits above Auto in visual urgency */
+.lg-row.anomaly{background:rgba(160,32,32,.035)}
+.lg-row.anomaly:hover{background:rgba(160,32,32,.08)}
+
+/* ── BANK-RECONCILIATION STRIP (above the table) ──────────────────────── */
+.lg-recon-strip{display:flex;align-items:center;gap:12px;margin:0 24px 12px;padding:9px 12px 9px 14px;background:linear-gradient(90deg,var(--color-brand-wash) 0%,var(--color-brand-subtle) 100%);border:1px solid var(--color-brand-subtle);border-left:3px solid var(--color-brand-mid);border-radius:var(--radius-md);font-size:12.5px;color:var(--color-text-secondary)}
+.lg-recon-icon{width:22px;height:22px;border-radius:6px;background:var(--color-brand-mid);color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.lg-recon-icon svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linejoin:round;stroke-linecap:round}
+.lg-recon-text{flex:1;min-width:0;line-height:1.45}
+.lg-recon-text strong{color:var(--color-text-primary);font-weight:700}
+.lg-recon-cta{background:var(--color-action);color:#fff;border:1px solid var(--color-action);border-radius:var(--radius-sm);padding:6px 12px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:var(--font-sans);transition:background var(--transition-fast);white-space:nowrap;flex-shrink:0}
+.lg-recon-cta:hover{background:var(--color-action-hover);border-color:var(--color-action-hover)}
+.lg-recon-dismiss{background:transparent;border:none;width:24px;height:24px;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--color-text-tertiary);flex-shrink:0;padding:0}
+.lg-recon-dismiss:hover{background:rgba(184,61,8,.10);color:var(--color-brand-deep)}
+.lg-recon-dismiss svg{width:10px;height:10px;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;fill:none}
+
+/* ── RECON REVIEW MODAL ──────────────────────────────────────────────── */
+.lg-recon-modal-backdrop{position:fixed;inset:0;background:rgba(8,7,6,.42);z-index:220;display:flex;align-items:flex-start;justify-content:center;padding:8vh 24px;animation:klayLauncherFade .14s ease-out}
+.lg-recon-modal{background:var(--color-surface-raised);border:1px solid var(--color-border-default);border-radius:14px;width:min(560px,100%);max-height:84vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 64px rgba(8,7,6,.22)}
+.lg-recon-modal-head{display:flex;align-items:center;gap:10px;padding:16px 18px 14px;border-bottom:1px solid var(--color-border-subtle);flex-shrink:0}
+.lg-recon-modal-title{font-family:var(--font-display);font-size:17px;font-weight:700;color:var(--color-text-primary);letter-spacing:-.01em}
+.lg-recon-modal-sub{font-size:11.5px;color:var(--color-text-tertiary);margin-top:2px}
+.lg-recon-modal-close{background:transparent;border:none;width:28px;height:28px;border-radius:6px;cursor:pointer;color:var(--color-text-tertiary);display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0}
+.lg-recon-modal-close:hover{background:var(--color-surface-sunken);color:var(--color-text-primary)}
+.lg-recon-modal-close svg{width:11px;height:11px;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;fill:none}
+.lg-recon-modal-body{padding:8px 18px 18px;overflow-y:auto;display:flex;flex-direction:column;gap:10px}
+
+.lg-recon-item{background:var(--color-surface-raised);border:1px solid var(--color-border-default);border-radius:var(--radius-md);padding:12px 14px;display:flex;flex-direction:column;gap:5px}
+.lg-recon-item-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.lg-recon-item-name{font-size:12.5px;font-weight:600;color:var(--color-text-primary)}
+.lg-recon-item-amt{font-family:var(--font-mono);font-size:12.5px;font-weight:700;color:var(--color-text-primary);white-space:nowrap}
+.lg-recon-item-amt.neg{color:var(--color-danger-text)}
+.lg-recon-item-meta{font-size:11px;color:var(--color-text-tertiary);font-family:var(--font-mono)}
+.lg-recon-item-reason{font-size:11.5px;color:var(--color-text-secondary);line-height:1.45;margin-top:2px}
+.lg-recon-item-reason-lbl{font-weight:700;color:var(--color-text-secondary);font-size:10px;text-transform:uppercase;letter-spacing:.05em;margin-right:4px}
+.lg-recon-item-suggested{display:flex;align-items:center;gap:6px;background:var(--color-brand-wash);border:1px solid var(--color-brand-subtle);border-radius:6px;padding:6px 10px;font-size:11.5px;color:var(--color-brand-deep);font-style:italic;line-height:1.4;margin-top:4px}
+.lg-recon-item-suggested svg{width:10px;height:10px;stroke:var(--color-brand);fill:none;stroke-width:1.7;stroke-linejoin:round;stroke-linecap:round;flex-shrink:0}
+.lg-recon-item-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:6px}
+.lg-recon-item-btn{font-family:var(--font-sans);font-size:11.5px;font-weight:600;padding:5px 14px;border-radius:var(--radius-sm);cursor:pointer;border:1px solid;transition:background var(--transition-fast),border-color var(--transition-fast),color var(--transition-fast);white-space:nowrap}
+.lg-recon-item-btn.primary{background:var(--color-action);border-color:var(--color-action);color:#fff}
+.lg-recon-item-btn.primary:hover{background:var(--color-action-hover);border-color:var(--color-action-hover)}
+.lg-recon-item-btn.ghost{background:var(--color-surface-raised);border-color:var(--color-border-strong);color:var(--color-text-secondary)}
+.lg-recon-item-btn.ghost:hover{background:var(--color-surface-sunken);color:var(--color-text-primary)}
+
+/* Drawer anomaly callout — danger themed (mirrors drawer-ai-callout structure) */
+.drawer-anomaly-callout{background:linear-gradient(160deg,var(--color-danger-surface) 0%,var(--color-surface-raised) 100%);border:1px solid var(--color-danger-border);border-radius:var(--radius-md);padding:12px 14px;margin-bottom:14px}
+.drawer-anomaly-eyebrow{display:flex;align-items:center;gap:6px;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--color-danger-text);margin-bottom:6px}
+.drawer-anomaly-eyebrow svg{width:11px;height:11px;color:var(--color-danger-text);flex-shrink:0}
+.drawer-anomaly-text{font-size:12.5px;color:var(--color-danger-text);line-height:1.5;margin:0;font-weight:500}
+.drawer-anomaly-meta{font-size:11px;color:var(--color-danger-text);opacity:.78;margin-top:8px}
+
+/* Drawer Investigate button — danger-themed primary */
+.drawer-btn.primary.danger{background:var(--color-danger-text);border-color:var(--color-danger-text);color:#fff}
+.drawer-btn.primary.danger:hover{background:#7d1818;border-color:#7d1818}
+.drawer-btn.primary.danger svg{stroke:#fff;fill:none}
 
 /* JE row description cell — 2-line variant for AI rows */
 .je-desc-cell{min-width:0;display:flex;flex-direction:column;gap:2px;justify-content:center;overflow:hidden}

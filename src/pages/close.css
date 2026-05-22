@@ -1,0 +1,49 @@
+/* ── CLOSE MANAGEMENT — page-level styles ──────────────────────────────── */
+
+/* Header meta row: period · day X of Y · blockers */
+.close-meta{display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--color-text-tertiary);margin-top:6px;flex-wrap:wrap}
+.close-meta svg{width:10px;height:10px;vertical-align:-1px;color:var(--color-brand)}
+.close-meta-blockers svg{color:currentColor}
+.close-meta-period{color:var(--color-text-secondary);font-weight:600;font-family:var(--font-display);letter-spacing:.01em}
+.close-meta-sep{color:var(--color-border-strong)}
+.close-meta-blockers{font-weight:700;color:var(--color-danger-text);background:var(--color-danger-surface);border:1px solid var(--color-danger-border);border-radius:9999px;padding:2px 9px;font-size:11.5px}
+.close-meta-blockers.ok{color:var(--color-success-text);background:var(--color-success-surface);border-color:var(--color-success-border)}
+
+/* Zones grid */
+.close-zones{padding:0 24px 16px;display:flex;flex-direction:column;gap:12px}
+
+.close-zone{background:var(--color-surface-raised);border:1px solid var(--color-border-default);border-radius:12px;overflow:hidden}
+.close-zone-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;border-bottom:1px solid var(--color-border-subtle);background:linear-gradient(180deg,var(--color-surface-raised) 0%,var(--color-surface-sunken) 100%)}
+.close-zone-title{font-family:var(--font-display);font-size:15px;font-weight:700;color:var(--color-text-primary);letter-spacing:-.005em;margin:0}
+.close-zone-tally{font-size:11.5px;font-weight:700;color:var(--color-danger-text);background:var(--color-danger-surface);border:1px solid var(--color-danger-border);border-radius:9999px;padding:3px 10px;white-space:nowrap}
+.close-zone-tally.ok{color:var(--color-success-text);background:var(--color-success-surface);border-color:var(--color-success-border)}
+.close-zone-of{font-weight:500;opacity:.7}
+
+.close-zone-body{display:flex;flex-direction:column}
+
+/* Single line item inside a zone */
+.close-item{display:flex;align-items:center;gap:10px;padding:11px 16px;border-bottom:1px solid var(--color-border-subtle);font-size:12.5px}
+.close-item:last-child{border-bottom:none}
+.close-item-label{flex:1;min-width:0;color:var(--color-text-primary);font-weight:500}
+.close-item-value{font-family:var(--font-mono);font-size:11.5px;color:var(--color-text-tertiary);white-space:nowrap;flex-shrink:0}
+.close-item.warn .close-item-value{color:var(--color-warning-text);font-weight:600}
+.close-item.danger .close-item-value{color:var(--color-danger-text);font-weight:600}
+.close-item.ok .close-item-value{color:var(--color-success-text)}
+.close-item-cta{font-family:var(--font-sans);font-size:11.5px;font-weight:700;padding:5px 11px;border-radius:var(--radius-sm);cursor:pointer;background:var(--color-action);border:1px solid var(--color-action);color:#fff;white-space:nowrap;transition:background var(--transition-fast),border-color var(--transition-fast)}
+.close-item-cta:hover{background:var(--color-action-hover);border-color:var(--color-action-hover)}
+
+/* Status icons */
+.close-status{width:14px;height:14px;flex-shrink:0}
+.close-status.ok{color:var(--color-success-text)}
+.close-status.warn{color:var(--color-warning-text)}
+.close-status.danger{color:var(--color-danger-text)}
+.close-status.dot{width:8px;height:8px;border-radius:50%;background:var(--color-border-strong);margin:3px}
+
+/* Ready-to-close CTA bar */
+.close-cta-wrap{padding:6px 24px 24px;display:flex;flex-direction:column;align-items:flex-start;gap:6px}
+.close-cta{display:inline-flex;align-items:center;gap:8px;font-family:var(--font-sans);font-size:14px;font-weight:700;padding:11px 22px;border-radius:10px;cursor:pointer;background:var(--color-action);border:1px solid var(--color-action);color:#fff;transition:background var(--transition-fast),border-color var(--transition-fast),box-shadow var(--transition-fast);box-shadow:0 2px 6px rgba(26,70,200,.18)}
+.close-cta:hover:not(:disabled){background:var(--color-action-hover);border-color:var(--color-action-hover);box-shadow:0 4px 10px rgba(26,70,200,.22)}
+.close-cta:disabled{background:var(--color-surface-sunken);border-color:var(--color-border-strong);color:var(--color-text-tertiary);cursor:not-allowed;box-shadow:none}
+.close-cta svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linejoin:round;stroke-linecap:round}
+.close-cta-hint{font-size:11.5px;color:var(--color-text-tertiary)}
+.close-cta-hint.ok{color:var(--color-success-text);font-weight:600}
