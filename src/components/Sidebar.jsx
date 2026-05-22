@@ -1,6 +1,41 @@
 import { useState, useEffect } from "react";
 import { NavLink } from "react-router-dom";
 
+// Mini progress ring shown next to the Close menu item. Reinforces Klay's
+// 0-day closing USP — the user can see close health without leaving any page.
+function CloseProgressRing({ done = 5, awaiting = 4, working = 0, total = 9 }) {
+  const R = 7;
+  const C = 2 * Math.PI * R;
+  const doneLen     = total ? (done     / total) * C : 0;
+  const awaitingLen = total ? (awaiting / total) * C : 0;
+  const workingLen  = total ? (working  / total) * C : 0;
+  const overall = total ? Math.round((done / total) * 100) : 0;
+  return (
+    <span className="sb-progress-ring" aria-label={`Close: ${done} of ${total} complete (${overall}%)`} title={`${done}/${total} complete · ${awaiting} awaiting · ${working} in progress`}>
+      <svg viewBox="0 0 20 20">
+        <circle cx="10" cy="10" r={R} fill="none" style={{ stroke: "rgba(255,255,255,0.18)" }} strokeWidth="2.4"/>
+        {done > 0 && (
+          <circle cx="10" cy="10" r={R} fill="none" style={{ stroke: "#3ec47a" }} strokeWidth="2.4"
+            strokeDasharray={`${doneLen} ${C - doneLen}`}
+            transform="rotate(-90 10 10)" strokeLinecap="round"/>
+        )}
+        {awaiting > 0 && (
+          <circle cx="10" cy="10" r={R} fill="none" style={{ stroke: "var(--color-brand)" }} strokeWidth="2.4"
+            strokeDasharray={`${awaitingLen} ${C - awaitingLen}`}
+            strokeDashoffset={-doneLen}
+            transform="rotate(-90 10 10)" strokeLinecap="round"/>
+        )}
+        {working > 0 && (
+          <circle cx="10" cy="10" r={R} fill="none" style={{ stroke: "rgba(255,255,255,0.45)" }} strokeWidth="2.4"
+            strokeDasharray={`${workingLen} ${C - workingLen}`}
+            strokeDashoffset={-(doneLen + awaitingLen)}
+            transform="rotate(-90 10 10)" strokeLinecap="round"/>
+        )}
+      </svg>
+    </span>
+  );
+}
+
 const navSections = [
   {
     section: "Overview",
@@ -9,6 +44,12 @@ const navSections = [
         label: "Dashboard",
         to: "/dashboard",
         icon: <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>,
+      },
+      {
+        label: "Close April 2025",
+        to: "/close",
+        icon: <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="14" x2="13" y2="18"/><line x1="13" y1="14" x2="9" y2="18"/></svg>,
+        indicator: <CloseProgressRing />,
       },
     ],
   },
@@ -69,11 +110,6 @@ const navSections = [
         label: "P&L",
         to: "/pl",
         icon: <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/></svg>,
-      },
-      {
-        label: "Close Management",
-        to: "/close",
-        icon: <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="14" x2="13" y2="18"/><line x1="13" y1="14" x2="9" y2="18"/></svg>,
       },
     ],
   },
@@ -238,7 +274,7 @@ export default function Sidebar() {
           <div key={section}>
             <div className="sb-section">{section}</div>
             {sIdx > 0 && <div className="sb-rail-divider" />}
-            {items.map(({ label, to, icon }) => (
+            {items.map(({ label, to, icon, indicator }) => (
               <NavLink
                 key={to}
                 to={to}
@@ -247,6 +283,7 @@ export default function Sidebar() {
               >
                 {icon}
                 {!collapsed && label}
+                {!collapsed && indicator}
               </NavLink>
             ))}
           </div>

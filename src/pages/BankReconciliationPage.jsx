@@ -618,6 +618,7 @@ export default function BankReconciliationPage() {
   const [createModal, setCreateModal] = useState(null);
   const [klayQuery, setKlayQuery] = useState("");
   const [highlightedRef, setHighlightedRef] = useState(null);
+  const [accountListOpen, setAccountListOpen] = useState(false);
   const klayInputRef = useRef(null);
   const [search, setSearch] = useState("");
   const [checked, setChecked] = useState(() => new Set());
@@ -900,20 +901,47 @@ export default function BankReconciliationPage() {
           </div>
         </div>
 
-        {/* ── Account carousel ────────────────────────────────────────── */}
+        {/* ── Account quick-access row (3 cards) + "more" → drawer ────── */}
         <div className="bank-carousel-row">
-          <div className="bank-carousel-wrap">
-            <div className="bank-carousel">
-              {ACCOUNTS.filter((a) => accountGroup === "all" || a.group === accountGroup).map((acct) => (
-                <AccountCard
-                  key={acct.id}
-                  account={acct}
-                  counts={countByStatus(transactions[acct.id] || [])}
-                  selected={selectedAccount === acct.id}
-                  onSelect={(id) => { setSelectedAccount(id); clearChecks(); setStatusFilter("all"); }}
-                />
-              ))}
-            </div>
+          <div className="bank-carousel">
+            {(() => {
+              const filtered = ACCOUNTS.filter((a) => accountGroup === "all" || a.group === accountGroup);
+              const selectedInFiltered = filtered.find((a) => a.id === selectedAccount);
+              let visible = filtered.slice(0, 3);
+              if (selectedInFiltered && !visible.some((a) => a.id === selectedAccount)) {
+                visible = [selectedInFiltered, ...filtered.slice(0, 2)];
+              }
+              const remaining = filtered.length - visible.length;
+              return (
+                <>
+                  {visible.map((acct) => (
+                    <AccountCard
+                      key={acct.id}
+                      account={acct}
+                      counts={countByStatus(transactions[acct.id] || [])}
+                      selected={selectedAccount === acct.id}
+                      onSelect={(id) => { setSelectedAccount(id); clearChecks(); setStatusFilter("all"); }}
+                    />
+                  ))}
+                  {remaining > 0 && (
+                    <button
+                      type="button"
+                      className="bank-card bank-card-more"
+                      onClick={() => setAccountListOpen(true)}
+                    >
+                      <div className="bank-card-more-icon">
+                        <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="3" cy="7" r="1"/><circle cx="7" cy="7" r="1"/><circle cx="11" cy="7" r="1"/>
+                        </svg>
+                      </div>
+                      <div className="bank-card-more-val">+{remaining}</div>
+                      <div className="bank-card-more-lbl">more accounts</div>
+                      <div className="bank-card-more-cta">View all →</div>
+                    </button>
+                  )}
+                </>
+              );
+            })()}
           </div>
         </div>
         </div>
@@ -1094,6 +1122,73 @@ export default function BankReconciliationPage() {
           )}
         </div>
       </div>
+
+      {/* ── Full account list — side drawer ─────────────────────────── */}
+      {accountListOpen && (
+        <>
+          <div className="drawer-overlay" onClick={() => setAccountListOpen(false)} />
+          <div className="drawer bank-accounts-list-drawer">
+            <div className="drawer-head">
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="drawer-title">All bank accounts</div>
+                <div className="drawer-sub">{ACCOUNTS.length} accounts across {ACCOUNT_GROUPS.length - 1} groups</div>
+              </div>
+              <button type="button" className="drawer-close" onClick={() => setAccountListOpen(false)}>
+                <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+            <div className="drawer-body">
+              {ACCOUNT_GROUPS.filter((g) => g.k !== "all").map((g) => {
+                const groupAccounts = ACCOUNTS.filter((a) => a.group === g.k);
+                if (groupAccounts.length === 0) return null;
+                return (
+                  <div key={g.k} className="bank-list-group">
+                    <div className="bank-list-group-head">
+                      <span>{g.lbl}</span>
+                      <span className="bank-list-group-count">{groupAccounts.length}</span>
+                    </div>
+                    {groupAccounts.map((acct) => {
+                      const acctCounts = countByStatus(transactions[acct.id] || []);
+                      const total = (acctCounts.matched || 0) + (acctCounts.auto || 0) + (acctCounts["to-match"] || 0) + (acctCounts.excluded || 0);
+                      const needsAction = (acctCounts.auto || 0) + (acctCounts["to-match"] || 0);
+                      const isSelected = selectedAccount === acct.id;
+                      return (
+                        <button
+                          key={acct.id}
+                          type="button"
+                          className={`bank-list-item${isSelected ? " selected" : ""}`}
+                          onClick={() => {
+                            setSelectedAccount(acct.id);
+                            clearChecks();
+                            setStatusFilter("all");
+                            setAccountListOpen(false);
+                          }}
+                        >
+                          <span className="bank-list-item-logo" style={{ background: acct.color }}>{acct.bank.slice(0, 1)}</span>
+                          <div className="bank-list-item-info">
+                            <div className="bank-list-item-title">{acct.glAccount} · {acct.name}</div>
+                            <div className="bank-list-item-meta">{acct.bank} · {acct.number}</div>
+                          </div>
+                          <div className="bank-list-item-right">
+                            <div className="bank-list-item-amt">Rp {fmtRp(acct.balance)}</div>
+                            {total === 0 ? (
+                              <span className="bank-list-item-pill empty">No statement</span>
+                            ) : needsAction > 0 ? (
+                              <span className="bank-list-item-pill warn">{needsAction} to review</span>
+                            ) : (
+                              <span className="bank-list-item-pill ok">All matched</span>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      )}
 
       <UploadStatementModal
         open={uploadOpen}

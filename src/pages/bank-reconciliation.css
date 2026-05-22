@@ -44,13 +44,41 @@
 .bank-filter-pop-item.active .bank-filter-pop-count{background:rgba(26,70,200,.12);color:var(--color-action)}
 .bank-filter-pop-check{width:11px;height:11px;color:var(--color-action);flex-shrink:0}
 
-/* ── ACCOUNT CAROUSEL ─────────────────────────────────────────────────── */
-.bank-carousel-wrap{flex:1;min-width:0;padding:0;overflow-x:auto;overflow-y:visible;-webkit-overflow-scrolling:touch}
-.bank-carousel-wrap::-webkit-scrollbar{height:6px}
-.bank-carousel-wrap::-webkit-scrollbar-thumb{background:var(--color-border-strong);border-radius:3px}
-.bank-carousel{display:inline-flex;gap:10px;padding:2px 2px 8px}
+/* ── ACCOUNT QUICK-ACCESS ROW (3 cards + "more" → drawer) ─────────────── */
+.bank-carousel{display:flex;gap:10px;padding:2px 2px 8px;flex-wrap:nowrap}
+.bank-carousel > *{flex:1 1 0;min-width:0}
 
-.bank-card{flex:0 0 268px;background:var(--color-surface-raised);border:1px solid var(--color-border-default);border-radius:12px;padding:11px 13px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:7px;transition:border-color var(--transition-fast),box-shadow var(--transition-fast),background var(--transition-fast);font-family:var(--font-sans)}
+/* "+X more" card */
+.bank-card-more{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:4px;background:var(--color-surface-sunken);border:1px dashed var(--color-border-strong);border-radius:12px;padding:11px 13px;cursor:pointer;font-family:var(--font-sans);transition:background var(--transition-fast),border-color var(--transition-fast)}
+.bank-card-more:hover{background:var(--color-brand-wash);border-color:var(--color-brand-subtle)}
+.bank-card-more-icon{width:24px;height:24px;border-radius:6px;background:var(--color-surface-raised);border:1px solid var(--color-border-default);color:var(--color-text-secondary);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-bottom:2px}
+.bank-card-more-icon svg{width:12px;height:12px}
+.bank-card-more-val{font-family:var(--font-mono);font-size:18px;font-weight:700;color:var(--color-text-primary);letter-spacing:-.01em;line-height:1}
+.bank-card-more-lbl{font-size:11px;color:var(--color-text-tertiary)}
+.bank-card-more-cta{font-size:11px;font-weight:700;color:var(--color-action);margin-top:2px}
+
+/* ── BANK ACCOUNTS LIST DRAWER ─────────────────────────────────────── */
+.bank-accounts-list-drawer{width:420px}
+.bank-list-group{margin-bottom:18px}
+.bank-list-group:last-child{margin-bottom:0}
+.bank-list-group-head{display:flex;align-items:baseline;justify-content:space-between;padding:0 0 8px;font-size:10px;font-weight:700;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid var(--color-border-default);margin-bottom:8px}
+.bank-list-group-count{font-family:var(--font-mono);font-size:10.5px;background:var(--color-surface-sunken);color:var(--color-text-tertiary);padding:1px 7px;border-radius:9999px;letter-spacing:0}
+
+.bank-list-item{display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px;background:var(--color-surface-raised);border:1px solid var(--color-border-default);border-radius:10px;cursor:pointer;text-align:left;font-family:var(--font-sans);margin-bottom:6px;transition:border-color var(--transition-fast),background var(--transition-fast)}
+.bank-list-item:hover{border-color:var(--color-border-strong);background:var(--color-surface-sunken)}
+.bank-list-item.selected{border-color:var(--color-brand-mid);background:linear-gradient(160deg,var(--color-brand-wash) 0%,var(--color-surface-raised) 100%);box-shadow:0 0 0 2px rgba(184,61,8,.08)}
+.bank-list-item-logo{width:28px;height:28px;border-radius:7px;color:#fff;font-family:var(--font-display);font-weight:900;font-size:13px;display:flex;align-items:center;justify-content:center;flex-shrink:0;letter-spacing:-.02em}
+.bank-list-item-info{flex:1;min-width:0}
+.bank-list-item-title{font-size:12px;font-weight:700;color:var(--color-text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;letter-spacing:-.005em}
+.bank-list-item-meta{font-family:var(--font-mono);font-size:10.5px;color:var(--color-text-tertiary);margin-top:1px}
+.bank-list-item-right{display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0}
+.bank-list-item-amt{font-family:var(--font-mono);font-size:11.5px;font-weight:700;color:var(--color-text-primary)}
+.bank-list-item-pill{font-size:9.5px;font-weight:700;padding:1px 8px;border-radius:9999px;border:1px solid;white-space:nowrap}
+.bank-list-item-pill.ok{background:var(--color-success-surface);color:var(--color-success-text);border-color:var(--color-success-border)}
+.bank-list-item-pill.warn{background:var(--color-warning-surface);color:var(--color-warning-text);border-color:var(--color-warning-border)}
+.bank-list-item-pill.empty{background:var(--color-surface-sunken);color:var(--color-text-tertiary);border-color:var(--color-border-default)}
+
+.bank-card{flex:1 1 0;min-width:0;background:var(--color-surface-raised);border:1px solid var(--color-border-default);border-radius:12px;padding:11px 13px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:7px;transition:border-color var(--transition-fast),box-shadow var(--transition-fast),background var(--transition-fast);font-family:var(--font-sans)}
 .bank-card:hover{border-color:var(--color-border-strong);background:var(--color-surface-raised)}
 .bank-card.selected{border-color:var(--color-brand-mid);background:linear-gradient(160deg,var(--color-brand-wash) 0%,var(--color-surface-raised) 100%);box-shadow:0 0 0 3px rgba(184,61,8,.08)}
 .bank-card.empty{opacity:.6}

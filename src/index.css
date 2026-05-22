@@ -84,6 +84,11 @@ body{font-family:var(--font-sans);background:var(--color-surface-base);color:var
 .sb.collapsed .sb-item{justify-content:center;width:36px;height:36px;padding:0;margin:2px 0;border-radius:9px;gap:0;font-size:0}
 .sb.collapsed .sb-item.active::before{left:-10px;top:8px;bottom:8px;width:2.5px}
 
+/* Tiny progress ring next to Close menu item (0-day-closing USP) */
+.sb-progress-ring{margin-left:auto;display:inline-flex;align-items:center;line-height:0;flex-shrink:0}
+.sb-item .sb-progress-ring svg{width:18px;height:18px;stroke:none;color:inherit}
+.sb.collapsed .sb-progress-ring{display:none}
+
 /* Settings (sn-*) — same treatment as sb-item */
 .sn-item{display:flex;align-items:center;gap:11px;padding:8px 10px;margin:1px 0;border-radius:8px;cursor:pointer;font-size:13px;color:var(--sidebar-text);transition:background var(--transition-fast),color var(--transition-fast);user-select:none}
 .sn-item svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;flex-shrink:0;color:var(--sidebar-text-muted)}
