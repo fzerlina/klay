@@ -3,7 +3,7 @@ import { NavLink } from "react-router-dom";
 
 // Mini progress ring shown next to the Close menu item. Reinforces Klay's
 // 0-day closing USP — the user can see close health without leaving any page.
-function CloseProgressRing({ done = 5, awaiting = 4, working = 0, total = 9 }) {
+function CloseProgressRing({ done = 5, awaiting = 3, working = 0, total = 8 }) {
   const R = 7;
   const C = 2 * Math.PI * R;
   const doneLen     = total ? (done     / total) * C : 0;

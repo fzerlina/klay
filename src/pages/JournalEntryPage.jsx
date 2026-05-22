@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import { JOURNAL_ENTRIES } from "../data/seed/journalEntries";
 import { TODAY } from "../lib/clock";
 import { formatDate } from "../lib/format";
@@ -451,7 +452,20 @@ export default function JournalEntryPage() {
     });
   }, []);
 
-  const [filter, setFilter] = useState({ kind: "tab", value: "semua" });
+  const [searchParams] = useSearchParams();
+  const initialTab = (() => {
+    const t = searchParams.get("tab");
+    const valid = ["semua", "anomaly", "auto", "pending", "draft", "posted", "void"];
+    return t && valid.includes(t) ? t : "semua";
+  })();
+  const [filter, setFilter] = useState({ kind: "tab", value: initialTab });
+
+  // Respond to deep-link tab changes (e.g. navigating from Close → JE with ?tab=anomaly)
+  useEffect(() => {
+    const t = searchParams.get("tab");
+    const valid = ["semua", "anomaly", "auto", "pending", "draft", "posted", "void"];
+    if (t && valid.includes(t)) setFilter({ kind: "tab", value: t });
+  }, [searchParams]);
   const [sortChoice, setSortChoice] = useState(null);
   const [groupChoice, setGroupChoice] = useState(null);
   const emptyFilters = { creators: new Set(), minAmt: "", maxAmt: "", dateFrom: "", dateTo: "" };
@@ -935,17 +949,6 @@ export default function JournalEntryPage() {
             ))}
           </div>
         </div>
-
-        {/* ── Bank-reconciliation strip (Klay's morning recon summary) ─── */}
-        {!reconDismissed && (
-          <ReconStrip
-            matched={RECON_MATCHED}
-            total={RECON_TOTAL}
-            unmatched={RECON_UNMATCHED.length}
-            onReview={() => setReconReviewOpen(true)}
-            onDismiss={() => setReconDismissed(true)}
-          />
-        )}
 
         {/* ── Table card ─────────────────────────────────────────────── */}
         <div className="lg-table-wrap">

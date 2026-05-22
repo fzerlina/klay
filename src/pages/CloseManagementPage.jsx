@@ -1,6 +1,7 @@
 import { useMemo, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { RECON_TOTAL, RECON_MATCHED, RECON_UNMATCHED } from "../components/ReconReviewModal";
+import { ACCOUNTS as BANK_ACCOUNTS, INITIAL_TRANSACTIONS as BANK_TRANSACTIONS } from "./BankReconciliationPage";
+import { JOURNAL_ENTRIES } from "../data/seed/journalEntries";
 import "./modules.css";
 import "./invoices-ledger.css";
 import "./close.css";
@@ -17,7 +18,6 @@ const TASK_OWNERS = {
   "ap-aging":         "budi",
   "anomalies":        "budi",
   "pending-jes":      "budi",
-  "accruals-missing": "andi",
   "depreciation":     "andi",
   "prepaid":          "sarah",
   "payroll":          "sarah",
@@ -27,6 +27,40 @@ const HUMAN_REVIEWERS = [
   { key: "budi",  name: "Budi Santoso",  initials: "BS" },
   { key: "andi",  name: "Andi Prasetyo", initials: "AP" },
 ];
+
+// Single source of truth for bank-rec stats — derived from the real
+// Bank Reconciliation page data so the two pages always tally.
+const RECON_STATS = (() => {
+  const totalAccounts = BANK_ACCOUNTS.length;
+  const statementsUploaded = BANK_ACCOUNTS.filter(
+    (a) => a.statementPeriod && a.statementPeriod !== "no statement yet",
+  ).length;
+  let matched = 0, autoPending = 0, toMatch = 0;
+  for (const acctId of Object.keys(BANK_TRANSACTIONS)) {
+    for (const t of BANK_TRANSACTIONS[acctId]) {
+      if (t.status === "matched") matched++;
+      else if (t.status === "auto") autoPending++;
+      else if (t.status === "to-match") toMatch++;
+    }
+  }
+  const totalTransactions = matched + autoPending + toMatch;
+  // Auto + matched are both Klay-handled (one auto-applied, one pending sign-off)
+  const klayAutomated = matched + autoPending;
+  const automationPct = totalTransactions
+    ? Math.round((klayAutomated / totalTransactions) * 100)
+    : 0;
+  return { totalAccounts, statementsUploaded, totalTransactions, matched, autoPending, toMatch, klayAutomated, automationPct };
+})();
+
+// JE stats — single source of truth for the "Journal entries to post" bucket.
+// The Klay-attributed draft count (8 invoices + 2 recurring = 10) is what
+// Klay surfaced; the rest are manual user drafts still awaiting work.
+const JE_STATS = (() => {
+  const drafts = JOURNAL_ENTRIES.filter((j) => j.status === "draft").length;
+  const klayDrafts = 10; // 8 from invoices/bills + 2 from recurring templates
+  return { drafts, klayDrafts, manualDrafts: Math.max(0, drafts - klayDrafts) };
+})();
+
 const HUMANS_BY_KEY = Object.fromEntries(HUMAN_REVIEWERS.map((r) => [r.key, r]));
 
 // Inline sparkle icon — matches the Invoices/Bills/GL pattern.
@@ -66,9 +100,6 @@ const SUB_TASKS = [
   { id: "je-8",  title: "Confirm JE: VND-508 (Klay draft)",            category: "Journal Entry", status: "awaiting", assignee: "klay",  reviewer: "budi",  due: "Apr 24" },
   { id: "je-9",  title: "Approve recurring: Office rent April",        category: "Journal Entry", status: "awaiting", assignee: "klay",  reviewer: "budi",  due: "Apr 24" },
   { id: "je-10", title: "Approve recurring: SaaS subscription accrual", category: "Journal Entry", status: "awaiting", assignee: "klay",  reviewer: "budi",  due: "Apr 24" },
-  // Source documents (2)
-  { id: "sd-1", title: "Match source docs to vendor bills (7/8)",      category: "Accruals",     status: "done",     assignee: "klay",  reviewer: "andi",  due: "Apr 22" },
-  { id: "sd-2", title: "Chase missing doc: PT Pemasok Aman",           category: "Accruals",     status: "awaiting", assignee: "andi",  reviewer: null,    due: "Apr 23" },
   // AR / AP aging (2)
   { id: "ar-1", title: "AR aging · 84 customer balances reconciled",   category: "Recon",        status: "done",     assignee: "klay",  reviewer: "sarah", due: "Apr 22" },
   { id: "ap-1", title: "AP aging · 47 vendor balances reconciled",     category: "Recon",        status: "done",     assignee: "klay",  reviewer: "budi",  due: "Apr 22" },
@@ -79,11 +110,30 @@ const SUB_TASKS = [
 ];
 
 // Per-id route overrides; everything else maps by category.
+// JE deep-links include ?tab= so the JE page lands on the right view.
 const SUB_TASK_ROUTE_OVERRIDES = {
-  "sd-1": "/bills",
-  "sd-2": "/bills",
   "ar-1": "/customers",
   "ap-1": "/vendors",
+  // Anomalies → JE Anomaly tab
+  "an-1": "/journal-entry?tab=anomaly",
+  "an-2": "/journal-entry?tab=anomaly",
+  "an-3": "/journal-entry?tab=anomaly",
+  "an-4": "/journal-entry?tab=anomaly",
+  // Klay-drafted JEs → JE Draft tab
+  "je-1":  "/journal-entry?tab=draft",
+  "je-2":  "/journal-entry?tab=draft",
+  "je-3":  "/journal-entry?tab=draft",
+  "je-4":  "/journal-entry?tab=draft",
+  "je-5":  "/journal-entry?tab=draft",
+  "je-6":  "/journal-entry?tab=draft",
+  "je-7":  "/journal-entry?tab=draft",
+  "je-8":  "/journal-entry?tab=draft",
+  "je-9":  "/journal-entry?tab=draft",
+  "je-10": "/journal-entry?tab=draft",
+  // Done accrual JEs → JE Posted tab
+  "dp-1": "/journal-entry?tab=posted",
+  "pp-1": "/journal-entry?tab=posted",
+  "py-1": "/journal-entry?tab=posted",
 };
 const SUB_TASK_CATEGORY_ROUTES = {
   "Recon":         "/bank-reconciliation",
@@ -201,6 +251,14 @@ function ProgressCard({ counts }) {
           <span className="progress-legend-item">
             <span className="progress-legend-dot working" />
             Klay still working <strong>{working}</strong>
+          </span>
+        </div>
+
+        <div className="progress-ai-callout">
+          <SparkleIcon />
+          <span>
+            Klay automated <strong>{RECON_STATS.klayAutomated} of {RECON_STATS.totalTransactions} bank transactions</strong>
+            {" "}({RECON_STATS.automationPct}%) this period · {RECON_STATS.toMatch} surfaced for your review
           </span>
         </div>
       </div>
@@ -333,12 +391,17 @@ export default function CloseManagementPage() {
       id: "bank-unmatched",
       title: "Bank reconciliation",
       category: "Recon",
-      klayLine: `15/16 statements uploaded · Klay matched ${RECON_MATCHED}/${RECON_TOTAL} transaction lines`,
+      klayLine: `${RECON_STATS.statementsUploaded}/${RECON_STATS.totalAccounts} statements uploaded · Klay matched ${RECON_STATS.matched}/${RECON_STATS.totalTransactions} transaction lines`,
       status: "awaiting",
-      counts: { total: RECON_TOTAL, done: RECON_MATCHED, prepped: 0, todo: RECON_UNMATCHED.length },
-      awaitingLine: `${RECON_UNMATCHED.length} unmatched · 1 statement pending upload`,
-      action: `Review ${RECON_UNMATCHED.length} unmatched →`,
-      doneLine: `All ${RECON_TOTAL} matched · Ties to GL`,
+      counts: {
+        total: RECON_STATS.totalTransactions,
+        done: RECON_STATS.matched,
+        prepped: RECON_STATS.autoPending,
+        todo: RECON_STATS.toMatch,
+      },
+      awaitingLine: `${RECON_STATS.toMatch} unmatched · ${RECON_STATS.autoPending} awaiting confirmation · ${RECON_STATS.totalAccounts - RECON_STATS.statementsUploaded} statement pending upload`,
+      action: `Review ${RECON_STATS.toMatch + RECON_STATS.autoPending} →`,
+      doneLine: `All ${RECON_STATS.totalTransactions} matched · Ties to GL`,
     },
     {
       id: "anomalies",
@@ -355,23 +418,12 @@ export default function CloseManagementPage() {
       id: "pending-jes",
       title: "Journal entries to post",
       category: "Journal Entry",
-      klayLine: "Klay drafted 8 from invoices/bills · 2 from recurring templates",
+      klayLine: `Klay drafted 8 from invoices/bills · 2 from recurring templates · ${JE_STATS.manualDrafts} manual drafts`,
       status: "awaiting",
-      counts: { total: 10, done: 0, prepped: 10, todo: 0 },
-      awaitingLine: "10 drafts pending posting",
-      action: "Review 10 →",
-      doneLine: "All 10 posted",
-    },
-    {
-      id: "accruals-missing",
-      title: "Source documents",
-      category: "Accruals",
-      klayLine: "Klay matched 7/8 source docs to vendor bills",
-      status: "awaiting",
-      counts: { total: 8, done: 7, prepped: 0, todo: 1 },
-      awaitingLine: "1 missing",
-      action: "Chase →",
-      doneLine: "All source docs received",
+      counts: { total: JE_STATS.drafts, done: 0, prepped: JE_STATS.klayDrafts, todo: JE_STATS.manualDrafts },
+      awaitingLine: `${JE_STATS.drafts} drafts pending posting`,
+      action: `Review ${JE_STATS.drafts} →`,
+      doneLine: `All ${JE_STATS.drafts} posted`,
     },
     {
       id: "ar-aging",
@@ -465,12 +517,11 @@ export default function CloseManagementPage() {
     "bank-unmatched":   "/bank-reconciliation",
     "ar-aging":         "/customers",
     "ap-aging":         "/vendors",
-    "anomalies":        "/journal-entry",
-    "pending-jes":      "/journal-entry",
-    "accruals-missing": "/bills",
-    "depreciation":     "/journal-entry",
-    "prepaid":          "/journal-entry",
-    "payroll":          "/journal-entry",
+    "anomalies":        "/journal-entry?tab=anomaly",
+    "pending-jes":      "/journal-entry?tab=draft",
+    "depreciation":     "/journal-entry?tab=posted",
+    "prepaid":          "/journal-entry?tab=posted",
+    "payroll":          "/journal-entry?tab=posted",
   };
   function handleTaskAction(id) {
     const route = TASK_ROUTES[id];

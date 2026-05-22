@@ -33,7 +33,7 @@ function fmtDateShort(iso) {
 }
 
 // ── Account mock — 16 accounts across 6 groups ──────────────────────────
-const ACCOUNTS = [
+export const ACCOUNTS = [
   // Operating (6)
   { id: "bca-op",          group: "operating", bank: "BCA",     color: "#0050A8", glAccount: "1101-100", name: "BCA Operating",     number: "0123456789", balance: 1245680000, matchedAmount: 960000000, statementPeriod: "Apr 1–23, 2025" },
   { id: "bni-op",          group: "operating", bank: "BNI",     color: "#F37021", glAccount: "1101-110", name: "BNI Operating",     number: "5678901234", balance:  380400000, matchedAmount: 380400000, statementPeriod: "Apr 1–20, 2025" },
@@ -98,7 +98,7 @@ const PERIODS = [
 
 // ── Transaction mock for BCA Operating ──────────────────────────────────
 // 25 transactions covering all 4 statuses
-const INITIAL_TRANSACTIONS = {
+export const INITIAL_TRANSACTIONS = {
   "bca-op": [
     // ── Matched (12) — already confirmed
     { id: "t01", date: "2025-04-21", desc: "Bank service charge",                          amount:    -150000, status: "matched", klay: { date: "2025-04-21", ref: "JE-2025-0285", desc: "Monthly bank fee",                   amount:    -150000, type: "je" } },
