@@ -399,3 +399,196 @@
 .drawer-stat-val{font-family:var(--font-mono);font-size:16px;font-weight:700;color:var(--color-text-primary)}
 .drawer-stat-val.danger{color:var(--danger-text)}
 .drawer-stat-val.success{color:var(--success-text)}
+
+/* ── BILLS PAGE — 4+2 KPI cards, tabs, anomaly chip/dot, AI search bar/panel ── */
+
+/* KPI strip — Invoices-style: gridded cells with vertical separators, no card boxes */
+.bp-kpi-wrap{margin-top:28px;border-top:1px solid var(--color-border-default);display:flex;flex-direction:column}
+.bp-kpi-row{display:flex;align-items:stretch}
+.bp-kpi-row > .bp-kpi-card{flex:1 1 0;min-width:0}
+.bp-kpi-row > .bp-kpi-card.bp-kpi-summary{flex:1.4 1 0}
+.bp-kpi-card{background:transparent;border:none;border-left:1px solid var(--color-border-default);border-radius:0;padding:14px 18px;display:flex;flex-direction:column;gap:5px;text-align:left}
+.bp-kpi-card:first-child{border-left:none}
+.bp-kpi-lbl{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--color-text-tertiary)}
+.bp-kpi-val{font-family:var(--font-mono);font-size:22px;font-weight:700;color:var(--color-text-primary);letter-spacing:-.02em;line-height:1.1}
+.bp-kpi-sub{font-size:11px;color:var(--color-text-tertiary);margin-bottom:4px;line-height:1.4}
+.bp-kpi-cta{align-self:flex-start;background:transparent;color:var(--color-brand);border:none;padding:2px 0;font-family:var(--font-sans);font-size:11px;font-weight:700;cursor:pointer;transition:opacity var(--transition-fast)}
+.bp-kpi-cta:hover{opacity:.7}
+.bp-kpi-cta.ghost{color:var(--color-text-tertiary);font-weight:600}
+.bp-kpi-cta.ghost:hover{color:var(--color-text-secondary);opacity:1}
+
+/* SUMMARY (AI) card — gradient background matches Invoices' .lg-kpi-cell-summary */
+.bp-kpi-summary{background:linear-gradient(160deg,var(--color-brand-wash,#FAEEDA) 0%,var(--color-surface-raised,#fff) 100%);justify-content:center}
+.bp-kpi-summary:hover{background:linear-gradient(160deg,var(--color-brand-subtle,#E2D4B8) 0%,var(--color-brand-wash,#FAEEDA) 100%)}
+.bp-kpi-summary-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.bp-kpi-summary-seeall{background:transparent;border:none;padding:2px 0;font-family:var(--font-sans);font-size:11px;font-weight:400;color:var(--color-text-tertiary);cursor:pointer;transition:color var(--transition-fast)}
+.bp-kpi-summary-seeall:hover{color:var(--color-text-secondary)}
+.bp-kpi-summary-seeall.active{color:var(--color-text-primary);text-decoration:underline;text-underline-offset:3px}
+.bp-kpi-summary-eyebrow{display:flex;align-items:center;gap:6px;font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#BA5A0E}
+.bp-kpi-summary-eyebrow svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linejoin:round;stroke-linecap:round;flex-shrink:0}
+.bp-kpi-summary-body{font-size:12px;color:var(--color-text-secondary);line-height:1.45;transition:opacity .22s ease}
+.bp-kpi-summary-body.fading{opacity:0}
+.bp-kpi-summary-body strong{font-weight:700;color:var(--color-text-primary)}
+.bp-kpi-summary-body .lg-ai-strong{font-weight:700;color:var(--color-text-primary)}
+.bp-kpi-summary-body .lg-ai-danger{font-weight:700;color:var(--color-danger-text,#A32D2D)}
+.bp-kpi-summary-asof{font-size:10px;color:var(--color-text-tertiary);font-style:italic}
+.bp-kpi-summary-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:auto;padding-top:6px;flex-wrap:wrap}
+.bp-kpi-summary-ctas{display:inline-flex;align-items:center;gap:10px;flex-wrap:wrap}
+.bp-kpi-summary-ctas .bp-kpi-cta{display:inline-flex;align-items:center;gap:4px;align-self:auto}
+.bp-kpi-summary-ctas .bp-kpi-cta svg{stroke:currentColor;fill:none;stroke-width:1.7;stroke-linejoin:round;stroke-linecap:round}
+.bp-kpi-summary-ctas .bp-kpi-cta.active{color:#412402;text-decoration:underline;text-underline-offset:3px}
+.bp-kpi-summary-dots{display:inline-flex;align-items:center;gap:4px;min-height:6px}
+.bp-kpi-summary-dot{width:5px;height:5px;border-radius:9999px;background:#E2D4B8;transition:width var(--transition-fast),background var(--transition-fast)}
+.bp-kpi-summary-dot.on{background:#BA5A0E;width:14px;border-radius:3px}
+
+/* AP Close pill — sits in the page header next to Create Bill */
+.bp-close-wrap{position:relative;display:inline-flex}
+.bp-close-pill{display:inline-flex;align-items:center;gap:7px;padding:7px 10px;background:#FCEFD7;border:1px solid #E9C58B;border-radius:var(--radius-md);cursor:pointer;font-family:var(--font-sans);transition:background var(--transition-fast),border-color var(--transition-fast)}
+.bp-close-pill:hover,
+.bp-close-pill.open{background:#FAE2B5;border-color:#D9AE6A}
+.bp-close-pill-dot{width:8px;height:8px;border-radius:50%;background:#BA7517;flex-shrink:0}
+.bp-close-pill-lbl{font-size:11px;font-weight:700;letter-spacing:.06em;color:#5C3408;white-space:nowrap}
+.bp-close-pill-badge{display:inline-flex;align-items:center;padding:2px 7px;border-radius:9999px;background:#BA7517;color:#fff;font-family:var(--font-mono);font-size:10px;font-weight:700;letter-spacing:.02em;white-space:nowrap;line-height:1.1}
+.bp-close-pill-chev{width:9px;height:9px;color:#854F0B;flex-shrink:0;transition:transform var(--transition-fast)}
+.bp-close-pill.open .bp-close-pill-chev{transform:rotate(180deg)}
+
+/* Popover that opens on click — lists actual close blockers */
+.bp-close-popover{position:absolute;top:calc(100% + 6px);right:0;width:320px;background:var(--color-surface-raised,#fff);border:1px solid var(--color-border-default);border-radius:var(--radius-md);box-shadow:0 12px 32px rgba(8,7,6,.18),0 2px 6px rgba(8,7,6,.08);z-index:30;overflow:hidden;animation:bpClosePopIn .14s ease-out}
+@keyframes bpClosePopIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+.bp-close-popover-head{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--color-border-default);background:linear-gradient(160deg,#FCEFD7 0%,#fff 100%)}
+.bp-close-popover-dot{width:10px;height:10px;border-radius:50%;background:#BA7517;flex-shrink:0}
+.bp-close-popover-title{font-size:12px;font-weight:700;color:#5C3408;line-height:1.2}
+.bp-close-popover-sub{font-size:10.5px;color:var(--color-text-tertiary);margin-top:1px;font-style:italic}
+.bp-close-popover-list{display:flex;flex-direction:column;padding:6px}
+.bp-close-blocker{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 10px;background:transparent;border:none;border-radius:var(--radius-sm);cursor:pointer;text-align:left;transition:background var(--transition-fast);font-family:var(--font-sans)}
+.bp-close-blocker:hover{background:var(--color-surface-sunken)}
+.bp-close-blocker-text{flex:1;min-width:0}
+.bp-close-blocker-lbl{font-size:12px;font-weight:600;color:var(--color-text-primary);line-height:1.3}
+.bp-close-blocker-sub{font-size:10.5px;color:var(--color-text-tertiary);margin-top:2px}
+.bp-close-blocker-cta{flex-shrink:0;font-size:11px;font-weight:700;color:#412402}
+
+/* Tabs row (replaces lg-pills-row) */
+.bp-tabs-row{display:flex;align-items:stretch;gap:0;padding:0 18px;border-bottom:.5px solid var(--color-border-default);background:var(--color-surface-raised);border-radius:12px 12px 0 0}
+.bp-tab{display:inline-flex;align-items:center;gap:6px;padding:10px 14px;font-family:var(--font-sans);font-size:12px;font-weight:400;color:var(--color-text-secondary);background:transparent;border:none;border-bottom:2px solid transparent;cursor:pointer;transition:color var(--transition-fast),border-color var(--transition-fast);margin-bottom:-.5px}
+.bp-tab:hover{color:var(--color-text-primary)}
+.bp-tab.active{color:#412402;font-weight:500;border-bottom-color:#412402}
+.bp-tab-count{font-family:var(--font-mono);font-size:10px;color:var(--color-text-tertiary);margin-left:2px;font-weight:400}
+.bp-tab-count.overdue{background:#FCEBEB;color:#791F1F;font-weight:500;padding:1px 6px;border-radius:9999px}
+
+/* Anomaly toggle row inside the Filter popover */
+.bp-filter-anom-row{display:flex;align-items:center;gap:8px;font-family:var(--font-sans);font-size:12px;color:var(--color-text-primary);cursor:pointer;padding:2px 0}
+.bp-filter-anom-row input[type="checkbox"]{accent-color:#A32D2D;cursor:pointer}
+.bp-filter-anom-text{flex:1}
+.bp-filter-anom-count{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 6px;border-radius:9999px;background:#FCEBEB;color:#791F1F;font-family:var(--font-mono);font-size:10px;font-weight:700}
+
+/* Chips row (legacy — kept in case Anomaly returns as a standalone chip) */
+.bp-chips-row{display:flex;align-items:center;gap:8px;padding:10px 18px 0;background:var(--color-surface-raised)}
+.bp-anom-chip{display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border:none;border-radius:9999px;background:#FCEBEB;color:#791F1F;font-family:var(--font-sans);font-size:11px;font-weight:400;cursor:pointer;transition:background var(--transition-fast)}
+.bp-anom-chip:hover{background:#F8DADA}
+.bp-anom-chip.on{background:#F09595;color:#791F1F}
+.bp-anom-chip-count{font-weight:500;font-family:var(--font-mono)}
+
+/* AI search bar (sparkle + cmd+K) */
+.bp-ai-search{flex:1;min-width:0;display:flex;align-items:center;gap:6px;padding:5px 10px;background:var(--color-surface-sunken);border:1px solid var(--color-border-default);border-radius:var(--radius-md);transition:border-color var(--transition-fast),box-shadow var(--transition-fast)}
+.bp-ai-search:focus-within{border-color:#BA5A0E;box-shadow:0 0 0 3px rgba(186,90,14,.10)}
+.bp-ai-search-icon{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;color:#BA5A0E}
+.bp-ai-search-icon svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linejoin:round;stroke-linecap:round}
+.bp-ai-search-input{flex:1;min-width:0;height:22px;border:none;outline:none;background:transparent;font-family:var(--font-sans);font-size:12px;color:var(--color-text-primary);font-weight:400}
+.bp-ai-search-input::placeholder{color:var(--color-text-tertiary);font-weight:300}
+.bp-ai-search-hint{flex-shrink:0;display:inline-flex;align-items:center;background:#fff;border:1px solid var(--color-border-default);border-radius:4px;padding:2px 6px;font-family:var(--font-mono);font-size:10px;color:var(--color-text-tertiary);font-weight:500;user-select:none}
+
+/* AI summary panel (below search) */
+.bp-ai-panel{margin:12px 18px;padding:12px 14px;background:#E6F1FB;border:.5px solid #B5D4F4;border-radius:var(--radius-md);font-family:var(--font-sans)}
+.bp-ai-panel-vendor{font-size:11px;font-weight:700;color:#0C447C;letter-spacing:.04em;text-transform:uppercase;margin-bottom:4px}
+.bp-ai-panel-body{font-size:12px;color:var(--color-text-secondary);line-height:1.5}
+.bp-ai-panel-script{display:flex;gap:6px;align-items:flex-start;margin-top:6px;font-size:11px;color:#185FA5;font-style:italic;line-height:1.5}
+.bp-ai-panel-script svg{width:11px;height:11px;color:#185FA5;flex-shrink:0;margin-top:3px;stroke:currentColor}
+
+/* (?) hint badge — sits next to controls with a native-title tooltip */
+.bp-meta-hint{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;background:var(--color-surface-sunken);border:1px solid var(--color-border-default);color:var(--color-text-tertiary);font-family:var(--font-sans);font-size:9px;font-weight:700;cursor:help;margin-left:-4px;transition:background var(--transition-fast),color var(--transition-fast)}
+.bp-meta-hint:hover{background:var(--color-brand-wash,#FAEEDA);color:var(--color-brand,#BA5A0E);border-color:var(--color-brand-subtle,#E2D4B8)}
+
+/* Period-locked pinned section (amber, above the Review-tab table) */
+.bp-locked-section{margin:12px 18px;border:1px solid #E9C58B;background:#FCEFD7;border-radius:var(--radius-md);overflow:hidden}
+.bp-locked-head{display:flex;align-items:flex-start;gap:10px;padding:10px 14px 8px}
+.bp-locked-icon{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;flex-shrink:0;color:#854F0B;margin-top:1px}
+.bp-locked-icon svg{width:14px;height:14px}
+.bp-locked-body{flex:1;min-width:0}
+.bp-locked-title{font-size:12px;color:#5C3408;line-height:1.45}
+.bp-locked-title strong{font-weight:700;color:#3F230A}
+.bp-locked-sub{font-size:11px;color:#7E5A1F;margin-top:2px;font-style:italic;line-height:1.4}
+.bp-locked-rows{padding:0 14px 10px;display:flex;flex-direction:column;gap:4px}
+.bp-locked-row{display:grid;grid-template-columns:120px 1fr 90px 140px 78px;align-items:center;gap:12px;padding:6px 8px;background:rgba(255,255,255,.55);border-radius:var(--radius-sm);cursor:pointer;transition:background var(--transition-fast)}
+.bp-locked-row:hover{background:rgba(255,255,255,.85)}
+.bp-locked-row-id{font-family:var(--font-mono);font-size:11px;color:var(--color-action);font-weight:600}
+.bp-locked-row-vendor{font-size:12px;color:var(--color-text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bp-locked-row-period{font-size:11px;color:#854F0B;font-weight:500}
+.bp-locked-row-amt{font-family:var(--font-mono);font-size:12px;color:var(--color-text-primary);font-weight:600;text-align:right}
+.bp-locked-row-btn{font-size:11px;font-weight:600;color:#412402;background:transparent;border:1px solid #412402;border-radius:var(--radius-sm);padding:3px 8px;cursor:pointer;font-family:var(--font-sans);transition:background var(--transition-fast),color var(--transition-fast)}
+.bp-locked-row-btn:hover{background:#412402;color:#fff}
+.bp-locked-more{align-self:flex-start;font-size:11px;font-weight:600;color:#854F0B;background:transparent;border:none;cursor:pointer;padding:4px 0;margin-top:2px}
+.bp-locked-more:hover{text-decoration:underline}
+
+/* Source channel icon (next to Bill ID in each row) */
+.bp-source-icon{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;flex-shrink:0;margin-right:5px;color:var(--color-text-tertiary);vertical-align:middle}
+.bp-source-icon svg{width:12px;height:12px}
+.bp-source-icon.bp-source-email{color:#185FA5}
+.bp-source-icon.bp-source-upload{color:var(--color-text-tertiary)}
+.bp-source-icon.bp-source-recurring{color:#5B7A2E}
+.lg-cell-no-text{display:inline-block;vertical-align:middle}
+
+/* New 8-column grid for the Bills table — scoped to .bp-card so other lg-tables are untouched */
+.bp-card .lg-col-header,
+.bp-card .lg-row{grid-template-columns:30px 130px 120px 260px 120px 1fr 170px 30px}
+
+/* Urgency sort explainer ribbon — sits between the column header and the rows */
+.bp-sort-hint{display:flex;align-items:center;gap:8px;padding:8px 18px;font-family:var(--font-sans);font-size:11px;color:var(--color-text-tertiary);background:var(--color-surface-sunken);border-bottom:1px solid var(--color-border-subtle);line-height:1.4}
+.bp-sort-hint svg{width:12px;height:12px;color:var(--color-text-tertiary);flex-shrink:0}
+.bp-sort-hint strong{font-weight:600;color:var(--color-text-secondary)}
+
+/* Date cell — folds Days Overdue into the date */
+.bp-cell-date{display:flex;flex-direction:column;gap:1px;line-height:1.2}
+.bp-cell-date-late{font-size:10.5px;font-weight:600;color:var(--color-danger-text,#A32D2D);font-family:var(--font-mono)}
+
+/* Status + Cause column */
+.bp-status-cell{display:flex;align-items:flex-start;gap:6px}
+.bp-status-cell-body{flex:1;min-width:0}
+.bp-status-label{font-size:12px;font-weight:600;color:var(--color-text-primary);line-height:1.3}
+.bp-status-label.danger{color:var(--color-danger-text,#A32D2D)}
+.bp-status-label.warn{color:#BA7517}
+.bp-status-label.success{color:var(--color-success-text,#1F6E3F)}
+.bp-status-label.approved{color:#2D5A7F}
+.bp-status-label.muted{color:var(--color-text-tertiary)}
+.bp-status-cause{font-size:10.5px;color:var(--color-text-tertiary);line-height:1.35;margin-top:1px;font-style:italic;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bp-status-aging{margin-top:5px}
+
+/* Anomaly dot — kept inline in the Status cell */
+.bp-anom-dot{display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:4px;cursor:help}
+.bp-anom-dot.empty{background:transparent;cursor:default}
+.bp-anom-dot.sev-high{background:#A32D2D}
+.bp-anom-dot.sev-medium{background:#BA7517}
+.bp-anom-dot.sev-low{background:var(--color-text-tertiary)}
+
+/* Row hover preview — just the source-document thumbnail and a single CTA. */
+.bp-row-preview{position:fixed;width:170px;display:flex;flex-direction:column;background:var(--color-surface-raised,#fff);border:1px solid var(--color-border-default);border-radius:var(--radius-md);box-shadow:0 12px 32px rgba(8,7,6,.18),0 2px 6px rgba(8,7,6,.08);z-index:60;animation:bpRowPreviewIn .12s ease-out;pointer-events:auto;overflow:hidden}
+@keyframes bpRowPreviewIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+.bp-row-preview-thumb{display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,#F4ECDF 0%,#E8DECC 100%);padding:12px;border-bottom:1px solid var(--color-border-default)}
+.bp-row-preview-thumb svg{width:120px;height:150px;filter:drop-shadow(0 2px 6px rgba(8,7,6,.12))}
+.bp-row-preview-cta{display:flex;align-items:center;justify-content:center;gap:4px;padding:9px 12px;font-family:var(--font-sans);font-size:11px;font-weight:700;color:#412402;background:transparent;border:none;cursor:pointer;transition:background var(--transition-fast),color var(--transition-fast);width:100%}
+.bp-row-preview-cta:hover{background:#412402;color:#fff}
+
+/* Vendor cell — just the name, with a hover tooltip carrying full vendor detail */
+.bp-cell-vendor-name{font-size:12.5px;font-weight:500;color:var(--color-text-primary);line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:default;border-bottom:1px dashed transparent;transition:border-color var(--transition-fast)}
+.lg-row:hover .bp-cell-vendor-name,
+.bp-cell-vendor-name:hover{border-bottom-color:var(--color-text-tertiary)}
+
+.bp-vendor-tooltip{position:fixed;width:280px;background:var(--color-surface-raised,#fff);border:1px solid var(--color-border-default);border-radius:var(--radius-md);box-shadow:0 12px 32px rgba(8,7,6,.18),0 2px 6px rgba(8,7,6,.08);z-index:60;padding:11px 13px;animation:bpRowPreviewIn .12s ease-out;pointer-events:auto}
+.bp-vendor-tooltip-name{font-size:13px;font-weight:700;color:var(--color-text-primary);line-height:1.3;margin-bottom:6px}
+.bp-vendor-tooltip-row{display:flex;align-items:flex-start;gap:8px;font-size:11.5px;color:var(--color-text-secondary);line-height:1.4;margin-top:4px}
+.bp-vendor-tooltip-lbl{flex-shrink:0;width:56px;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--color-text-tertiary);padding-top:2px}
+.bp-vendor-tooltip-mono{font-family:var(--font-mono);font-size:11px}
+
+/* Bill ID hover target — slight underline cue so users discover the hover affordance */
+.bp-cell-no-trigger{cursor:default;border-bottom:1px dashed transparent;transition:border-color var(--transition-fast)}
+.lg-row:hover .bp-cell-no-trigger,
+.bp-cell-no-trigger:hover{border-bottom-color:var(--color-text-tertiary)}

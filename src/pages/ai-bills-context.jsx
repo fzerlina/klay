@@ -57,22 +57,65 @@ export function computeBillsInsights(bills) {
   // Largest single overdue bill
   const largest = overdue.reduce((m, b) => (b.sisa > (m?.sisa || 0) ? b : m), null);
 
+  // Bills approved + unpaid — verified by Klay, ready to be posted to payment batch.
+  const readyToPost = bills.filter((b) => b.approval === "approved" && b.pay === "unpaid");
+  const readyToPostTotal = readyToPost.reduce((s, b) => s + b.total, 0);
+
+  // Period-locked: bills in PENDING_REVIEW / APPROVED-unpaid whose `date` falls in a closed AP period.
+  // Demo rule: months ≤ 2025-02 are closed. Production would call is_ap_period_locked(entity_id, bill.period).
+  const periodLocked = bills.filter((b) => {
+    if (!b.date || b.date.slice(0, 7) > "2025-02") return false;
+    if (b.approval === "review") return true;
+    if (b.approval === "approved" && b.pay !== "paid") return true;
+    return false;
+  });
+  const periodLockedTotal = periodLocked.reduce((s, b) => s + (b.sisa || b.total), 0);
+
   const insights = [];
+
+  if (periodLocked.length > 0) {
+    insights.push({
+      id: "periodLocked",
+      node: (
+        <>
+          <strong className="lg-ai-strong">{periodLocked.length} bills</strong> worth{" "}
+          <strong className="lg-ai-strong">{fmtRpShort(periodLockedTotal)}</strong> are bound for closed periods — reassign to current open period to post.
+        </>
+      ),
+      cta: "View",
+      question: "Which bills are bound for closed periods?",
+    });
+  }
+
+  if (readyToPost.length > 0) {
+    insights.push({
+      id: "readyToPost",
+      node: (
+        <>
+          <strong className="lg-ai-strong">{readyToPost.length} bills</strong> worth{" "}
+          <strong className="lg-ai-strong">{fmtRpShort(readyToPostTotal)}</strong> ready to post, verified clean by Klay.
+        </>
+      ),
+      cta: "View",
+      question: "Which bills are ready to post?",
+    });
+  }
 
   if (top3.length > 0 && totalOverdue > 0) {
     insights.push({
       id: "vendorConcentration",
       node: (
         <>
-          <strong className="lg-ai-strong">{top3.length} vendor</strong>{" "}
+          <strong className="lg-ai-strong">{top3.length} vendors</strong>{" "}
           ({top3.map((v, i) => (
             <span key={v.id}>{i > 0 ? ", " : ""}{shortName(v.name)}</span>
           ))}) account for{" "}
           <strong className="lg-ai-strong">{top3Pct}%</strong> of{" "}
-          <span className="lg-ai-danger">{fmtRpShort(totalOverdue)}</span> payables that are overdue.
+          <span className="lg-ai-danger">{fmtRpShort(totalOverdue)}</span> in overdue payables.
         </>
       ),
-      question: "Which vendor that we most frequently pay late?",
+      cta: "View",
+      question: "Which vendors do we most frequently pay late?",
     });
   }
 
@@ -81,11 +124,12 @@ export function computeBillsInsights(bills) {
       id: "cashflowOut",
       node: (
         <>
-          <strong className="lg-ai-strong">{upcoming.length} bill</strong> worth{" "}
-          <strong className="lg-ai-strong">{fmtRpShort(upcomingTotal)}</strong> will be due in{" "}
-          <strong className="lg-ai-strong">7 days</strong> to depan.
+          <strong className="lg-ai-strong">{upcoming.length} bills</strong> worth{" "}
+          <strong className="lg-ai-strong">{fmtRpShort(upcomingTotal)}</strong> coming due in the next{" "}
+          <strong className="lg-ai-strong">7 days</strong>.
         </>
       ),
+      cta: "View",
       question: "What cash should be prepared for this week?",
     });
   }
@@ -95,10 +139,11 @@ export function computeBillsInsights(bills) {
       id: "inReview",
       node: (
         <>
-          <strong className="lg-ai-strong">{inReview.length} bill</strong> awaiting approval, total{" "}
+          <strong className="lg-ai-strong">{inReview.length} bills</strong> awaiting approval, total{" "}
           <span className="lg-ai-danger">{fmtRpShort(inReviewTotal)}</span>.
         </>
       ),
+      cta: "View",
       question: "Which bills are awaiting approval?",
     });
   }
@@ -108,34 +153,38 @@ export function computeBillsInsights(bills) {
       id: "avgDpd",
       node: (
         <>
-          Average <strong className="lg-ai-strong">{avgDpd} days overdue</strong> for{" "}
-          <strong className="lg-ai-strong">{overdue.length} bill</strong> that not yet we bayar.
+          Average <strong className="lg-ai-strong">{avgDpd} days overdue</strong> across{" "}
+          <strong className="lg-ai-strong">{overdue.length} unpaid bills</strong>.
         </>
       ),
-      question: "What average days we pay vendors late?",
+      cta: "View",
+      question: "What is our average days-late on vendor payments?",
     });
   }
 
   if (largest && largest.sisa > 0) {
     insights.push({
       id: "largest",
+      bill: largest,
       node: (
         <>
-          Payables largest that late:{" "}
-          <span className="lg-ai-danger">{fmtRpShort(largest.sisa)}</span> ke{" "}
+          Largest overdue payable:{" "}
+          <span className="lg-ai-danger">{fmtRpShort(largest.sisa)}</span> to{" "}
           <strong className="lg-ai-strong">{shortName(largest.vendorName)}</strong>{" "}
           ({Math.max(0, daysSince(largest.due))} days overdue).
         </>
       ),
-      question: `Detail bill ${largest.invNo || largest.id} from ${shortName(largest.vendorName)}`,
+      cta: "View",
+      question: `Show details for bill ${largest.invNo || largest.id} from ${shortName(largest.vendorName)}`,
     });
   }
 
   if (insights.length === 0) {
     insights.push({
       id: "empty",
-      node: <>All trade payables we in term today — none that late paying.</>,
-      question: "How ringcashan AP this week?",
+      node: <>All trade payables are within term today — nothing overdue.</>,
+      cta: "View",
+      question: "How is AP cash flow this week?",
     });
   }
 
@@ -174,13 +223,13 @@ export function makeBillsAiContext(bills) {
   const upcoming7Total = upcoming7.reduce((s, b) => s + b.sisa, 0);
 
   const welcome = (
-    <p>Hi Sarah — I have reviewed data trade payables your. How can I help?</p>
+    <p>Hi Sarah — I've reviewed your trade payables data. How can I help?</p>
   );
 
   const suggestions = [
-    "Which vendor that we most frequently pay late?",
+    "Which vendors do we most frequently pay late?",
     "What cash should be prepared for this week?",
-    "Bill which that awaiting approval?",
+    "Which bills are awaiting approval?",
     "Compare trade payables this month vs last month",
   ];
 
@@ -191,7 +240,7 @@ export function makeBillsAiContext(bills) {
       role: "ai",
       content: (
         <>
-          <p>3 vendor that we most frequently pay late:</p>
+          <p>The 3 vendors we most frequently pay late:</p>
           <div className="ai-mini-table">
             {top.map((v) => {
               const vendor = VENDORS.find((x) => x.id === v.id);
@@ -201,7 +250,7 @@ export function makeBillsAiContext(bills) {
                   <div className="ai-mini-body">
                     <div className="ai-mini-name">{vendor?.name || v.name}</div>
                     <div className="ai-mini-meta">
-                      average <span className="ai-mini-meta-strong">{v.avgDpd}d</span> late · {v.count} bill active
+                      <span className="ai-mini-meta-strong">{v.avgDpd}d</span> avg. late · {v.count} active bills
                     </div>
                   </div>
                   <div className="ai-mini-amt">{fmtRpShort(v.amount)}</div>
@@ -210,12 +259,12 @@ export function makeBillsAiContext(bills) {
             })}
           </div>
           <p>
-            Total <strong>{pct}%</strong> from payables that late is in {top.length} vendor ini. Want me to susun schedule payment prioritas?
+            These {top.length} vendors account for <strong>{pct}%</strong> of overdue payables. Want me to draft a priority payment schedule?
           </p>
           <div className="chat-chips">
-            <ChatChip primary onClick={() => send("Ya, susun schedule payment prioritas")}>Susun schedule payment</ChatChip>
-            <ChatChip onClick={() => send("Show riwayat payment")}>Show riwayat</ChatChip>
-            <ChatChip onClick={() => send("I negosiasi term dulu")}>Negosiasi term</ChatChip>
+            <ChatChip primary onClick={() => send("Yes, draft a priority payment schedule")}>Draft payment schedule</ChatChip>
+            <ChatChip onClick={() => send("Show payment history")}>Show history</ChatChip>
+            <ChatChip onClick={() => send("Negotiate terms first")}>Negotiate terms</ChatChip>
           </div>
         </>
       ),
@@ -228,14 +277,14 @@ export function makeBillsAiContext(bills) {
       content: (
         <>
           <p>
-            Kas keluar 7 days to depan: <strong>{fmtRpShort(upcoming7Total)}</strong> for{" "}
-            <strong>{upcoming7.length} bill</strong> already approved and will be due.{" "}
-            <span className="danger">3 bill berisiko terlambat</span> jika none follow-up internal.
+            Cash out for the next 7 days: <strong>{fmtRpShort(upcoming7Total)}</strong> across{" "}
+            <strong>{upcoming7.length} approved bills</strong> coming due.{" "}
+            <span className="danger">3 bills at risk of being late</span> without an internal follow-up.
           </p>
-          <p>Want me to create a reminder approval for that berisiko?</p>
+          <p>Want me to create an approval reminder for the at-risk bills?</p>
           <div className="chat-chips">
-            <ChatChip primary>Create reminder approval</ChatChip>
-            <ChatChip>View detailnya dulu</ChatChip>
+            <ChatChip primary>Create approval reminder</ChatChip>
+            <ChatChip>View details first</ChatChip>
           </div>
         </>
       ),
@@ -246,7 +295,7 @@ export function makeBillsAiContext(bills) {
     if (inReview.length === 0) {
       return {
         role: "ai",
-        content: <p>None bill that awaiting approval saat ini.</p>,
+        content: <p>No bills are currently awaiting approval.</p>,
       };
     }
     const sample = inReview.slice(0, 3);
@@ -254,7 +303,7 @@ export function makeBillsAiContext(bills) {
       role: "ai",
       content: (
         <>
-          <p>{inReview.length} bill total worth <strong>{fmtRpShort(inReviewTotal)}</strong> sedang awaiting approval. Beberapa with the largest:</p>
+          <p>{inReview.length} bills totalling <strong>{fmtRpShort(inReviewTotal)}</strong> are awaiting approval. Top by amount:</p>
           <div className="ai-mini-table">
             {sample.map((b) => (
               <div className="ai-mini-row" key={b.id}>
@@ -269,7 +318,7 @@ export function makeBillsAiContext(bills) {
           </div>
           <div className="chat-chips">
             <ChatChip primary>Approve all</ChatChip>
-            <ChatChip>Review satu as of satu</ChatChip>
+            <ChatChip>Review one by one</ChatChip>
           </div>
         </>
       ),
@@ -282,12 +331,12 @@ export function makeBillsAiContext(bills) {
       content: (
         <>
           <p>
-            Payables dagang this month <strong>Rp 8,4 M</strong> — down{" "}
-            <span style={{ color: "var(--color-success-text)", fontWeight: 600 }}>−12%</span> from last month (Rp 9,5 M). Payment regular to supplier inventory up 18%, sementara biaya jasa down 30%.
+            Trade payables this month: <strong>Rp 8.4 B</strong> — down{" "}
+            <span style={{ color: "var(--color-success-text)", fontWeight: 600 }}>−12%</span> vs last month (Rp 9.5 B). Regular inventory supplier payments are up 18%, while service costs are down 30%.
           </p>
           <div className="chat-chips">
-            <ChatChip primary>As of category</ChatChip>
-            <ChatChip>As of vendor</ChatChip>
+            <ChatChip primary>Break down by category</ChatChip>
+            <ChatChip>Break down by vendor</ChatChip>
           </div>
         </>
       ),
@@ -301,9 +350,9 @@ export function makeBillsAiContext(bills) {
         <>
           <p>I can't specifically answer "{text}" in this prototype, but I can help with:</p>
           <div className="chat-chips">
-            <ChatChip>Vendor most often late paying</ChatChip>
-            <ChatChip>Cashflow keluar this week</ChatChip>
-            <ChatChip>Antrian approval</ChatChip>
+            <ChatChip>Vendors most often paid late</ChatChip>
+            <ChatChip>Cash out this week</ChatChip>
+            <ChatChip>Approval queue</ChatChip>
           </div>
         </>
       ),

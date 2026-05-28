@@ -568,5 +568,7 @@
 .summary-card-cta svg{stroke:currentColor;fill:none;stroke-width:1.6;width:9px;height:9px}
 .summary-card-cta em{font-style:normal;color:var(--color-text-secondary);font-weight:500;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .summary-card-arrow{color:var(--color-brand);margin-left:auto}
+.summary-card-cta-task{justify-content:flex-end;width:100%;font-weight:700}
+.summary-card-cta-task .summary-card-arrow{margin-left:4px}
 
 .summary-foot{padding:10px 18px;border-top:1px solid var(--color-border-default);background:var(--color-surface-raised);font-size:10px;color:var(--color-text-tertiary);flex-shrink:0}
