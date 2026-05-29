@@ -426,7 +426,7 @@
 .bp-kpi-summary-seeall.active{color:var(--color-text-primary);text-decoration:underline;text-underline-offset:3px}
 .bp-kpi-summary-eyebrow{display:flex;align-items:center;gap:6px;font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#BA5A0E}
 .bp-kpi-summary-eyebrow svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linejoin:round;stroke-linecap:round;flex-shrink:0}
-.bp-kpi-summary-body{font-size:12px;color:var(--color-text-secondary);line-height:1.45;transition:opacity .22s ease}
+.bp-kpi-summary-body{font-size:12px;color:var(--color-text-secondary);line-height:1.45;min-height:74px;display:block}
 .bp-kpi-summary-body.fading{opacity:0}
 .bp-kpi-summary-body strong{font-weight:700;color:var(--color-text-primary)}
 .bp-kpi-summary-body .lg-ai-strong{font-weight:700;color:var(--color-text-primary)}
@@ -440,6 +440,20 @@
 .bp-kpi-summary-dots{display:inline-flex;align-items:center;gap:4px;min-height:6px}
 .bp-kpi-summary-dot{width:5px;height:5px;border-radius:9999px;background:#E2D4B8;transition:width var(--transition-fast),background var(--transition-fast)}
 .bp-kpi-summary-dot.on{background:#BA5A0E;width:14px;border-radius:3px}
+
+/* Numbered pager replacing the auto-rotate dots — SME feedback: the FM
+   should step through tasks at their own pace instead of being yanked to
+   a new slide mid-read. */
+.bp-kpi-summary-pager{display:inline-flex;align-items:center;gap:3px;flex-wrap:wrap}
+.bp-kpi-summary-pager-num{min-width:18px;height:18px;padding:0 5px;border-radius:4px;background:transparent;border:1px solid transparent;color:#8C7E6A;font-family:var(--font-mono);font-size:10.5px;font-weight:600;cursor:pointer;transition:all var(--transition-fast);display:inline-flex;align-items:center;justify-content:center}
+.bp-kpi-summary-pager-num:hover{background:#F5E9D3;color:#412402}
+.bp-kpi-summary-pager-num.on{background:#BA5A0E;color:#fff;border-color:#BA5A0E}
+.bp-kpi-summary-pager-chev{width:18px;height:18px;border-radius:4px;background:transparent;border:1px solid transparent;color:#8C7E6A;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:all var(--transition-fast)}
+.bp-kpi-summary-pager-chev:hover{background:#F5E9D3;color:#412402}
+.bp-kpi-summary-pager-chev svg{width:9px;height:9px;color:currentColor;fill:none;stroke:currentColor;stroke-width:1.6}
+
+/* AP Outstanding card — draft sub-line (excluded from the headline). */
+.bp-kpi-sub-draft{color:var(--color-text-tertiary);font-style:italic}
 
 /* AP Close pill — sits in the page header next to Create Bill */
 .bp-close-wrap{position:relative;display:inline-flex}

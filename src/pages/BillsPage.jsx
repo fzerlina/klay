@@ -29,6 +29,13 @@ function fmtRp(n) {
 function toRow(b) {
   const v = vendors.find((x) => x.id === b.vendor);
   const dOver = daysSince(b.due);
+  // Currency contract: `b.total`/`b.sisa`/`b.dpp`/`b.ppn`/`b.pph23` are ALWAYS
+  // stored in IDR (the entity's functional currency / canonical books).
+  // For foreign-currency bills, `original_currency` + `original_total` carry
+  // the source-currency view that the vendor invoiced in — used only by the
+  // "Original" column on the Bills List for cross-checking against the
+  // vendor's source-currency document.
+  const originalCur = b.original_currency || "IDR";
   return {
     id: b.id,
     no: b.invNo === "—" || !b.invNo ? b.id : b.invNo,
@@ -37,7 +44,10 @@ function toRow(b) {
     addr: v?.address || "",
     due: formatDate(b.due),
     daysOverdue: dOver,
-    total: b.total,
+    total: b.total,                                                          // IDR
+    original: originalCur !== "IDR" && b.original_total != null
+      ? { code: originalCur, amount: b.original_total }
+      : null,
     sisa: b.sisa,
     approval: b.approval,
     pay: b.pay,
@@ -204,6 +214,16 @@ function LedgerRow({ r, bucket, isChecked, onCheck, onClick, onKebab, isSelected
             </div>
           )}
         </div>
+      </div>
+      <div className="lg-cell-original">
+        {r.original ? (
+          <>
+            <span className="lg-cell-orig-code">{r.original.code}</span>
+            <span className="lg-cell-orig-amt">{fmtRp(r.original.amount)}</span>
+          </>
+        ) : (
+          <span className="lg-cell-orig-empty">—</span>
+        )}
       </div>
       <div className="lg-cell-total">
         <span className="lg-cell-total-rp">Rp</span>{fmtRp(r.total)}
@@ -414,24 +434,18 @@ function FilterPopover({ values, onChange, vendors: vendorList, anomalyOnly, onA
 }
 
 function BillsSummaryCard({ insights, onOpenSummary, onAskAboutInsight, summaryActive }) {
+  // No auto-rotation — SME feedback. The FM wants to read each task at their
+  // own pace and explicitly step between them. Numbered pager + prev/next.
   const [idx, setIdx] = useState(0);
-  const [fading, setFading] = useState(false);
-  useEffect(() => {
-    if (insights.length <= 1) return;
-    const id = setInterval(() => {
-      setFading(true);
-      setTimeout(() => {
-        setIdx((i) => (i + 1) % insights.length);
-        setFading(false);
-      }, 220);
-    }, 7000);
-    return () => clearInterval(id);
-  }, [insights.length]);
   useEffect(() => { if (idx >= insights.length) setIdx(0); }, [insights.length, idx]);
 
   const current = insights[idx] || insights[0];
   const todayLbl = formatDate(TODAY.toISOString().slice(0, 10));
   const actionLabel = current?.cta || "Ask Klay AI";
+  const total = insights.length;
+
+  function prev() { setIdx((i) => (i - 1 + total) % total); }
+  function next() { setIdx((i) => (i + 1) % total); }
 
   return (
     <div className="bp-kpi-card bp-kpi-summary">
@@ -447,16 +461,43 @@ function BillsSummaryCard({ insights, onOpenSummary, onAskAboutInsight, summaryA
           See all
         </button>
       </div>
-      <div className={`bp-kpi-summary-body${fading ? " fading" : ""}`}>
+      <div className="bp-kpi-summary-body">
         {current?.node}
       </div>
       <div className="bp-kpi-summary-asof">as of {todayLbl}</div>
       <div className="bp-kpi-summary-foot">
-        <span className="bp-kpi-summary-dots" aria-hidden>
-          {insights.length > 1 && insights.map((_, i) => (
-            <span key={i} className={`bp-kpi-summary-dot${i === idx ? " on" : ""}`} />
-          ))}
-        </span>
+        {total > 1 ? (
+          <div className="bp-kpi-summary-pager" aria-label="Task pager">
+            <button
+              type="button"
+              className="bp-kpi-summary-pager-chev"
+              onClick={prev}
+              aria-label="Previous task"
+            >
+              <svg viewBox="0 0 9 9" aria-hidden><path d="M6 2L3 4.5L6 7" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </button>
+            {insights.map((_, i) => (
+              <button
+                key={i}
+                type="button"
+                className={`bp-kpi-summary-pager-num${i === idx ? " on" : ""}`}
+                onClick={() => setIdx(i)}
+                aria-label={`Task ${i + 1}`}
+                aria-current={i === idx ? "true" : undefined}
+              >
+                {i + 1}
+              </button>
+            ))}
+            <button
+              type="button"
+              className="bp-kpi-summary-pager-chev"
+              onClick={next}
+              aria-label="Next task"
+            >
+              <svg viewBox="0 0 9 9" aria-hidden><path d="M3 2L6 4.5L3 7" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </button>
+          </div>
+        ) : <span />}
         <button
           type="button"
           className="bp-kpi-cta bp-kpi-cta-action"
@@ -639,7 +680,17 @@ export default function BillsPage() {
     const reviewSum = reviewList.reduce((s, b) => s + b.total, 0);
     const draftList = bills.filter((b) => b.approval === "draft");
     const draftSum = draftList.reduce((s, b) => s + b.total, 0);
-    const outstanding = bills.filter((b) => b.pay !== "paid").reduce((s, b) => s + b.sisa, 0);
+    // AP Outstanding — SME feedback: drafts aren't real obligations to vendors,
+    // so they shouldn't be counted in the headline number. Split into the
+    // amount we actually owe (submitted bills, unpaid) and a separate drafts
+    // sub-line shown beneath.
+    const outstandingActive = bills
+      .filter((b) => b.pay !== "paid" && b.approval !== "draft")
+      .reduce((s, b) => s + b.sisa, 0);
+    const outstandingDraft = bills
+      .filter((b) => b.approval === "draft")
+      .reduce((s, b) => s + (b.sisa ?? b.total ?? 0), 0);
+    const outstandingDraftCount = bills.filter((b) => b.approval === "draft").length;
     return {
       verifiedReadyCount: verifiedReady.length,
       verifiedReadySum,
@@ -649,7 +700,9 @@ export default function BillsPage() {
       reviewSum,
       draftCount: draftList.length,
       draftSum,
-      outstanding,
+      outstandingActive,
+      outstandingDraft,
+      outstandingDraftCount,
     };
   }, [bills]);
 
@@ -719,7 +772,10 @@ export default function BillsPage() {
         const in7Key = in7.toISOString().slice(0, 10);
         list = list.filter((b) => b.pay !== "paid" && b.approval === "approved" && b.due && b.due > todayKey && b.due <= in7Key);
       }
-      else if (filter.value === "allUnpaid")     list = list.filter((b) => b.pay !== "paid");
+      // AP Outstanding card filter — exclude drafts so it matches the KPI's
+      // headline number (drafts aren't real obligations yet). The Draft tab
+      // is the place to see drafts.
+      else if (filter.value === "allUnpaid")     list = list.filter((b) => b.pay !== "paid" && b.approval !== "draft");
       else if (filter.value === "apClose")       list = list.filter((b) => b.date && b.date.startsWith(monthPfx) && (b.approval !== "approved" || b.pay !== "paid"));
       else if (filter.value === "periodLocked")  list = list.filter((b) => isApPeriodLocked(b.date) && (b.approval === "review" || (b.approval === "approved" && b.pay !== "paid")));
     }
@@ -854,6 +910,15 @@ export default function BillsPage() {
   }, [effectiveGroup, sortedRows]);
 
   const pageTotal = filteredRows.reduce((s, r) => s + r.total, 0);
+  // Footer subtotal split — SME feedback. When viewing the "All" tab AND
+  // there are drafts in the current filtered set, show the headline number
+  // as just the submitted bills and surface drafts as a "(+ Rp X draft
+  // belum submitted)" suffix. Prevents misreading at closing time.
+  const isAllTab = filter.kind === "tab" && filter.value === "semua";
+  const draftRows = isAllTab ? filteredRows.filter((r) => r.approval === "draft") : [];
+  const pageTotalDraft = draftRows.reduce((s, r) => s + r.total, 0);
+  const pageTotalNonDraft = pageTotal - pageTotalDraft;
+  const showDraftSplit = isAllTab && draftRows.length > 0 && checked.size === 0;
   const selectedTotal = filteredRows.filter((r) => checked.has(r.id)).reduce((s, r) => s + r.total, 0);
 
   // ── Handlers ───────────────────────────────────────────────────────────
@@ -1066,8 +1131,14 @@ export default function BillsPage() {
 
               <div className="bp-kpi-card">
                 <div className="bp-kpi-lbl">AP Outstanding</div>
-                <div className="bp-kpi-val">{formatRupiah(billStats.outstanding)}</div>
-                <div className="bp-kpi-sub">Plan upcoming payments</div>
+                <div className="bp-kpi-val">{formatRupiah(billStats.outstandingActive)}</div>
+                {billStats.outstandingDraftCount > 0 ? (
+                  <div className="bp-kpi-sub bp-kpi-sub-draft">
+                    + {formatRupiah(billStats.outstandingDraft)} in {billStats.outstandingDraftCount} draft{billStats.outstandingDraftCount === 1 ? "" : "s"}
+                  </div>
+                ) : (
+                  <div className="bp-kpi-sub">Plan upcoming payments</div>
+                )}
                 <button type="button" className="bp-kpi-cta" onClick={() => selectCard("allUnpaid")}>View →</button>
               </div>
             </div>
@@ -1158,6 +1229,7 @@ export default function BillsPage() {
               <div>Vendor</div>
               <div>Due Date</div>
               <div>Status</div>
+              <div style={{ textAlign: "right" }}>Original</div>
               <div style={{ textAlign: "right" }}>Total · IDR</div>
               <div />
             </div>
@@ -1289,7 +1361,14 @@ export default function BillsPage() {
           </button>
           <span className="lg-footer-sep">·</span>
           <span className="lg-footer-lbl">{checked.size > 0 ? "Subtotal selected" : "Subtotal page"}</span>
-          <span className="lg-footer-total">Rp {fmtRp(checked.size > 0 ? selectedTotal : pageTotal)}</span>
+          <span className="lg-footer-total">
+            Rp {fmtRp(checked.size > 0 ? selectedTotal : (showDraftSplit ? pageTotalNonDraft : pageTotal))}
+            {showDraftSplit && (
+              <span className="lg-footer-draft-split">
+                {" "}(+ Rp {fmtRp(pageTotalDraft)} in {draftRows.length} draft{draftRows.length === 1 ? "" : "s"})
+              </span>
+            )}
+          </span>
         </div>
       </div>
 

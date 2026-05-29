@@ -120,6 +120,16 @@
 .lg-card.lg-table-vendor .lg-col-header,
 .lg-card.lg-table-customer .lg-row,
 .lg-card.lg-table-customer .lg-col-header{grid-template-columns:30px 90px 1fr 130px 110px 140px 150px 100px 30px}
+/* Bills table — adds the 'Original' currency column (PRD §Multi-Currency)
+   between Status and Total · IDR so the FM can cross-check the IDR total
+   against the vendor's source-currency invoice. SME feedback. */
+.lg-card.bp-card .lg-row,
+.lg-card.bp-card .lg-col-header{grid-template-columns:30px 130px 100px 1fr 70px 110px 110px 150px 30px}
+.lg-cell-original{display:flex;flex-direction:column;align-items:flex-end;font-size:11px;line-height:1.3;text-align:right}
+.lg-cell-orig-code{font-size:9px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--color-text-tertiary);font-family:var(--font-mono)}
+.lg-cell-orig-amt{font-family:var(--font-mono);color:var(--color-text-secondary);font-size:11px}
+.lg-cell-orig-empty{color:var(--color-text-tertiary);font-family:var(--font-mono);font-size:13px;opacity:.6}
+.lg-footer-draft-split{font-weight:400;font-size:11.5px;color:var(--color-text-tertiary);font-style:italic;margin-left:2px}
 /* Journal entry grid — balanced ledger columns */
 .lg-card.lg-table-je .lg-row,
 .lg-card.lg-table-je .lg-col-header{grid-template-columns:30px 100px 130px 1fr 50px 140px 140px 90px 30px}

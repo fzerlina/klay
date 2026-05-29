@@ -92,6 +92,15 @@
 .tax-line-sentence{font-size:12.5px;color:var(--color-text-primary);line-height:1.45}
 .tax-net .tax-line-lbl{font-size:11px;text-transform:none;font-weight:600;letter-spacing:0;color:var(--color-text-secondary)}
 
+/* Discount input + % / Rp toggle inside the totals block. */
+.disc-input{width:64px;padding:3px 6px;font-size:11px;font-family:var(--font-mono);border:1px solid var(--color-border-default);border-radius:var(--radius-sm);background:#fff;text-align:right}
+.disc-input:focus{outline:1px solid var(--color-action);border-color:var(--color-action)}
+.disc-toggle{display:inline-flex;border:1px solid var(--color-border-default);border-radius:var(--radius-sm);overflow:hidden;font-family:var(--font-sans)}
+.disc-toggle button{padding:3px 8px;font-size:11px;background:var(--color-surface-raised);color:var(--color-text-secondary);border:none;cursor:pointer;border-right:1px solid var(--color-border-default);transition:background var(--transition-fast)}
+.disc-toggle button:last-child{border-right:none}
+.disc-toggle button.on{background:var(--color-action);color:#fff}
+.disc-toggle button:not(.on):hover{background:var(--color-surface-sunken)}
+
 /* Three-tier account suggestion chip (PRD Zone 3). Tier 1 (blue) — vendor
    history. Tier 2 (yellow) — description inference. Tier 3 (grey) —
    category range, informational only. Tiers 1 & 2 are clickable buttons

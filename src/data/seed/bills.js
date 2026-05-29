@@ -203,4 +203,31 @@ export const BILLS = [
   {id:"BILL198",vendor:"V018",vendorName:"UD Mandiri Furnitur",initials:"MF",poNo:"PO198",invNo:"INV-V018-20250211",date:"2025-02-11",due:"2025-02-24",grn:"matched",dpp:6620000,ppn:728200,pph23:132400,total:7348200,sisa:7348200,approval:"approved",pay:"overdue",isAI:false,keterangan:"",items:[{desc:"Jasa hukum — batch 7/2025",qty:662,price:10000,subtotal:6620000,acct:"6-2700",acctName:"Professional Services"}],audit:[{type:"created",action:"Bill dibuat",by:"Sarah Wijaya",date:"2025-02-11",time:"10:55"},{type:"approved",action:"Disetujui",by:"Budi Santoso",date:"2025-02-15",time:"09:30"}]},
   {id:"BILL199",vendor:"V050",vendorName:"UD Lestari Elektronik",initials:"LE",poNo:"PO199",invNo:"INV-V050-20250315",date:"2025-03-15",due:"2025-04-28",grn:"mismatch",dpp:15074000,ppn:1658140,pph23:0,total:16732140,sisa:0,approval:"approved",pay:"paid",isAI:false,keterangan:"",items:[{desc:"Sewa gudang — batch 3/2025",qty:14,price:38000,subtotal:532000,acct:"6-2300",acctName:"Office Rent"},{desc:"Lisensi software tahunan — batch 11/2025",qty:661,price:22000,subtotal:14542000,acct:"6-2600",acctName:"Software Subscriptions"}],audit:[{type:"created",action:"Bill dibuat",by:"Sarah Wijaya",date:"2025-03-15",time:"11:37"},{type:"approved",action:"Disetujui",by:"Budi Santoso",date:"2025-03-16",time:"15:54"}]},
   {id:"BILL200",vendor:"V027",vendorName:"Koperasi Sumber Furnitur",initials:"SF",poNo:"PO200",invNo:"INV-V027-20250106",date:"2025-01-06",due:"2025-02-04",grn:"matched",dpp:94000000,ppn:0,pph23:0,total:94000000,sisa:94000000,approval:"approved",pay:"overdue",isAI:false,keterangan:"Pesanan khusus untuk proyek Q1.",items:[{desc:"Peralatan tulis — batch 4/2025",qty:40,price:2350000,subtotal:94000000,acct:"6-2500",acctName:"Office Supplies"}],audit:[{type:"created",action:"Bill dibuat",by:"Sarah Wijaya",date:"2025-01-06",time:"14:18"},{type:"approved",action:"Disetujui",by:"Budi Santoso",date:"2025-01-07",time:"11:28"}]},
+
+  // ── Foreign-currency demo bills ──────────────────────────────────────
+  // Three hand-curated bills that exercise the Original column on the
+  // Bills List (PRD §Multi-Currency). All financial fields are stored in
+  // IDR (the entity's functional currency); original_currency, original_*,
+  // and fx_rate_used carry the source-currency view for cross-checking
+  // against the vendor's invoice. Math contract per row:
+  //   dpp_idr  = dpp_orig × fx
+  //   ppn_idr  = ppn_orig × fx     (= dpp_idr × 0.11 when PKP)
+  //   total    = dpp_idr + ppn_idr (gross — what the vendor invoiced)
+  //   pph23    = dpp_idr × 0.02    (when vendor is on PPh 23 2%)
+  //   sisa     = total − pph23     (net we transfer)
+
+  // USD · PT Teknologi Solusi Digital (V008 · PKP · pph23_2 · service)
+  // Original: $15,000 DPP + $1,650 PPN + $300 PPh23 → gross $16,650, net $16,350.
+  // FX 15,750 IDR/USD → IDR gross 262,237,500. Overdue (due 17 Mar 2025).
+  {id:"BILL201",vendor:"V008",vendorName:"PT Teknologi Solusi Digital",initials:"TS",poNo:"PO-2025-0201",invNo:"INV-TS-2025-021",date:"2025-02-15",due:"2025-03-17",grn:"matched",dpp:236250000,ppn:25987500,pph23:4725000,total:262237500,sisa:257512500,approval:"approved",pay:"overdue",isAI:false,keterangan:"Annual software maintenance & IT support — Q1 2025.",original_currency:"USD",original_total:16650,original_sisa:16350,fx_rate_used:15750,items:[{desc:"Software maintenance & IT support — Q1 2025",qty:1,price:236250000,subtotal:236250000,acct:"6-2600",acctName:"Software Subscriptions"}],audit:[{type:"created",action:"Bill dibuat",by:"Sarah Wijaya",date:"2025-02-15",time:"09:24"},{type:"approved",action:"Disetujui",by:"Budi Santoso",date:"2025-02-17",time:"14:10"}]},
+
+  // SGD · PT Jasa Logistik Cepat (V003 · PKP · pph23_2 · service)
+  // Original: S$8,000 DPP + S$880 PPN + S$160 PPh23 → gross S$8,880, net S$8,720.
+  // FX 11,840 IDR/SGD → IDR gross 105,139,200. Approved, awaiting payment.
+  {id:"BILL202",vendor:"V003",vendorName:"PT Jasa Logistik Cepat",initials:"JL",poNo:"PO-2025-0202",invNo:"INV-V003-2025-SG02",date:"2025-04-15",due:"2025-05-15",grn:"matched",dpp:94720000,ppn:10419200,pph23:1894400,total:105139200,sisa:103244800,approval:"approved",pay:"unpaid",isAI:false,keterangan:"Cross-border logistics — Singapore lane, April shipments.",original_currency:"SGD",original_total:8880,original_sisa:8720,fx_rate_used:11840,items:[{desc:"Cross-border logistics — Singapore lane (April)",qty:1,price:94720000,subtotal:94720000,acct:"6-3100",acctName:"Postage & Courier"}],audit:[{type:"created",action:"Bill dibuat",by:"Rina Kusuma",date:"2025-04-15",time:"11:05"},{type:"approved",action:"Disetujui",by:"Budi Santoso",date:"2025-04-16",time:"09:42"}]},
+
+  // EUR · PT Penyedia Layanan Konsultasi (V004 · PKP · pph23_2 · service)
+  // Original: €2,500 DPP + €275 PPN + €50 PPh23 → gross €2,775, net €2,725.
+  // FX 17,200 IDR/EUR → IDR gross 47,730,000. Draft from email ingestion.
+  {id:"BILL203",vendor:"V004",vendorName:"PT Penyedia Layanan Konsultasi",initials:"PK",poNo:"—",invNo:"PK-2025-EU-014",date:"2025-04-22",due:"2025-06-06",grn:"pending",dpp:43000000,ppn:4730000,pph23:860000,total:47730000,sisa:46870000,approval:"draft",pay:"unpaid",isAI:true,keterangan:"",original_currency:"EUR",original_total:2775,original_sisa:2725,fx_rate_used:17200,items:[{desc:"Internal audit consulting — March engagement",qty:1,price:43000000,subtotal:43000000,acct:"6-2700",acctName:"Professional Services"}],audit:[{type:"created",action:"Bill dibuat (Draft — OCR AI)",by:"System (OCR Auto)",date:"2025-04-22",time:"06:18"}]},
 ];
