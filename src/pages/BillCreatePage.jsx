@@ -1,25 +1,152 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { VENDORS } from "../data/seed/vendors";
 import { useBills } from "../state/BillsContext";
+import { useVendors } from "../state/VendorsContext";
 import { formatDate, initials } from "../lib/format";
+import { previewJournalLines } from "../lib/billJournalPreview";
 import "./invoice-create.css";
+import "./bill-detail.css";
 
+// Demo CoA used by the line-item account picker. In production this would
+// come from the entity's chart of accounts API. The accounts here match what
+// the bills seed actually uses, so the Tier 1/2 suggestion engine never
+// surfaces an account that isn't in the dropdown.
 const EXPENSE_ACCOUNTS = [
   { code: "1-3100", name: "Raw Materials" },
   { code: "1-3300", name: "Finished Goods" },
   { code: "1-6300", name: "Office Equipment" },
   { code: "6-1000", name: "Expenses Pembelian" },
+  { code: "6-1200", name: "Marketing & Advertising" },
   { code: "6-2300", name: "Office Rent" },
+  { code: "6-2400", name: "Office Utilities" },
+  { code: "6-2500", name: "Office Supplies" },
+  { code: "6-2600", name: "Software Subscriptions" },
   { code: "6-2700", name: "Professional Services" },
   { code: "6-3100", name: "Postage & Courier" },
+  { code: "6-3200", name: "Repairs & Maintenance" },
+];
+const ACCOUNT_NAME_BY_CODE = Object.fromEntries(EXPENSE_ACCOUNTS.map((a) => [a.code, a.name]));
+
+// ─── Three-tier account suggestion (PRD Zone 3) ─────────────────────────────
+// Tier 1 — vendor history: most-used account for this vendor (with a 5×
+//          boost when current row's description overlaps a prior item's
+//          description). Blue chip, one-tap apply.
+// Tier 2 — description inference: keyword → account map. Yellow chip,
+//          one-tap apply, softer language.
+// Tier 3 — category guidance: vendor.category → account range. Grey chip,
+//          informational only, not directly applicable.
+
+const DESCRIPTION_RULES = [
+  { match: ["konsultasi", "konsultan", "audit", "jasa hukum", "legal", "strategis"],                acct: "6-2700" },
+  { match: ["sewa", "rent", "ruang kantor", "biaya sewa"],                                          acct: "6-2300" },
+  { match: ["panel", "lcd", "monitor 27", "komponen elektronik", "bahan baku", "kayu", "tekstil"],  acct: "1-3100" },
+  { match: ["meja", "kursi", "furnitur", "furniture", "printer", "scanner", "komputer", "peripheral", "ac ", "pendingin", "telepon"], acct: "1-6300" },
+  { match: ["logistik", "kirim", "ekspedisi", "pengiriman", "courier", "postage", "paket"],         acct: "6-3100" },
+  { match: ["iklan", "marketing", "endorsement", "brosur", "banner", "event"],                       acct: "6-1200" },
+  { match: ["internet", "listrik", "air", "utility", "tagihan air", "wifi"],                         acct: "6-2400" },
+  { match: ["atk", "alat tulis", "kertas", "office supplies", "stationery", "peralatan tulis"],     acct: "6-2500" },
+  { match: ["software", "saas", "subscription", "cloud", "hosting", "lisensi", "tools developer"],   acct: "6-2600" },
+  { match: ["renovasi", "maintenance", "perbaikan", "repair", "cat ", "plamir"],                     acct: "6-3200" },
 ];
 
+const CATEGORY_RANGES = {
+  inventory: { codes: ["1-3100", "1-3300", "1-6300"],            label: "1-3xxx to 1-6xxx (inventory & assets)" },
+  service:   { codes: ["6-2700", "6-3100", "6-1200"],            label: "6-1xxx to 6-3xxx (service expenses)" },
+  expense:   { codes: ["6-2300", "6-2400", "6-2500", "6-2600", "6-3200"], label: "6-2xxx to 6-3xxx (operating expenses)" },
+};
+
+function suggestAccount(description, vendor, allBills) {
+  const desc = (description || "").toLowerCase().trim();
+  const descWords = desc.split(/\s+/).filter((w) => w.length >= 4);
+
+  // Tier 1 — vendor history. When the description is non-empty, only fire
+  // if the description matches a prior item's description (so "Jasa
+  // Konsultasi" on an electronics vendor doesn't get nudged toward Raw
+  // Materials just because that's what the vendor mostly bills). When the
+  // description is empty (new blank row), fall back to the vendor's
+  // overall most-used account.
+  if (vendor) {
+    const vendorBills = allBills.filter((b) => b.vendor === vendor.id);
+    if (vendorBills.length > 0) {
+      if (desc) {
+        // Description-matched history only
+        const counts = {};
+        for (const b of vendorBills) {
+          for (const it of b.items || []) {
+            if (!it.acct) continue;
+            const itDesc = (it.desc || "").toLowerCase();
+            if (descWords.some((w) => itDesc.includes(w))) {
+              counts[it.acct] = (counts[it.acct] || 0) + 1;
+            }
+          }
+        }
+        const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+        if (sorted.length) {
+          const acct = sorted[0][0];
+          const matchCount = sorted[0][1];
+          return {
+            tier: 1,
+            acct,
+            name: ACCOUNT_NAME_BY_CODE[acct] || "",
+            sentence: `Matches ${matchCount} prior item${matchCount === 1 ? "" : "s"} from this vendor`,
+          };
+        }
+        // No description match → fall through to Tier 2
+      } else {
+        // Empty description — overall most-used for this vendor
+        const counts = {};
+        for (const b of vendorBills) {
+          for (const it of b.items || []) {
+            if (!it.acct) continue;
+            counts[it.acct] = (counts[it.acct] || 0) + 1;
+          }
+        }
+        const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+        if (sorted.length) {
+          const acct = sorted[0][0];
+          const usedBills = vendorBills.filter((b) => (b.items || []).some((it) => it.acct === acct));
+          return {
+            tier: 1,
+            acct,
+            name: ACCOUNT_NAME_BY_CODE[acct] || "",
+            sentence: `Used on ${usedBills.length} previous invoice${usedBills.length === 1 ? "" : "s"} from this vendor`,
+          };
+        }
+      }
+    }
+  }
+
+  // Tier 2 — description inference (only when description has content)
+  if (desc) {
+    for (const rule of DESCRIPTION_RULES) {
+      if (rule.match.some((kw) => desc.includes(kw))) {
+        return {
+          tier: 2,
+          acct: rule.acct,
+          name: ACCOUNT_NAME_BY_CODE[rule.acct] || "",
+          sentence: `'${description}' commonly posts to ${ACCOUNT_NAME_BY_CODE[rule.acct] || rule.acct}`,
+        };
+      }
+    }
+  }
+
+  // Tier 3 — category guidance
+  if (vendor?.category && CATEGORY_RANGES[vendor.category]) {
+    const cat = CATEGORY_RANGES[vendor.category];
+    return {
+      tier: 3,
+      sentence: `${vendor.name} is categorised as ${vendor.category} — typically ${cat.label}`,
+    };
+  }
+
+  return null;
+}
+
 const PPH_OPTIONS = [
-  { v: "none", label: "No withholding", rate: 0 },
-  { v: "pph23_2", label: "PPh 23 — 2% (jasa/sewa)", rate: 0.02 },
-  { v: "pph23_15", label: "PPh 23 — 15% (dividen/bunga)", rate: 0.15 },
-  { v: "pph4_final", label: "PPh 4(2) Final — konstruksi", rate: 0.02 },
+  { v: "none",       label: "No withholding",                 rate: 0    },
+  { v: "pph23_2",    label: "PPh 23 — 2% (service / sewa)",   rate: 0.02 },
+  { v: "pph23_15",   label: "PPh 23 — 15% (dividen / bunga)", rate: 0.15 },
+  { v: "pph4_final", label: "PPh 4(2) Final — konstruksi",    rate: 0.02 },
 ];
 
 function fmtNum(n) {
@@ -31,11 +158,13 @@ function CheckSvg() {
   return <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>;
 }
 
-const AISvg = () => (
-  <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/></svg>
-);
+// ─── Vendor combobox ────────────────────────────────────────────────────────
+// Search-by-name picker with avatar + payment-terms hint. Includes a
+// "Create new vendor: <query>" option at the bottom when the search has
+// content and no exact match — per PRD Zone 4, that's the entry point into
+// the inline-create overlay.
 
-function VendorCombobox({ value, onChange }) {
+function VendorCombobox({ value, onChange, vendors, onRequestCreate }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const ref = useRef(null);
@@ -47,11 +176,15 @@ function VendorCombobox({ value, onChange }) {
     return () => document.removeEventListener("mousedown", onDoc);
   }, [open]);
 
-  const selected = VENDORS.find((v) => v.id === value);
-  const q = search.toLowerCase();
-  const list = VENDORS.filter(
+  const selected = vendors.find((v) => v.id === value);
+  const q = search.toLowerCase().trim();
+  const list = vendors.filter(
     (v) => !q || v.name.toLowerCase().includes(q) || (v.contact || "").toLowerCase().includes(q),
   );
+  // Show the "Create new vendor" affordance when the user has typed a query
+  // and no vendor exactly matches that name (case-insensitive).
+  const exactMatch = q && vendors.some((v) => v.name.toLowerCase() === q);
+  const offerCreate = q.length >= 2 && !exactMatch;
 
   return (
     <div className="cust-combo" ref={ref}>
@@ -62,7 +195,7 @@ function VendorCombobox({ value, onChange }) {
             <span className="cust-combo-addr">{selected.address}</span>
           </>
         ) : (
-          <span className="cust-combo-placeholder">Pick Vendor…</span>
+          <span className="cust-combo-placeholder">Pick vendor…</span>
         )}
         <svg className="cust-combo-chev" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
@@ -73,7 +206,7 @@ function VendorCombobox({ value, onChange }) {
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name or contact…" autoFocus />
           </div>
           <div className="cust-combo-list">
-            {list.length === 0 && <div className="cust-combo-empty">None vendor matching</div>}
+            {list.length === 0 && <div className="cust-combo-empty">No vendor matches</div>}
             {list.map((v) => (
               <div
                 key={v.id}
@@ -87,6 +220,16 @@ function VendorCombobox({ value, onChange }) {
                 </div>
               </div>
             ))}
+            {offerCreate && onRequestCreate && (
+              <button
+                type="button"
+                className="cust-combo-create"
+                onClick={() => { onRequestCreate(search.trim()); setOpen(false); setSearch(""); }}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                <span>Create new vendor: <strong>"{search.trim()}"</strong></span>
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -94,11 +237,176 @@ function VendorCombobox({ value, onChange }) {
   );
 }
 
+// ─── Inline Vendor Creation Panel (PRD Zone 4) ──────────────────────────────
+// Side-panel overlay invoked from the vendor dropdown when the FM searches
+// for a vendor that doesn't exist yet. Per PRD: name + NPWP + PPh category
+// are required before confirming. NPWP deduplication runs as the FM types.
+// On confirm, the new vendor is added via VendorsContext.addVendor, focus
+// returns to the bill form, and the new vendor is pre-selected so the
+// classification cascade fires immediately.
+
+const VENDOR_TYPE_OPTIONS = [
+  { v: "company",     label: "PT / Limited Company" },
+  { v: "cv",          label: "CV" },
+  { v: "cooperative", label: "Koperasi" },
+  { v: "individual",  label: "Individual / Sole Proprietor" },
+];
+
+const PKP_OPTIONS = [
+  { v: "PKP",     label: "PKP (Pengusaha Kena Pajak)" },
+  { v: "NON_PKP", label: "Non-PKP" },
+];
+
+const PPH_CATEGORY_OPTIONS = [
+  { v: "none",       label: "None — no withholding" },
+  { v: "pph23_2",    label: "PPh 23 · 2% (service / sewa)" },
+  { v: "pph23_15",   label: "PPh 23 · 15% (dividen / bunga)" },
+  { v: "pph4_final", label: "PPh 4(2) Final · 2% (konstruksi)" },
+];
+
+function InlineVendorCreatePanel({ initialName, vendors, onCancel, onConfirm }) {
+  const [name,   setName]   = useState(initialName || "");
+  const [npwp,   setNpwp]   = useState("");
+  const [type,   setType]   = useState("company");
+  const [pkp,    setPkp]    = useState("PKP");
+  const [pph,    setPph]    = useState("none");
+  const [pphTouched, setPphTouched] = useState(false);
+
+  // Run NPWP dedup against existing vendors as the user types. We don't
+  // normalize beyond trim because Indonesian NPWPs have a canonical
+  // 15-digit dotted format that's distinctive enough.
+  const npwpDupe = npwp.trim().length > 0 && vendors.some((v) => v.tax_id && v.tax_id === npwp.trim());
+
+  const canConfirm = name.trim().length >= 2 && npwp.trim().length > 0 && !npwpDupe && pphTouched;
+
+  function confirm() {
+    if (!canConfirm) return;
+    onConfirm({
+      name:   name.trim(),
+      tax_id: npwp.trim(),
+      type,
+      pkp,
+      pph,
+      category: type === "service" ? "service" : (pkp === "PKP" ? "expense" : "inventory"),
+    });
+  }
+
+  return (
+    <>
+      <div className="bd-overlay" onClick={onCancel} />
+      <div className="bd-modal vendor-create-modal">
+        <div className="bd-modal-head">
+          <div>
+            <div className="bd-modal-title">Create new vendor</div>
+            <div className="bd-modal-sub">Required fields only — full bank, address, and contact details can be added later in Vendor Master.</div>
+          </div>
+          <button className="bd-modal-close" onClick={onCancel} aria-label="Close">
+            <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div className="bd-modal-body">
+          <div className="form-fld">
+            <label>Vendor name *</label>
+            <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. PT Sumber Alam" autoFocus />
+          </div>
+
+          <div className="form-fld">
+            <label>NPWP *</label>
+            <input
+              type="text"
+              value={npwp}
+              onChange={(e) => setNpwp(e.target.value)}
+              placeholder="12.345.678.9-001.000"
+              style={{ fontFamily: "var(--font-mono)" }}
+            />
+            {npwpDupe && (
+              <div className="bd-rule-note" style={{ color: "var(--color-danger-text)" }}>
+                This NPWP is already used by another vendor — pick the existing record instead.
+              </div>
+            )}
+            {!npwp && (
+              <div className="bd-rule-note">Required so we can classify and post bills correctly.</div>
+            )}
+          </div>
+
+          <div className="fg2">
+            <div className="form-fld">
+              <label>Vendor type</label>
+              <select value={type} onChange={(e) => setType(e.target.value)}>
+                {VENDOR_TYPE_OPTIONS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
+              </select>
+            </div>
+            <div className="form-fld">
+              <label>PKP status</label>
+              <select value={pkp} onChange={(e) => setPkp(e.target.value)}>
+                {PKP_OPTIONS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div className="form-fld">
+            <label>PPh withholding category *</label>
+            <select
+              value={pph}
+              onChange={(e) => { setPph(e.target.value); setPphTouched(true); }}
+            >
+              {!pphTouched && <option value="" disabled>Choose one…</option>}
+              {PPH_CATEGORY_OPTIONS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
+            </select>
+            <div className="bd-rule-note">
+              Required so bills posted to this vendor never carry an unknown PPh category. You can change this later in Vendor Master.
+            </div>
+          </div>
+        </div>
+        <div className="bd-modal-foot">
+          <button className="bd-modal-btn ghost" onClick={onCancel}>Cancel</button>
+          <button className="bd-modal-btn primary" onClick={confirm} disabled={!canConfirm}>
+            Create &amp; select vendor
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ─── Plain-language tax sentences (PRD Zone 5) ──────────────────────────────
+// Triggered by vendor selection. No raw scores, no codes — sentence form
+// only, exactly as the FM would read them aloud.
+
+function ppnSentence(vendor) {
+  if (!vendor) return "Pick a vendor above to see PPN treatment.";
+  if (vendor.pkp === "PKP")     return `PPN 11% applied — ${vendor.name} is PKP (confirmed in vendor master).`;
+  if (vendor.pkp === "NON_PKP") return `PPN not applicable — ${vendor.name} is Non-PKP, no VAT collectable.`;
+  return `PKP status unknown for ${vendor.name} — PPN applicability cannot be determined. Set PKP status before posting.`;
+}
+
+function pphSentence(vendor) {
+  if (!vendor) return "Pick a vendor above to see PPh withholding rules.";
+  const entity = vendor.type === "company" ? "corporate entity"
+              : vendor.type === "cooperative" ? "cooperative"
+              : vendor.type === "individual" ? "individual"
+              : "domestic vendor";
+  if (vendor.pph === "pph23_2")    return `PPh 23 at 2% will be withheld — service / sewa vendor, domestic, ${entity}.`;
+  if (vendor.pph === "pph23_15")   return `PPh 23 at 15% will be withheld — dividen / bunga vendor, ${entity}.`;
+  if (vendor.pph === "pph4_final") return `PPh 4(2) Final at 2% will be withheld — konstruksi vendor.`;
+  return `No PPh withholding — ${vendor.name} doesn't fall in any withholding category.`;
+}
+
 export default function BillCreatePage() {
   const navigate = useNavigate();
-  const { addBill } = useBills();
+  const { addBill, bills } = useBills();
+  const { vendors, addVendor } = useVendors();
 
-  const [step, setStep] = useState("upload"); // upload | scanning | review
+  // Inline vendor creation state — opened from the vendor combobox when the
+  // FM searches for a vendor that doesn't exist yet.
+  const [createVendorOpen, setCreateVendorOpen] = useState(false);
+  const [createVendorSeedName, setCreateVendorSeedName] = useState("");
+
+  // Single-page form. Scanning is a transient overlay state, not a wizard
+  // step — manual entry fields stay visible underneath while the OCR sim
+  // runs. Per the Create New Bill PRD: "Upload zone is the visual primary
+  // action … manual entry fields are visible below but visually secondary."
+  const [scanning, setScanning] = useState(false);
   const [scanPhase, setScanPhase] = useState(0);
   const [aiFilled, setAiFilled] = useState(false);
   const [toast, setToast] = useState("");
@@ -114,9 +422,56 @@ export default function BillCreatePage() {
   const [items, setItems] = useState([]); // {desc,qty,price,acct}
   const [ppnRate, setPpnRate] = useState(0.11);
   const [pphChoice, setPphChoice] = useState("none");
+  const [fakturPajak, setFakturPajak] = useState("");
   const [attachments, setAttachments] = useState([]);
 
-  const vendor = useMemo(() => VENDORS.find((v) => v.id === vendorId), [vendorId]);
+  const vendor = useMemo(() => vendors.find((v) => v.id === vendorId), [vendors, vendorId]);
+
+  function handleRequestCreateVendor(name) {
+    setCreateVendorSeedName(name || "");
+    setCreateVendorOpen(true);
+  }
+  function handleCreateVendor(draft) {
+    const record = addVendor(draft);
+    setCreateVendorOpen(false);
+    setCreateVendorSeedName("");
+    setVendorId(record.id);
+    showToast(`${record.name} added to vendor master · auto-selected.`);
+  }
+  function handleCancelCreateVendor() {
+    setCreateVendorOpen(false);
+    setCreateVendorSeedName("");
+  }
+
+  // Vendor cascade — PRD Zone 2. When the FM picks a vendor (or the OCR
+  // assigns one), pre-fill PPh / PPN from the vendor master. Faktur Pajak
+  // clears for Non-PKP vendors. User can still override the dropdowns
+  // afterward; this just makes the default match the vendor master.
+  const prevVendorIdRef = useRef(null);
+  useEffect(() => {
+    if (prevVendorIdRef.current === vendorId) return;
+    prevVendorIdRef.current = vendorId;
+    if (!vendor) return;
+    setPpnRate(vendor.pkp === "PKP" ? 0.11 : 0);
+    setPphChoice(vendor.pph || "none");
+    if (vendor.pkp !== "PKP") setFakturPajak("");
+  }, [vendor, vendorId]);
+
+  // Per-row account suggestions — Tier 1/2/3 from suggestAccount(). Computed
+  // at the component level (not inside the items map) so React hook rules
+  // are happy. Recomputes whenever items, vendor, or bills change.
+  const itemSuggestions = useMemo(
+    () => items.map((it) => suggestAccount(it.desc, vendor, bills)),
+    [items, vendor, bills],
+  );
+
+  // Default account for new rows: Tier 1 if vendor has history, otherwise
+  // a generic expense bucket. Description-driven Tier 2 fires once the user
+  // types into the new row.
+  const defaultNewRowAcct = useMemo(() => {
+    const s = suggestAccount("", vendor, bills);
+    return s?.acct || "6-1000";
+  }, [vendor, bills]);
 
   function showToast(msg) {
     setToast(msg);
@@ -124,22 +479,25 @@ export default function BillCreatePage() {
     toastTmr.current = setTimeout(() => setToast(""), 2000);
   }
 
+  // Simulated OCR — drops the user into Sub-flow A by pre-filling fields
+  // from a known vendor anchor (V001). Phase 2 will swap this for a real
+  // vendor cascade triggered by vendor selection; Phase F will replace the
+  // A4 reconstruction on the right with the actual source PDF.
   function simulateScan() {
-    setStep("scanning");
+    setScanning(true);
     setScanPhase(0);
     setTimeout(() => setScanPhase(1), 1500);
     setTimeout(() => setScanPhase(2), 3000);
-    setTimeout(() => goToReview(), 3700);
+    setTimeout(() => prefillFromOcr(), 3700);
   }
 
-  function goToReview() {
-    // Prefill from a fato OCR result (anchor on V001 - PT Supplier Elektronik)
+  function prefillFromOcr() {
     setVendorId("V001");
     setPoNo("PO-2025-0006");
     setInvNo("INV-V001-20250415");
     setDate("2025-04-15");
     setDue("2025-05-15");
-    setDescription("Pengadaan komponen elektronik Q2 — as of PO.");
+    setDescription("Pengadaan komponen elektronik Q2 — sesuai PO.");
     setItems([
       { desc: "Komponen Elektronik - Panel LCD 24 inch", qty: 50, price: 1500000, acct: "1-3100" },
     ]);
@@ -147,33 +505,67 @@ export default function BillCreatePage() {
     setPphChoice("none");
     setAttachments([{ name: "invoice_supplier_elektronik.pdf", size: "PDF · 2.4 MB", fromOCR: true }]);
     setAiFilled(true);
-    setStep("review");
+    setScanning(false);
   }
 
-  // Totals
+  // Totals. `total` is the GROSS amount the vendor invoices (DPP + PPN),
+  // matching the shape used by Bill Detail seed records. `netPayable` is
+  // what we actually transfer (total minus PPh withheld). Splitting these
+  // is what keeps the GL preview balanced — AP Trade is credited the net,
+  // PPh Payable is credited the withholding.
   const dpp = items.reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.price) || 0), 0);
   const ppn = Math.round(dpp * ppnRate);
   const pphRate = PPH_OPTIONS.find((o) => o.v === pphChoice)?.rate || 0;
   const pph = Math.round(dpp * pphRate);
-  const total = dpp + ppn - pph;
+  const total = dpp + ppn;
+  const netPayable = total - pph;
 
-  // Items handlers
-  function addRow() { setItems((p) => [...p, { desc: "", qty: 1, price: 0, acct: "6-1000" }]); }
-  function updateRow(i, patch) { setItems((p) => p.map((it, idx) => (idx === i ? { ...it, ...patch } : it))); }
-  function delRow(i) { setItems((p) => p.filter((_, idx) => idx !== i)); }
+  // Items handlers — new rows pick up the Tier 1 suggestion when vendor
+  // history exists; otherwise fall back to a generic expense bucket.
+  function addRow() {
+    setItems((p) => [...p, { desc: "", qty: 1, price: 0, acct: defaultNewRowAcct }]);
+  }
+  function updateRow(i, patch)         { setItems((p) => p.map((it, idx) => (idx === i ? { ...it, ...patch } : it))); }
+  function delRow(i)                   { setItems((p) => p.filter((_, idx) => idx !== i)); }
   function addAttach() {
     const names = ["po_vendor.pdf", "berita_acara.pdf", "faktur_pajak.pdf"];
     setAttachments((p) => [...p, { name: names[Math.floor(Math.random() * names.length)], size: "PDF · 1.1 MB", fromOCR: false }]);
   }
-  function delAttach(i) { setAttachments((p) => p.filter((_, idx) => idx !== i)); }
+  function delAttach(i)                { setAttachments((p) => p.filter((_, idx) => idx !== i)); }
+
+  // GL preview — same generator as Bill Detail so the two pages always agree
+  // on what will post. Builds an ad-hoc "bill-like" object from form state.
+  const previewBill = useMemo(() => ({
+    total,
+    dpp,
+    ppn,
+    pph23: pph,
+    vendorName: vendor?.name || "",
+    items: items.map((it) => {
+      const acct = EXPENSE_ACCOUNTS.find((a) => a.code === it.acct);
+      return {
+        desc:     it.desc,
+        qty:      it.qty,
+        price:    it.price,
+        subtotal: (Number(it.qty) || 0) * (Number(it.price) || 0),
+        acct:     it.acct,
+        acctName: acct?.name || "",
+      };
+    }),
+  }), [total, dpp, ppn, pph, vendor, items]);
+
+  const { lines: jeLines, totalDr, totalCr, balanced, anyFlag } = useMemo(
+    () => previewJournalLines(previewBill, vendor),
+    [previewBill, vendor],
+  );
 
   // Save
   function buildDraft(approval) {
     if (!vendor) return null;
     return {
-      vendor: vendor.id,
-      vendorName: vendor.name,
-      initials: vendor.initials || initials(vendor.name),
+      vendor:        vendor.id,
+      vendorName:    vendor.name,
+      initials:      vendor.initials || initials(vendor.name),
       poNo,
       invNo,
       date,
@@ -181,10 +573,12 @@ export default function BillCreatePage() {
       keterangan,
       dpp,
       ppn,
-      pph23: pph,
-      total,
+      pph23:         pph,
+      total,                       // gross — DPP + PPN
+      sisa:          netPayable,   // outstanding net to vendor at posting time
       approval,
-      grn: poNo ? "matched" : "pending",
+      grn:           poNo ? "matched" : "pending",
+      faktur_pajak:  fakturPajak || undefined,
       items: items.map((it) => {
         const acct = EXPENSE_ACCOUNTS.find((a) => a.code === it.acct);
         return {
@@ -199,19 +593,19 @@ export default function BillCreatePage() {
 
   function onSaveDraft() {
     const draft = buildDraft("draft");
-    if (!draft) { showToast("Pick vendor dulu"); return; }
-    if (!items.length) { showToast("Add at least 1 item"); return; }
+    if (!draft)             { showToast("Pick a vendor first"); return; }
+    if (!items.length)      { showToast("Add at least 1 item"); return; }
     addBill(draft);
-    showToast("Draft tersimpan ✓");
+    showToast("Draft saved ✓");
     setTimeout(() => navigate("/bills"), 600);
   }
 
-  function onSubmitForApproval() {
+  function onSubmitForReview() {
     const draft = buildDraft("review");
-    if (!draft) { showToast("Pick vendor dulu"); return; }
-    if (!items.length) { showToast("Add at least 1 item"); return; }
+    if (!draft)             { showToast("Pick a vendor first"); return; }
+    if (!items.length)      { showToast("Add at least 1 item"); return; }
     addBill(draft);
-    showToast("Bill submitted for approval ✓");
+    showToast("Bill submitted for review ✓");
     setTimeout(() => navigate("/bills"), 700);
   }
 
@@ -219,88 +613,459 @@ export default function BillCreatePage() {
 
   return (
     <div className="addpage">
-      {/* Header */}
+      {/* ── Header ────────────────────────────────────────────────── */}
       <div className="ap-head">
-        <div className="ap-title">Add Bill</div>
-        <div className="ap-stepper">
-          {[
-            { n: 1, label: "Upload Dokumen", done: step === "review", active: step === "upload" || step === "scanning" },
-            { n: 2, label: "Review & Save", done: false, active: step === "review" },
-          ].map((s, i) => (
-            <span key={s.n} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              <div className={`ap-step${s.active ? " active" : ""}${s.done ? " done" : ""}`}>
-                <div className="ap-step-num">{s.done ? <CheckSvg /> : s.n}</div>
-                {s.label}
-              </div>
-              {i < 1 && <div className={`ap-step-line${s.done ? " done" : ""}`} />}
-            </span>
-          ))}
-        </div>
+        <div className="ap-title">New Bill</div>
         <button className="ap-close" onClick={() => navigate("/bills")}>
           <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
 
-      {/* STEP 1 — Upload */}
-      {(step === "upload" || step === "scanning") && (
-        <div className="ap-s1">
-          <div style={{ textAlign: "center", marginBottom: 20 }}>
-            <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 5 }}>Upload Invoice from Vendor</div>
-            <div style={{ fontSize: 13, color: "var(--color-text-tertiary)" }}>
-              Upload foto, screenshot, atau file PDF tagihan from vendor.
+      {/* ── Two-column body: form on the left, A4 preview on the right ── */}
+      <div className="ap-split">
+        {/* Form side */}
+        <div className="ap-form-side">
+          {/* Upload zone — visual primary action per PRD. Manual fields
+              stay visible below regardless; the zone is a shortcut, not a
+              gate. Phase F will replace the A4 reconstruction with the
+              real source PDF in the side panel. */}
+          <div className="form-sec card upload-card">
+            <div className="form-sec-title">Upload Invoice</div>
+            <div className="upload-zone-compact" onClick={simulateScan}>
+              <div className="upload-zone-icon">
+                <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              </div>
+              <div className="upload-zone-text">
+                <div className="upload-zone-title">Drag & drop or click to upload</div>
+                <div className="upload-zone-sub">We'll auto-fill fields from the document · PDF, PNG, JPG, HEIC up to 20 MB</div>
+              </div>
+              <button className="upload-zone-cta" onClick={(e) => { e.stopPropagation(); simulateScan(); }}>Choose file</button>
+            </div>
+            <div className="upload-skip-hint">No document? Just fill in the fields below — you can attach a file later.</div>
+          </div>
+
+          {aiFilled && (
+            <div className="ai-fill-banner">
+              <div className="ai-fill-banner-title">
+                <svg viewBox="0 0 24 24" style={{ width: 14, height: 14, fill: "currentColor" }}><path d="M12 2L2 7l10 5 10-5-10-5z"/></svg>
+                Auto-filled from the uploaded invoice
+              </div>
+              <div className="ai-fill-banner-sub">Review each field below before submitting — flagged fields will surface on the Bill Detail page after submit.</div>
+            </div>
+          )}
+
+          {/* Bill Information */}
+          <div className="form-sec card">
+            <div className="form-sec-title">Bill Information</div>
+            <div className="fg2">
+              <div className="form-fld">
+                <label>Vendor</label>
+                <VendorCombobox
+                  value={vendorId}
+                  onChange={setVendorId}
+                  vendors={vendors}
+                  onRequestCreate={handleRequestCreateVendor}
+                />
+              </div>
+              <div className="form-fld">
+                <label>Vendor Invoice No.</label>
+                <input type="text" value={invNo} onChange={(e) => setInvNo(e.target.value)} placeholder="Vendor's invoice number" style={{ fontFamily: "var(--font-mono)" }} />
+              </div>
+            </div>
+            <div className="fg3">
+              <div className="form-fld">
+                <label>Invoice Date</label>
+                <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+              </div>
+              <div className="form-fld">
+                <label>Due Date</label>
+                <input type="date" value={due} onChange={(e) => setDue(e.target.value)} />
+              </div>
+              <div className="form-fld">
+                <label>PO No.</label>
+                <input type="text" value={poNo} onChange={(e) => setPoNo(e.target.value)} placeholder="PO-…" style={{ fontFamily: "var(--font-mono)" }} />
+              </div>
             </div>
           </div>
-          <div className="upload-zone" onClick={simulateScan}>
-            <div className="upload-zone-icon">
-              <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+
+          {/* Line Items */}
+          <div className="form-sec card">
+            <div className="form-sec-title">Line Items</div>
+            <div className="items-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th style={{ width: "32%" }}>Description</th>
+                    <th className="r" style={{ width: "9%" }}>Qty</th>
+                    <th className="r" style={{ width: "15%" }}>Price (Rp)</th>
+                    <th className="r" style={{ width: "15%" }}>Subtotal (Rp)</th>
+                    <th style={{ width: "24%" }}>Account</th>
+                    <th style={{ width: "5%" }}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.length === 0 && (
+                    <tr><td colSpan={6} style={{ textAlign: "center", color: "var(--color-text-tertiary)", padding: 12, fontSize: 11 }}>No items yet — add one below.</td></tr>
+                  )}
+                  {items.map((it, i) => {
+                    const sub = (Number(it.qty) || 0) * (Number(it.price) || 0);
+                    const suggestion = itemSuggestions[i];
+                    return (
+                      <tr key={i}>
+                        <td>
+                          <input type="text" value={it.desc} onChange={(e) => updateRow(i, { desc: e.target.value })} placeholder="Item description…" />
+                        </td>
+                        <td><input type="text" value={it.qty} style={{ textAlign: "right" }} onChange={(e) => updateRow(i, { qty: parseInt(e.target.value) || 0 })} /></td>
+                        <td><input type="text" value={fmtNum(it.price)} style={{ textAlign: "right", fontFamily: "var(--font-mono)" }} onChange={(e) => updateRow(i, { price: parseInt(e.target.value.replace(/\./g, "")) || 0 })} /></td>
+                        <td><input type="text" value={fmtNum(sub)} readOnly style={{ textAlign: "right", fontWeight: 700, fontFamily: "var(--font-mono)" }} /></td>
+                        <td>
+                          <select value={it.acct} onChange={(e) => updateRow(i, { acct: e.target.value })} style={{ fontSize: 11 }}>
+                            {EXPENSE_ACCOUNTS.map((a) => (
+                              <option key={a.code} value={a.code}>{a.code} · {a.name}</option>
+                            ))}
+                          </select>
+                          {suggestion && suggestion.tier !== 3 && (
+                            <button
+                              type="button"
+                              className={`bd-suggest-chip bd-suggest-tier-${suggestion.tier}`}
+                              onClick={() => updateRow(i, { acct: suggestion.acct })}
+                              title={`Apply ${suggestion.acct} · ${suggestion.name}`}
+                              disabled={it.acct === suggestion.acct}
+                            >
+                              <span className="bd-suggest-glyph" aria-hidden>
+                                {it.acct === suggestion.acct ? "✓" : "✦"}
+                              </span>
+                              <span className="bd-suggest-body">
+                                <span className="bd-suggest-acct">{suggestion.acct} {suggestion.name}</span>
+                                <span className="bd-suggest-sentence">{suggestion.sentence}</span>
+                              </span>
+                            </button>
+                          )}
+                          {suggestion && suggestion.tier === 3 && (
+                            <div className="bd-suggest-chip bd-suggest-tier-3">
+                              <span className="bd-suggest-sentence">{suggestion.sentence}</span>
+                            </div>
+                          )}
+                        </td>
+                        <td>
+                          <button className="btn-del-row" onClick={() => delRow(i)}>
+                            <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
-            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Drag & drop file di sini</div>
-            <div style={{ fontSize: 12, color: "var(--color-text-tertiary)", marginBottom: 14 }}>
-              atau klik for memilih from perangkat kamu
-            </div>
-            <button className="upload-zone-cta" onClick={(e) => { e.stopPropagation(); simulateScan(); }}>Choose File</button>
+            <button className="btn-add-row" onClick={addRow}>
+              <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add row
+            </button>
+            {items.length > 0 && (
+              <div className="total-block">
+                <div className="t-row">
+                  <span className="t-row-lbl">DPP (before tax)</span>
+                  <span className="t-row-val">{fmtNum(dpp)}</span>
+                </div>
+                <div className="t-row">
+                  <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                    <span className="t-row-lbl">PPN (input VAT)</span>
+                    <select className="ppn-select" value={ppnRate} onChange={(e) => setPpnRate(parseFloat(e.target.value))}>
+                      <option value="0.11">11%</option>
+                      <option value="0.10">10%</option>
+                      <option value="0">0%</option>
+                    </select>
+                  </div>
+                  <span className="t-row-val" style={{ color: "var(--danger-text)" }}>+ {fmtNum(ppn)}</span>
+                </div>
+                <div className="t-row grand">
+                  <span className="t-row-lbl">Total</span>
+                  <span className="t-row-val">{fmtNum(total)}</span>
+                </div>
+              </div>
+            )}
           </div>
-          <div className="ftgrid">
-            <div className="ftcard">
-              <div className="ftcard-icon" style={{ background: "var(--success-surface)" }}>
-                <svg viewBox="0 0 24 24" style={{ stroke: "var(--success-text)" }}><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="9" y1="7" x2="15" y2="7"/><line x1="9" y1="11" x2="15" y2="11"/></svg>
+
+          {/* ── Tax card ─── plain-language explanations driven by the vendor
+              master, per PRD Zone 5. Faktur Pajak input is surfaced when
+              the vendor is PKP; Non-PKP vendors hide it and flag mistaken
+              entries. */}
+          <div className="form-sec card">
+            <div className="form-sec-title">Tax Treatment</div>
+            {!vendor && (
+              <div className="bd-rule-note" style={{ fontStyle: "normal", marginTop: 0 }}>
+                Pick a vendor above to see how PPN and PPh apply.
               </div>
-              <div className="ftcard-title">Screenshot</div>
-              <div className="ftcard-sub">WA, email, atau showingan invoice digital</div>
-              <div className="ftcard-ext">JPG · PNG · WEBP</div>
-            </div>
-            <div className="ftcard">
-              <div className="ftcard-icon" style={{ background: "var(--warning-surface)" }}>
-                <svg viewBox="0 0 24 24" style={{ stroke: "var(--warning-text)" }}><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+            )}
+            {vendor && (
+              <>
+                <div className="tax-line">
+                  <div className="tax-line-lbl">PPN</div>
+                  <div className="tax-line-body">
+                    <div className="tax-line-sentence">{ppnSentence(vendor)}</div>
+                    <div className="bd-rule-note">
+                      {vendor.pkp === "PKP"
+                        ? `Auto-set from vendor master · override the rate in the totals above if needed.`
+                        : `No VAT collected — vendor cannot issue a valid Faktur Pajak.`}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="tax-line">
+                  <div className="tax-line-lbl">PPh</div>
+                  <div className="tax-line-body">
+                    <div className="tax-line-sentence">{pphSentence(vendor)}</div>
+                    <div className="bd-rule-note">
+                      Auto-set from vendor master · {pph > 0 ? `withholding ${fmtNum(pph)} from this invoice.` : "no withholding to compute."}
+                    </div>
+                  </div>
+                </div>
+
+                {vendor.pkp === "PKP" && (
+                  <div className="form-fld" style={{ marginTop: 10 }}>
+                    <label>Faktur Pajak Number</label>
+                    <input
+                      type="text"
+                      value={fakturPajak}
+                      onChange={(e) => setFakturPajak(e.target.value)}
+                      placeholder="010.000-25.12345678"
+                      style={{ fontFamily: "var(--font-mono)" }}
+                    />
+                    {!fakturPajak && (
+                      <div className="bd-rule-note" style={{ color: "var(--color-danger-text, var(--danger-text))" }}>
+                        Required for PKP vendors before posting.
+                      </div>
+                    )}
+                    {fakturPajak && (
+                      <div className="bd-rule-note">Entered manually · will surface as a settled field on the Bill Detail page.</div>
+                    )}
+                  </div>
+                )}
+
+                {vendor.pkp !== "PKP" && fakturPajak && (
+                  <div className="bd-rule-note" style={{ color: "#6B4F00", marginTop: 10 }}>
+                    Faktur Pajak number entered for a Non-PKP vendor. Confirm this vendor is PKP before posting.
+                  </div>
+                )}
+
+                <div className="tax-line tax-net" style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid var(--color-border-default)" }}>
+                  <div className="tax-line-lbl">Net Payable to vendor</div>
+                  <div className="tax-line-body" style={{ textAlign: "right" }}>
+                    <div style={{ fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 700 }}>Rp {fmtNum(netPayable)}</div>
+                    <div className="bd-rule-note">Total minus PPh withheld.</div>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Attachments */}
+          <div className="form-sec card">
+            <div className="form-sec-title">Attachments</div>
+            {attachments.length > 0 && (
+              <div className="attach-list">
+                {attachments.map((a, i) => (
+                  <div key={i} className="attach-item">
+                    <div className="attach-icon">
+                      <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/></svg>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div className="attach-name">{a.name}</div>
+                      <div className="attach-size">{a.size}{a.fromOCR ? " · from upload" : ""}</div>
+                    </div>
+                    <button className="attach-rm" onClick={() => delAttach(i)}>
+                      <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                  </div>
+                ))}
               </div>
-              <div className="ftcard-title">Photo Invoice Fisik</div>
-              <div className="ftcard-sub">Photo kamera HP, pastikan teks terbaca jelas</div>
-              <div className="ftcard-ext">JPG · PNG · HEIC</div>
-            </div>
-            <div className="ftcard">
-              <div className="ftcard-icon" style={{ background: "var(--danger-surface)" }}>
-                <svg viewBox="0 0 24 24" style={{ stroke: "var(--danger-text)" }}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-              </div>
-              <div className="ftcard-title">PDF Invoice</div>
-              <div className="ftcard-sub">File PDF from sistem vendor atau e-faktur</div>
-              <div className="ftcard-ext">PDF · maks. 10 MB</div>
+            )}
+            <button className="btn-add-attach" onClick={addAttach}>
+              <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add attachment
+            </button>
+          </div>
+
+          {/* Notes */}
+          <div className="form-sec card">
+            <div className="form-sec-title">Notes</div>
+            <div className="form-fld">
+              <textarea value={keterangan} onChange={(e) => setDescription(e.target.value)} rows={3} placeholder="Internal note or description for this bill…" />
             </div>
           </div>
-          <div style={{ fontSize: 12, color: "var(--color-text-tertiary)", textAlign: "center" }}>
-            AI akan mengekstrak semua data automatic — kamu bisa koreksi before menyimpan
+
+          {/* GL Preview — driven by the same previewJournalLines() helper
+              the Bill Detail page uses, so creation and review never
+              disagree on what will post. Phase 5+ adds rule-annotation
+              chips and yellow indicators on low-confidence lines. */}
+          {total > 0 && (
+            <div className="form-sec card">
+              <div className="form-sec-title">
+                GL Journal Entry Preview
+                <span className={`bd-je-status${balanced ? " ok" : " err"}`} style={{ marginLeft: 8 }}>
+                  {balanced ? "Balanced" : "Out of balance"}
+                </span>
+                {anyFlag && (
+                  <span className="bd-je-flag" title="One or more lines were generated with low confidence" style={{ marginLeft: 4 }}>⚠</span>
+                )}
+              </div>
+              <div className="bd-je-hint" style={{ marginBottom: 10 }}>
+                What this bill will write to the General Ledger when it's approved. Read-only — edit the fields above to change.
+              </div>
+              <table className="bd-je-table">
+                <thead>
+                  <tr>
+                    <th>Account</th>
+                    <th className="r">Debit</th>
+                    <th className="r">Credit</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {jeLines.map((line, i) => (
+                    <tr key={i} className={line.flag ? `bd-je-row-${line.flag.toLowerCase()}` : ""}>
+                      <td>
+                        <div className="bd-je-line-acct">
+                          <span className="bd-mono bd-je-acct-code">{line.account_code}</span>
+                          <span className="bd-je-acct-name">{line.account_name}</span>
+                        </div>
+                        <div className="bd-rule-note">{line.rule}</div>
+                      </td>
+                      <td className="r mono">{line.side === "DR" ? line.amount.toLocaleString("id-ID") : ""}</td>
+                      <td className="r mono">{line.side === "CR" ? line.amount.toLocaleString("id-ID") : ""}</td>
+                    </tr>
+                  ))}
+                  <tr className="bd-je-total-row">
+                    <td>Total</td>
+                    <td className="r mono">{totalDr.toLocaleString("id-ID")}</td>
+                    <td className="r mono">{totalCr.toLocaleString("id-ID")}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )}
+          <div style={{ height: 20 }} />
+        </div>
+
+        {/* Document preview side — A4 reconstruction from form data. PRD
+            says this slot should hold the source document (the uploaded
+            PDF/photo). Phase F-equivalent for Create will swap the mock
+            for the real source. */}
+        <div className="ap-preview-side">
+          <div className="ap-prev-bar">
+            <div className="ap-prev-lbl">
+              <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/></svg>
+              Invoice preview (A4)
+            </div>
+            <button className="a4-download-btn" onClick={() => showToast("Download PDF…")}>
+              <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Download PDF
+            </button>
+          </div>
+          <div className="a4-doc">
+            <div className="a4-head2">
+              <div className="a4-brand">
+                <div className="a4-brand-name">{vendor?.name || "—"}</div>
+                <div className="a4-brand-tag">Invoice from vendor</div>
+              </div>
+              <div className="a4-head-meta">
+                <div className="a4-head-row"><span className="a4-head-lbl">Invoice</span><span className="a4-head-val">{invNo || "—"}</span></div>
+                <div className="a4-head-row"><span className="a4-head-lbl">Date</span><span className="a4-head-val">{formatDate(date)}</span></div>
+                <div className="a4-head-row"><span className="a4-head-lbl">Due</span><span className="a4-head-val">{formatDate(due)}</span></div>
+                {poNo && <div className="a4-head-row"><span className="a4-head-lbl">PO</span><span className="a4-head-val">{poNo}</span></div>}
+              </div>
+            </div>
+
+            <div className="a4-addr-grid">
+              <div className="a4-addr">
+                <div className="a4-addr-lbl">FROM VENDOR</div>
+                <div className="a4-addr-name">{vendor?.name || "—"}</div>
+                <div className="a4-addr-line">{vendor?.address || ""}</div>
+                {vendor?.tax_id && <div className="a4-addr-line">NPWP {vendor.tax_id}</div>}
+                {vendor?.contact && <div className="a4-addr-line a4-addr-attn">Attn: {vendor.contact}</div>}
+              </div>
+              <div className="a4-addr">
+                <div className="a4-addr-lbl">BILL TO</div>
+                <div className="a4-addr-name">PT Sejahtera Makmur</div>
+                <div className="a4-addr-line">Jl. Sudirman No. 99</div>
+                <div className="a4-addr-line">Jakarta 10220, Indonesia</div>
+                <div className="a4-addr-line">NPWP 12.345.678.9-000.000</div>
+              </div>
+              <div className="a4-addr">
+                <div className="a4-addr-lbl">TERMS</div>
+                <div className="a4-addr-name">{vendor?.payment_terms || "—"}</div>
+                <div className="a4-addr-line a4-addr-muted">Payment via bank transfer</div>
+                {vendor?.banks?.[0] && (
+                  <>
+                    <div className="a4-addr-line" style={{ marginTop: 6 }}>{vendor.banks[0].name} {vendor.banks[0].acc}</div>
+                    <div className="a4-addr-line">a/n {vendor.banks[0].holder}</div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className="a4-items2">
+              <table>
+                <thead>
+                  <tr>
+                    <th className="a4-item-num">ITEM</th>
+                    <th>DESCRIPTION</th>
+                    <th className="r">QTY</th>
+                    <th className="r">PRICE</th>
+                    <th className="r">SUBTOTAL</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.filter((it) => it.desc).length === 0 && (
+                    <tr><td colSpan={5} className="empty">Add items in the form on the left</td></tr>
+                  )}
+                  {items.filter((it) => it.desc).map((it, i) => (
+                    <tr key={i}>
+                      <td className="a4-item-num">{String(i + 1).padStart(2, "0")}</td>
+                      <td><div className="a4-item-name">{it.desc}</div></td>
+                      <td className="r mono">{it.qty}</td>
+                      <td className="r mono">{fmtNum(it.price)}</td>
+                      <td className="r mono">{fmtNum((Number(it.qty) || 0) * (Number(it.price) || 0))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="a4-total">
+              <div className="a4-tb">
+                <div className="a4-tr"><span className="lbl">DPP</span><span className="val">{fmtNum(dpp)}</span></div>
+                <div className="a4-tr"><span className="lbl">PPN ({Math.round(ppnRate * 100)}%)</span><span className="val">{fmtNum(ppn)}</span></div>
+                {pph > 0 && <div className="a4-tr"><span className="lbl">PPh (withholding)</span><span className="val">− {fmtNum(pph)}</span></div>}
+                <div className="a4-tr grand"><span className="lbl">Total</span><span className="val">Rp {fmtNum(total)}</span></div>
+              </div>
+            </div>
+
+            <div className="a4-notes">
+              <div className="a4-notes-lbl">NOTES</div>
+              <div className="a4-notes-body">
+                {keterangan
+                  ? keterangan
+                  : <span className="a4-notes-empty">Please pay before the due date. Include the invoice number in the bank transfer description.</span>}
+              </div>
+            </div>
+
+            <div className="a4-footer">
+              {vendor?.email || "—"} · {vendor?.phone || ""}
+            </div>
           </div>
         </div>
-      )}
+      </div>
 
-      {/* Scanning overlay */}
-      {step === "scanning" && (
+      {/* ── Scanning overlay ─────────────────────────────────────── */}
+      {scanning && (
         <div className="scan-overlay">
           <div className="scan-loading-card">
             <div className="scan-spinner" />
-            <div className="scan-loading-title">Memproses Dokumen</div>
+            <div className="scan-loading-title">Reading the invoice</div>
             <div className="scan-loading-status">
-              {scanPhase === 0 && "Memverificashi kesafean file…"}
-              {scanPhase === 1 && "Mengekstrak data invoice vendor…"}
+              {scanPhase === 0 && "Checking file integrity…"}
+              {scanPhase === 1 && "Extracting invoice data…"}
               {scanPhase >= 2 && "Matching vendor & PO…"}
             </div>
             <div className="scan-progress">
@@ -311,350 +1076,28 @@ export default function BillCreatePage() {
         </div>
       )}
 
-      {/* STEP 2 — Review */}
-      {step === "review" && (
-        <div className="ap-split">
-          {/* Form side */}
-          <div className="ap-form-side">
-            {aiFilled && (
-              <div className="ai-fill-banner">
-                <div className="ai-fill-banner-title"><AISvg />AI mengekstrak data from invoice vendor</div>
-                <div className="ai-fill-banner-sub">Check each field. Akurasi average 96% — koreksi seneedsnya.</div>
-              </div>
-            )}
-
-            <div className="form-sec card">
-              <div className="form-sec-title">Bill Information</div>
-              <div className="fg2">
-                <div className="form-fld">
-                  <label>Vendor <span className="fld-conf hi">98%</span></label>
-                  <VendorCombobox value={vendorId} onChange={setVendorId} />
-                </div>
-                <div className="form-fld">
-                  <label>Invoice Number Vendor <span className="fld-conf hi">97%</span></label>
-                  <input type="text" value={invNo} onChange={(e) => setInvNo(e.target.value)} placeholder="No. invoice from vendor" style={{ fontFamily: "var(--font-mono)" }} />
-                </div>
-              </div>
-              <div className="fg3">
-                <div className="form-fld">
-                  <label>Date Invoice <span className="fld-conf hi">96%</span></label>
-                  <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-                </div>
-                <div className="form-fld">
-                  <label>Overdue <span className="fld-conf hi">94%</span></label>
-                  <input type="date" value={due} onChange={(e) => setDue(e.target.value)} />
-                </div>
-                <div className="form-fld">
-                  <label>PO Number <span className="fld-conf hi">97%</span></label>
-                  <input type="text" value={poNo} onChange={(e) => setPoNo(e.target.value)} placeholder="PO-…" style={{ fontFamily: "var(--font-mono)" }} />
-                </div>
-              </div>
-            </div>
-
-            <div className="form-sec card">
-              <div className="form-sec-title">Line Items</div>
-              <div className="items-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th style={{ width: "32%" }}>Description</th>
-                      <th className="r" style={{ width: "9%" }}>Qty</th>
-                      <th className="r" style={{ width: "15%" }}>Price (Rp)</th>
-                      <th className="r" style={{ width: "15%" }}>Subtotal (Rp)</th>
-                      <th style={{ width: "24%" }}>Account</th>
-                      <th style={{ width: "5%" }}></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {items.length === 0 && (
-                      <tr><td colSpan={6} style={{ textAlign: "center", color: "var(--color-text-tertiary)", padding: 12, fontSize: 11 }}>Not yet there is item</td></tr>
-                    )}
-                    {items.map((it, i) => {
-                      const sub = (Number(it.qty) || 0) * (Number(it.price) || 0);
-                      return (
-                        <tr key={i}>
-                          <td>
-                            <input type="text" value={it.desc} onChange={(e) => updateRow(i, { desc: e.target.value })} placeholder="Description item…" />
-                          </td>
-                          <td><input type="text" value={it.qty} style={{ textAlign: "right" }} onChange={(e) => updateRow(i, { qty: parseInt(e.target.value) || 0 })} /></td>
-                          <td><input type="text" value={fmtNum(it.price)} style={{ textAlign: "right", fontFamily: "var(--font-mono)" }} onChange={(e) => updateRow(i, { price: parseInt(e.target.value.replace(/\./g, "")) || 0 })} /></td>
-                          <td><input type="text" value={fmtNum(sub)} readOnly style={{ textAlign: "right", fontWeight: 700, fontFamily: "var(--font-mono)" }} /></td>
-                          <td>
-                            <select value={it.acct} onChange={(e) => updateRow(i, { acct: e.target.value })} style={{ fontSize: 11 }}>
-                              {EXPENSE_ACCOUNTS.map((a) => (
-                                <option key={a.code} value={a.code}>{a.code} · {a.name}</option>
-                              ))}
-                            </select>
-                          </td>
-                          <td>
-                            <button className="btn-del-row" onClick={() => delRow(i)}>
-                              <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-              <button className="btn-add-row" onClick={addRow}>
-                <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                Add Row
-              </button>
-              {items.length > 0 && (
-                <div className="total-block">
-                  <div className="t-row">
-                    <span className="t-row-lbl">DPP (before pajak)</span>
-                    <span className="t-row-val">{fmtNum(dpp)}</span>
-                  </div>
-                  <div className="t-row">
-                    <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                      <span className="t-row-lbl">Input VAT (PPN)</span>
-                      <select className="ppn-select" value={ppnRate} onChange={(e) => setPpnRate(parseFloat(e.target.value))}>
-                        <option value="0.11">11%</option>
-                        <option value="0.10">10%</option>
-                        <option value="0">0%</option>
-                      </select>
-                    </div>
-                    <span className="t-row-val" style={{ color: "var(--danger-text)" }}>+ {fmtNum(ppn)}</span>
-                  </div>
-                  <div className="t-row">
-                    <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                      <span className="t-row-lbl">Withholding (PPh)</span>
-                      <select className="ppn-select" value={pphChoice} onChange={(e) => setPphChoice(e.target.value)}>
-                        {PPH_OPTIONS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
-                      </select>
-                    </div>
-                    <span className="t-row-val" style={{ color: pph > 0 ? "var(--success-text)" : "var(--color-text-tertiary)" }}>
-                      {pph > 0 ? `− ${fmtNum(pph)}` : "—"}
-                    </span>
-                  </div>
-                  <div className="t-row grand">
-                    <span className="t-row-lbl">Total Bill</span>
-                    <span className="t-row-val">{fmtNum(total)}</span>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="form-sec card">
-              <div className="form-sec-title">Attachments</div>
-              {attachments.length > 0 && (
-                <div className="attach-list">
-                  {attachments.map((a, i) => (
-                    <div key={i} className="attach-item">
-                      <div className="attach-icon">
-                        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/></svg>
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div className="attach-name">{a.name}</div>
-                        <div className="attach-size">{a.size}{a.fromOCR ? " · from upload" : ""}</div>
-                      </div>
-                      <button className="attach-rm" onClick={() => delAttach(i)}>
-                        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <button className="btn-add-attach" onClick={addAttach}>
-                <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                Add Attachment
-              </button>
-            </div>
-
-            <div className="form-sec card">
-              <div className="form-sec-title">Description</div>
-              <div className="form-fld">
-                <label>Notes / Memo</label>
-                <textarea value={keterangan} onChange={(e) => setDescription(e.target.value)} rows={3} placeholder="Add a description or note for this transaction…" />
-              </div>
-            </div>
-
-            {total > 0 && (
-              <div className="form-sec card">
-                <div className="form-sec-title">
-                  Journal Entry
-                  <span className="ai-chip" style={{ marginLeft: 4 }}>
-                    <AISvg />AI Generated · 95%
-                  </span>
-                </div>
-                <table className="journals-table">
-                  <thead>
-                    <tr>
-                      <th>Account</th>
-                      <th>Name</th>
-                      <th className="r">Debit</th>
-                      <th className="r">Credit</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {items.filter((it) => it.desc).map((it, i) => {
-                      const acct = EXPENSE_ACCOUNTS.find((a) => a.code === it.acct);
-                      const sub = (Number(it.qty) || 0) * (Number(it.price) || 0);
-                      return (
-                        <tr key={i}>
-                          <td className="mono">{it.acct}</td>
-                          <td>{acct?.name || "—"}</td>
-                          <td className="r">{fmtNum(sub)}</td>
-                          <td className="dim r">—</td>
-                        </tr>
-                      );
-                    })}
-                    {ppn > 0 && (
-                      <tr>
-                        <td className="mono">1-5100</td>
-                        <td>Input VAT (PPN)</td>
-                        <td className="r">{fmtNum(ppn)}</td>
-                        <td className="dim r">—</td>
-                      </tr>
-                    )}
-                    {pph > 0 && (
-                      <tr>
-                        <td className="mono">2-2300</td>
-                        <td>Payables PPh</td>
-                        <td className="dim r">—</td>
-                        <td className="r">{fmtNum(pph)}</td>
-                      </tr>
-                    )}
-                    <tr>
-                      <td className="mono">2-1100</td>
-                      <td>Trade Payables</td>
-                      <td className="dim r">—</td>
-                      <td className="r">{fmtNum(total)}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            )}
-            <div style={{ height: 20 }} />
-          </div>
-
-          {/* Document preview side */}
-          <div className="ap-preview-side">
-            <div className="ap-prev-bar">
-              <div className="ap-prev-lbl">
-                <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/></svg>
-                Preview Invoice Vendor (A4)
-              </div>
-              <button className="a4-download-btn" onClick={() => showToast("Download PDF…")}>
-                <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                Download PDF
-              </button>
-            </div>
-            <div className="a4-doc">
-              <div className="a4-head2">
-                <div className="a4-brand">
-                  <div className="a4-brand-name">{vendor?.name || "—"}</div>
-                  <div className="a4-brand-tag">Invoice from vendor</div>
-                </div>
-                <div className="a4-head-meta">
-                  <div className="a4-head-row"><span className="a4-head-lbl">Invoice</span><span className="a4-head-val">{invNo || "—"}</span></div>
-                  <div className="a4-head-row"><span className="a4-head-lbl">Date</span><span className="a4-head-val">{formatDate(date)}</span></div>
-                  <div className="a4-head-row"><span className="a4-head-lbl">Overdue</span><span className="a4-head-val">{formatDate(due)}</span></div>
-                  {poNo && <div className="a4-head-row"><span className="a4-head-lbl">PO</span><span className="a4-head-val">{poNo}</span></div>}
-                </div>
-              </div>
-
-              <div className="a4-addr-grid">
-                <div className="a4-addr">
-                  <div className="a4-addr-lbl">DARI VENDOR</div>
-                  <div className="a4-addr-name">{vendor?.name || "—"}</div>
-                  <div className="a4-addr-line">{vendor?.address || ""}</div>
-                  {vendor?.tax_id && <div className="a4-addr-line">NPWP {vendor.tax_id}</div>}
-                  {vendor?.contact && <div className="a4-addr-line a4-addr-attn">Attn: {vendor.contact}</div>}
-                </div>
-                <div className="a4-addr">
-                  <div className="a4-addr-lbl">DITAGIHKAN KE</div>
-                  <div className="a4-addr-name">PT Sejahtera Makmur</div>
-                  <div className="a4-addr-line">Jl. Sudirman No. 99</div>
-                  <div className="a4-addr-line">Jakarta 10220, Indonesia</div>
-                  <div className="a4-addr-line">NPWP 12.345.678.9-000.000</div>
-                </div>
-                <div className="a4-addr">
-                  <div className="a4-addr-lbl">TERMS</div>
-                  <div className="a4-addr-name">{vendor?.payment_terms || "—"}</div>
-                  <div className="a4-addr-line a4-addr-muted">Payment via transfer bank</div>
-                  {vendor?.banks?.[0] && (
-                    <>
-                      <div className="a4-addr-line" style={{ marginTop: 6 }}>{vendor.banks[0].name} {vendor.banks[0].acc}</div>
-                      <div className="a4-addr-line">a/n {vendor.banks[0].holder}</div>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              <div className="a4-items2">
-                <table>
-                  <thead>
-                    <tr>
-                      <th className="a4-item-num">ITEM</th>
-                      <th>DESKRIPSI</th>
-                      <th className="r">QTY</th>
-                      <th className="r">HARGA</th>
-                      <th className="r">JUMLAH</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {items.filter((it) => it.desc).length === 0 && (
-                      <tr><td colSpan={5} className="empty">Add item di form kiri</td></tr>
-                    )}
-                    {items.filter((it) => it.desc).map((it, i) => (
-                      <tr key={i}>
-                        <td className="a4-item-num">{String(i + 1).padStart(2, "0")}</td>
-                        <td><div className="a4-item-name">{it.desc}</div></td>
-                        <td className="r mono">{it.qty}</td>
-                        <td className="r mono">{fmtNum(it.price)}</td>
-                        <td className="r mono">{fmtNum((Number(it.qty) || 0) * (Number(it.price) || 0))}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="a4-total">
-                <div className="a4-tb">
-                  <div className="a4-tr"><span className="lbl">DPP</span><span className="val">{fmtNum(dpp)}</span></div>
-                  <div className="a4-tr"><span className="lbl">PPN ({Math.round(ppnRate * 100)}%)</span><span className="val">{fmtNum(ppn)}</span></div>
-                  {pph > 0 && <div className="a4-tr"><span className="lbl">PPh (potongan)</span><span className="val">− {fmtNum(pph)}</span></div>}
-                  <div className="a4-tr grand"><span className="lbl">Total</span><span className="val">Rp {fmtNum(total)}</span></div>
-                </div>
-              </div>
-
-              <div className="a4-notes">
-                <div className="a4-notes-lbl">CATATAN</div>
-                <div className="a4-notes-body">
-                  {keterangan
-                    ? keterangan
-                    : <span className="a4-notes-empty">Mohon lakukan payment before date due. Cantumkan nomor invoice as berita transfer.</span>}
-                </div>
-              </div>
-
-              <div className="a4-footer">
-                {vendor?.email || "—"} · {vendor?.phone || ""}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Footer */}
+      {/* ── Footer ───────────────────────────────────────────────── */}
       <div className="ap-foot">
         <button className="ap-btn" onClick={() => navigate("/bills")}>Cancel</button>
-        <span className="ap-hint">{step === "review" ? "All perubahan tersimpan automatic" : ""}</span>
-        {step === "review" && (
-          <>
-            <button className="ap-btn" onClick={onSaveDraft} disabled={!canSubmit}>
-              <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v14a2 2 0 01-2 2z"/></svg>
-              Save Draft
-            </button>
-            <button className="ap-btn-send" onClick={onSubmitForApproval} disabled={!canSubmit}>
-              <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
-              Submit for Approval
-            </button>
-          </>
-        )}
+        <span className="ap-hint">{canSubmit ? "Changes are saved when you click Save Draft or Submit" : ""}</span>
+        <button className="ap-btn" onClick={onSaveDraft} disabled={!canSubmit}>
+          <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v14a2 2 0 01-2 2z"/></svg>
+          Save Draft
+        </button>
+        <button className="ap-btn-send" onClick={onSubmitForReview} disabled={!canSubmit}>
+          <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+          Submit for Review
+        </button>
       </div>
+
+      {createVendorOpen && (
+        <InlineVendorCreatePanel
+          initialName={createVendorSeedName}
+          vendors={vendors}
+          onCancel={handleCancelCreateVendor}
+          onConfirm={handleCreateVendor}
+        />
+      )}
 
       {toast && <div className="toast show">{toast}</div>}
     </div>

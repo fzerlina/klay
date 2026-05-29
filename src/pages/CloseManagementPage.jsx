@@ -1,7 +1,7 @@
 import { useMemo, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { ACCOUNTS as BANK_ACCOUNTS, INITIAL_TRANSACTIONS as BANK_TRANSACTIONS } from "./BankReconciliationPage";
-import { JOURNAL_ENTRIES } from "../data/seed/journalEntries";
+import { JOURNAL_ENTRIES as SEED_JOURNAL_ENTRIES } from "../data/seed/journalEntries";
 import "./modules.css";
 import "./invoices-ledger.css";
 import "./close.css";
@@ -56,7 +56,10 @@ const RECON_STATS = (() => {
 // The Klay-attributed draft count (8 invoices + 2 recurring = 10) is what
 // Klay surfaced; the rest are manual user drafts still awaiting work.
 const JE_STATS = (() => {
-  const drafts = JOURNAL_ENTRIES.filter((j) => j.status === "draft").length;
+  // Computed from the static seed at module load — Close Management's draft
+  // count doesn't need to react to posted bills in the demo (posting creates
+  // a 'posted' JE, not a 'draft', so this count stays accurate).
+  const drafts = SEED_JOURNAL_ENTRIES.filter((j) => j.status === "draft").length;
   const klayDrafts = 10; // 8 from invoices/bills + 2 from recurring templates
   return { drafts, klayDrafts, manualDrafts: Math.max(0, drafts - klayDrafts) };
 })();

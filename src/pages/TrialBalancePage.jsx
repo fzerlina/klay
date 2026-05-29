@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef, Fragment } from "react";
 import { COA, COA_BY_CODE } from "../data/seed/coa";
-import { JOURNAL_ENTRIES } from "../data/seed/journalEntries";
+import { useJournalEntries } from "../state/JournalEntriesContext";
 import { OPENING_BALANCES } from "../data/seed/openingBalances";
 import AiChatDrawer from "./AiChatDrawer";
 import SummaryDrawer from "./SummaryDrawer";
@@ -68,10 +68,10 @@ const fmtIdDate = (s) =>
   new Date(s + "T00:00:00").toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
 
 // ── TB compute ────────────────────────────────────────────────────────────
-function computeTB(dateFrom, dateTo) {
+function computeTB(dateFrom, dateTo, journalEntries) {
   const acc = {};
   LEAF.forEach((a) => { acc[a.code] = { preDr: 0, preCr: 0, perDr: 0, perCr: 0, entries: [] }; });
-  JOURNAL_ENTRIES.forEach((je) => {
+  journalEntries.forEach((je) => {
     if (je.status !== "posted") return;
     je.lines.forEach((line) => {
       const a = acc[line.account_code];
@@ -361,7 +361,8 @@ export default function TrialBalancePage() {
   }
 
   const { dateFrom, dateTo } = filterValues;
-  const ALL_TB = useMemo(() => computeTB(dateFrom, dateTo), [dateFrom, dateTo]);
+  const { entries: JOURNAL_ENTRIES } = useJournalEntries();
+  const ALL_TB = useMemo(() => computeTB(dateFrom, dateTo, JOURNAL_ENTRIES), [dateFrom, dateTo, JOURNAL_ENTRIES]);
   const balance = useMemo(() => checkBalance(ALL_TB), [ALL_TB]);
   const anomalyes = useMemo(() => detectAnomalyes(ALL_TB), [ALL_TB]);
   const anomalyesByCode = useMemo(() => {

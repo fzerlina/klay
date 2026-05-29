@@ -5,6 +5,7 @@ import ChartOfAccountsPage from "./pages/ChartOfAccountsPage";
 import DimensionsPage from "./pages/DimensionsPage";
 import BillsPage from "./pages/BillsPage";
 import BillCreatePage from "./pages/BillCreatePage";
+import BillDetailPage from "./pages/BillDetailPage";
 import InvoicesPage from "./pages/InvoicesPage";
 import InvoiceCreatePage from "./pages/InvoiceCreatePage";
 import VendorsPage from "./pages/VendorsPage";
@@ -20,6 +21,7 @@ import { InvoicesProvider } from "./state/InvoicesContext";
 import { BillsProvider } from "./state/BillsContext";
 import { VendorsProvider } from "./state/VendorsContext";
 import { CustomersProvider } from "./state/CustomersContext";
+import { JournalEntriesProvider } from "./state/JournalEntriesContext";
 
 function ComingSoon({ title }) {
   return (
@@ -35,6 +37,7 @@ export default function App() {
       <BillsProvider>
         <VendorsProvider>
           <CustomersProvider>
+            <JournalEntriesProvider>
             <Routes>
               <Route element={<Layout />}>
                 <Route index element={<Navigate to="/journal-entry" replace />} />
@@ -44,6 +47,7 @@ export default function App() {
                 <Route path="/dimensions" element={<DimensionsPage />} />
                 <Route path="/bills" element={<BillsPage />} />
                 <Route path="/bills/new" element={<BillCreatePage />} />
+                <Route path="/bills/:id" element={<BillDetailPage />} />
                 <Route path="/invoices" element={<InvoicesPage />} />
                 <Route path="/invoices/new" element={<InvoiceCreatePage />} />
                 <Route path="/vendors" element={<VendorsPage />} />
@@ -57,6 +61,7 @@ export default function App() {
                 <Route path="*" element={<Navigate to="/journal-entry" replace />} />
               </Route>
             </Routes>
+            </JournalEntriesProvider>
           </CustomersProvider>
         </VendorsProvider>
       </BillsProvider>

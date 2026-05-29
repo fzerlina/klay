@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
-import { JOURNAL_ENTRIES } from "../data/seed/journalEntries";
+import { useJournalEntries } from "../state/JournalEntriesContext";
 import { TODAY } from "../lib/clock";
 import { formatDate } from "../lib/format";
 import AiChatDrawer from "./AiChatDrawer";
@@ -427,6 +427,7 @@ function KlayActionModal({ intent, onClose }) {
 }
 
 export default function JournalEntryPage() {
+  const { entries: JOURNAL_ENTRIES } = useJournalEntries();
   const allRows = useMemo(() => {
     // Mark the AUTO_PROCESSED_COUNT most-recent pending JEs as auto-processed by Klay AI
     const pendingByDateDesc = JOURNAL_ENTRIES
@@ -450,7 +451,7 @@ export default function JournalEntryPage() {
       }
       return { ...je, debit, credit };
     });
-  }, []);
+  }, [JOURNAL_ENTRIES]);
 
   const [searchParams] = useSearchParams();
   const initialTab = (() => {

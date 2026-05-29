@@ -2,7 +2,16 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { VENDORS as vendors } from "../data/seed/vendors";
 import { TODAY, daysSince } from "../lib/clock";
-import { formatRupiah, initials } from "../lib/format";
+import { formatRupiah, formatDateEn as formatDate } from "../lib/format";
+import {
+  DEMO_OVERRIDES,
+  STATUS_LABEL,
+  workflowStatus,
+  statusCause,
+  isApPeriodLocked,
+  sourceChannelFor,
+  urgencyScore,
+} from "../lib/billStatus";
 import { useBills } from "../state/BillsContext";
 import AiChatDrawer, { SparkleIcon as DrawerSparkle } from "./AiChatDrawer";
 import SummaryDrawer from "./SummaryDrawer";
@@ -15,16 +24,6 @@ import "./invoices-ledger.css";
 function fmtRp(n) {
   if (n == null) return "—";
   return n.toLocaleString("id-ID", { maximumFractionDigits: 0 });
-}
-
-const APPROVAL_LABEL = { approved: "Approved", review: "Review", draft: "Draft" };
-const PAY_LABEL = { paid: "Paid", unpaid: "Unpaid", overdue: "Overdue" };
-const GRN_LABEL = { matched: "Matched", pending: "Pending", mismatch: "Mismatch" };
-
-function payBadgeClass(pay) {
-  if (pay === "paid") return "badge-lunas";
-  if (pay === "overdue") return "badge-overdue";
-  return "badge-unpaid";
 }
 
 function toRow(b) {
@@ -69,14 +68,6 @@ function formatMonthLabel(yyyymm) {
   return `${MONTHS_EN[parseInt(m, 10) - 1] || m} ${y}`;
 }
 
-// Local English-month override (the lib version uses id-ID which renders "Mei/Agu/Okt/Des").
-function formatDate(input) {
-  if (!input) return "—";
-  const d = new Date(input);
-  if (isNaN(d.getTime())) return "—";
-  return `${d.getDate()} ${MONTHS_EN[d.getMonth()]} ${d.getFullYear()}`;
-}
-
 // ─── Components ─────────────────────────────────────────────────────────────
 
 function SparkleIcon({ size = 11 }) {
@@ -86,106 +77,6 @@ function SparkleIcon({ size = 11 }) {
       <path d="M10 8.5l0.4 1L11.5 10l-1.1 0.4L10 11.5l-0.4-1.1L8.5 10l1.1-0.5L10 8.5z" />
     </svg>
   );
-}
-
-// ─── Workflow status (unified, single value per bill) ──────────────────────
-// In production this would be a stored column on ap_invoices. For the demo we
-// derive it from existing approval/pay + a small overrides map that adds the
-// new states (RETURNED, ON_HOLD, EXCEPTION) that aren't expressible from the
-// two-dimensional seed.
-const DEMO_OVERRIDES = {
-  BILL005: { state: "RETURNED", returned: { by: "FM", reason: "PO doesn't match invoice qty — verify with vendor" } },
-  BILL022: { state: "RETURNED", returned: { by: "FM", reason: "Needs L2 approval for amount > Rp 100M" } },
-  BILL010: { state: "ON_HOLD",  onHold:   { reason: "awaiting credit note", since: "2025-04-15" } },
-  BILL011: { state: "ON_HOLD",  onHold:   { reason: "vendor dispute on shipping cost", since: "2025-04-10" } },
-  BILL028: { state: "EXCEPTION", exception: { reason: "OCR confidence below threshold — manual review required" } },
-  BILL034: { state: "EXCEPTION", exception: { reason: "Duplicate detected — similar to BILL001" } },
-  // Tag a couple of PENDING_REVIEW bills as "already opened" so the cause sentence shows that branch
-  BILL008: { opened: { daysAgo: 2, fieldsFlagged: 3 } },
-  BILL012: { opened: { daysAgo: 1, fieldsFlagged: 0 } },
-};
-
-const STATUS_LABEL = {
-  DRAFT:          "Draft",
-  PENDING_REVIEW: "Pending Review",
-  RETURNED:       "Returned",
-  ON_HOLD:        "On Hold",
-  APPROVED:       "Approved",
-  POSTED:         "Posted",
-  PAID:           "Paid",
-  EXCEPTION:      "Exception",
-};
-
-function workflowStatus(b) {
-  const ov = DEMO_OVERRIDES[b.id];
-  if (ov?.state) return ov.state;
-  if (b.approval === "draft") return "DRAFT";
-  if (b.approval === "review") return "PENDING_REVIEW";
-  if (b.approval === "approved" && b.pay === "paid") return "PAID";
-  if (b.approval === "approved") return "APPROVED";
-  return "PENDING_REVIEW";
-}
-
-function statusCause(b) {
-  const ov = DEMO_OVERRIDES[b.id] || {};
-  const ws = workflowStatus(b);
-  const dpd = daysSince(b.due);
-  switch (ws) {
-    case "DRAFT":
-      return "not yet submitted";
-    case "PENDING_REVIEW": {
-      if (ov.opened) {
-        const { daysAgo, fieldsFlagged } = ov.opened;
-        return fieldsFlagged > 0
-          ? `opened ${daysAgo}d ago · ${fieldsFlagged} field${fieldsFlagged === 1 ? "" : "s"} flagged`
-          : `opened ${daysAgo}d ago · no fields flagged`;
-      }
-      const inQueue = Math.max(1, daysSince(b.audit?.[0]?.date || b.date));
-      return `not yet opened · ${inQueue}d in queue`;
-    }
-    case "RETURNED":
-      return `FM: ${(ov.returned?.reason || "needs fix").slice(0, 60)}`;
-    case "ON_HOLD": {
-      const sinceDays = ov.onHold?.since ? Math.max(0, daysSince(ov.onHold.since)) : 0;
-      return `${ov.onHold?.reason || "awaiting info"} · ${sinceDays}d`;
-    }
-    case "APPROVED":
-      return dpd > 0 ? `overdue ${dpd}d` : "ready for payment";
-    case "POSTED":
-      return "payment scheduled";
-    case "PAID": {
-      const paidAudit = (b.audit || []).find((a) => a.type === "paid") || (b.audit || [])[(b.audit?.length || 1) - 1];
-      return paidAudit?.date ? formatDate(paidAudit.date) : "settled";
-    }
-    case "EXCEPTION":
-      return ov.exception?.reason || "system error";
-    default:
-      return "";
-  }
-}
-
-// Period-locking helper — checks if a bill's accounting period (YYYY-MM)
-// falls within a closed AP period. Demo logic: anything before 2025-03 is closed.
-// In production this would be `is_ap_period_locked(entity_id, bill.period)`.
-const AP_CLOSED_THROUGH = "2025-02"; // months ≤ this are closed
-function isApPeriodLocked(billDate) {
-  if (!billDate) return false;
-  const period = billDate.slice(0, 7);
-  return period <= AP_CLOSED_THROUGH;
-}
-
-// Source channel — derived from existing bill fields for demo. In production
-// this would come from a `source_channel` field on ap_invoices.
-function sourceChannelFor(b) {
-  if (b.isAI) return "email"; // AI-OCR drafts are ingested from email/WA streams
-  // Recurring vendor heuristic: same vendor appears multiple times across months
-  // with similar amounts. For the demo, mark utility/subscription CoA accts as recurring.
-  const recurringAccts = new Set(["6-2400", "6-2600", "6-2300"]); // Utilities, SaaS, Rent
-  if (b.items && b.items.some((it) => recurringAccts.has(it.acct))) {
-    // Only flag as recurring if not a draft (recurring = locked-in template)
-    if (b.approval !== "draft") return "recurring";
-  }
-  return "upload";
 }
 
 function SourceChannelIcon({ channel }) {
@@ -206,92 +97,6 @@ function SourceChannelIcon({ channel }) {
         <svg viewBox="0 0 12 12" aria-hidden><path d="M2 6a4 4 0 0 1 6.8-2.8M10 6a4 4 0 0 1-6.8 2.8" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/><polyline points="8.4 1.2 8.8 3.2 6.8 3.2" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/><polyline points="3.6 10.8 3.2 8.8 5.2 8.8" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
       )}
     </span>
-  );
-}
-
-// Status-aware footer for the bill detail drawer. The action set adapts to
-// the bill's workflow_status so the FM / AP Staff always see the relevant
-// next step. Each click fires the parent's onAction (primary, closes drawer)
-// or onSecondary (stays open).
-function DrawerFooter({ bill, onAction, onSecondary }) {
-  if (!bill) return null;
-  const ws = workflowStatus(bill);
-
-  // Resolve sub-actions for EXCEPTION based on the seeded reason text
-  const ov = DEMO_OVERRIDES[bill.id] || {};
-  const exceptionPrimaryLabel = (() => {
-    const reason = (ov.exception?.reason || "").toLowerCase();
-    if (reason.includes("ocr") || reason.includes("confidence")) return "Verify & resubmit";
-    if (reason.includes("duplicate")) return "Mark as new";
-    if (reason.includes("vendor")) return "Confirm vendor";
-    if (reason.includes("type")) return "Classify document";
-    if (reason.includes("field")) return "Enter manually";
-    return "Resolve";
-  })();
-
-  let primary = null;
-  let secondaries = [];
-
-  switch (ws) {
-    case "DRAFT":
-      primary = "Submit for review";
-      secondaries = ["Edit", "Delete"];
-      break;
-    case "PENDING_REVIEW":
-      primary = "Approve";
-      secondaries = ["Return to AP", "Put on hold", "Edit"];
-      break;
-    case "RETURNED":
-      primary = "Edit & resubmit";
-      secondaries = ["View FM comments"];
-      break;
-    case "ON_HOLD":
-      primary = "Release hold";
-      secondaries = ["Edit", "Cancel bill"];
-      break;
-    case "APPROVED":
-      primary = "Record payment";
-      secondaries = ["Revert to review", "Edit"];
-      break;
-    case "POSTED":
-      primary = "Record payment";
-      secondaries = ["View GL entry"];
-      break;
-    case "PAID":
-      primary = null;
-      secondaries = ["View receipt", "Revert to unpaid"];
-      break;
-    case "EXCEPTION":
-      primary = exceptionPrimaryLabel;
-      secondaries = ["Open source document", "Skip — mark for later"];
-      break;
-    default:
-      primary = "Edit";
-      secondaries = [];
-  }
-
-  return (
-    <div className="drawer-footer">
-      {primary && (
-        <button
-          type="button"
-          className="drawer-btn primary"
-          onClick={() => onAction(primary)}
-        >
-          {primary}
-        </button>
-      )}
-      {secondaries.map((label) => (
-        <button
-          key={label}
-          type="button"
-          className="drawer-btn ghost"
-          onClick={() => onSecondary(label)}
-        >
-          {label}
-        </button>
-      ))}
-    </div>
   );
 }
 
@@ -345,10 +150,6 @@ function LedgerRow({ r, bucket, isChecked, onCheck, onClick, onKebab, isSelected
   const ws = workflowStatus(r.raw);
   const causeText = statusCause(r.raw);
   const statusLabel = STATUS_LABEL[ws] || ws;
-  const dotTone =
-    isOverdue ? (bucket?.tone === "warn" ? "warn" : "") :
-    isPaid ? "success" :
-    "muted";
   const pct = isOverdue && bucket
     ? Math.min(100, Math.max(8, ((r.daysOverdue - bucket.minDays) / ((bucket.maxDaysCap - bucket.minDays) || 30)) * 100))
     : 0;
@@ -380,7 +181,6 @@ function LedgerRow({ r, bucket, isChecked, onCheck, onClick, onKebab, isSelected
         {isOverdue && <div className="bp-cell-date-late">{r.daysOverdue}d late</div>}
       </div>
       <div className="lg-cell-customer">
-        <span className={`lg-cell-customer-dot${dotTone ? " " + dotTone : ""}`} />
         <span
           className="bp-cell-vendor-name"
           onMouseEnter={(e) => onVendorHover && onVendorHover(r.raw, e.clientX, e.clientY)}
@@ -468,60 +268,6 @@ const SORT_LABELS = {
   "vendor-desc":     "Vendor Z-A",
 };
 
-// Urgency score — drives the default sort outside the Overdue tab.
-// Built around the FM's daily attention model (per PRD Bills List §Two-mode page):
-// what's blocking the workflow, what's been sitting in my queue too long, and
-// what's about to fall over a due-date cliff. Bills that the FM has already
-// approved (= now AP Staff's payment problem) score lower than the same bill
-// would when it was still in PENDING_REVIEW.
-// In production this would be a pre-computed `urgency_score` column with
-// IA-tunable weights from `system_config.urgency_weights`.
-function urgencyScore(b) {
-  let s = 0;
-  const ws = workflowStatus(b);
-  const dpd = daysSince(b.due); // positive when past due
-  const ov = DEMO_OVERRIDES[b.id] || {};
-
-  // 1) Workflow state — heaviest weight on states that gate FM action
-  switch (ws) {
-    case "EXCEPTION":      s += 150; break; // system blocked, FM must unstick
-    case "RETURNED":       s += 120; break; // bounced; needs FM follow-through
-    case "ON_HOLD":        s += 40;  break; // paused, may need a nudge
-    case "PENDING_REVIEW": s += 60;  break;
-    case "APPROVED":       s += 25;  break; // off the FM's plate already
-    case "DRAFT":          s += 15;  break;
-    case "PAID":           s += 0;   break;
-  }
-
-  // 2) PENDING_REVIEW age + opened-with-flags signal — PRD: "days_in_queue" + "fields_requiring_attention"
-  if (ws === "PENDING_REVIEW") {
-    const inQueue = Math.max(0, daysSince(b.audit?.[0]?.date || b.date));
-    if (inQueue >= 5) s += 40;
-    else if (inQueue >= 3) s += 20;
-    else if (inQueue >= 1) s += 8;
-    const flagged = ov.opened?.fieldsFlagged || 0;
-    s += flagged * 12; // each flagged field = nudge upward
-  }
-
-  // 3) Due-date pressure — applied to all non-terminal states
-  if (ws !== "PAID" && ws !== "DRAFT") {
-    if (dpd > 0)      s += Math.min(50, Math.round(dpd / 2)); // overdue (halved & capped)
-    else if (dpd > -3) s += 25; // due in next 3 days
-    else if (dpd > -7) s += 10; // due this week
-  }
-
-  // 4) Anomaly signal — informational but worth ranking on
-  for (const a of (b.anomalies || [])) {
-    if (a.severity === "high")   s += 20;
-    else if (a.severity === "medium") s += 10;
-    else                          s += 3;
-  }
-
-  // 5) GRN mismatch — a quiet "needs a look" signal
-  if (b.grn === "mismatch") s += 8;
-
-  return s;
-}
 const GROUP_LABELS = {
   "none":   "—",
   "aging":  "Aging",
@@ -801,8 +547,6 @@ export default function BillsPage() {
   const emptyFilters = { vendors: new Set(), minAmount: "", maxAmount: "", dateFrom: "", dateTo: "", dateField: "date", grn: "all" };
   const [filterValues, setFilterValues] = useState(emptyFilters);
 
-  const [selectedId, setSelectedId] = useState(null);
-  const [drawerTab, setDrawerTab] = useState("detail");
   const [checked, setChecked] = useState(() => new Set());
   const [menuOpenFor, setMenuOpenFor] = useState(null);
   const [collapsedGroups, setCollapsedGroups] = useState(() => new Set());
@@ -1108,9 +852,6 @@ export default function BillsPage() {
       kind: effectiveGroup,
     }));
   }, [effectiveGroup, sortedRows]);
-
-  const selected = bills.find((b) => b.id === selectedId);
-  const selectedVendor = selected ? vendors.find((v) => v.id === selected.vendor) : null;
 
   const pageTotal = filteredRows.reduce((s, r) => s + r.total, 0);
   const selectedTotal = filteredRows.filter((r) => checked.has(r.id)).reduce((s, r) => s + r.total, 0);
@@ -1464,9 +1205,8 @@ export default function BillsPage() {
                               bucket={rowBucket}
                               isChecked={checked.has(r.id)}
                               onCheck={toggleRow}
-                              onClick={() => { setSelectedId(r.id); setDrawerTab("detail"); }}
+                              onClick={() => navigate(`/bills/${r.id}`)}
                               onKebab={(id) => setMenuOpenFor(menuOpenFor === id ? null : id)}
-                              isSelected={selectedId === r.id}
                               isAlt={i % 2 === 1}
                               onIdHover={onIdHover}
                               onIdLeave={onIdLeave}
@@ -1502,9 +1242,8 @@ export default function BillsPage() {
                           bucket={bucket}
                           isChecked={checked.has(r.id)}
                           onCheck={toggleRow}
-                          onClick={() => { setSelectedId(r.id); setDrawerTab("detail"); }}
+                          onClick={() => navigate(`/bills/${r.id}`)}
                           onKebab={(id) => setMenuOpenFor(menuOpenFor === id ? null : id)}
-                          isSelected={selectedId === r.id}
                           isAlt={i % 2 === 1}
                           onIdHover={onIdHover}
                           onIdLeave={onIdLeave}
@@ -1553,154 +1292,6 @@ export default function BillsPage() {
           <span className="lg-footer-total">Rp {fmtRp(checked.size > 0 ? selectedTotal : pageTotal)}</span>
         </div>
       </div>
-
-      {/* ── Side drawer (bill detail) ──────────────────────────────── */}
-      {selected && (
-        <>
-          <div className="drawer-overlay" onClick={() => setSelectedId(null)} />
-          <div className="drawer">
-            <div className="drawer-head">
-              <div className="drawer-av bill">{selected.initials || initials(selected.vendorName)}</div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="drawer-title">{selected.vendorName}</div>
-                <div className="drawer-sub">{selected.id}</div>
-              </div>
-              <button className="drawer-close" onClick={() => setSelectedId(null)}>
-                <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-              </button>
-            </div>
-            <div className="drawer-tabs">
-              {[["detail", "Detail"], ["items", "Items"], ["audit", "Audit"], ["ai", "AI Insight"]].map(([t, label]) => (
-                <div key={t} className={`drawer-tab${drawerTab === t ? " active" : ""}`} onClick={() => setDrawerTab(t)}>
-                  {t === "ai" && <span style={{ marginRight: 4, color: "var(--color-action)" }}>✦</span>}
-                  {label}
-                </div>
-              ))}
-            </div>
-            <div className="drawer-body">
-              {drawerTab === "detail" && (
-                <>
-                  <div className="drawer-stat-row">
-                    <div className="drawer-stat-card">
-                      <div className="drawer-stat-lbl">Total</div>
-                      <div className="drawer-stat-val">{formatRupiah(selected.total)}</div>
-                    </div>
-                    <div className="drawer-stat-card">
-                      <div className="drawer-stat-lbl">Remaining</div>
-                      <div className={`drawer-stat-val${selected.sisa > 0 ? " danger" : " success"}`}>{selected.sisa > 0 ? formatRupiah(selected.sisa) : "Paid"}</div>
-                    </div>
-                  </div>
-                  <div className="drawer-section">
-                    <div className="drawer-section-title">Bill Information</div>
-                    {[
-                      ["Bill ID", selected.id],
-                      ["Vendor Invoice No.", selected.invNo],
-                      ["PO No.", selected.poNo],
-                      ["Date", formatDate(selected.date)],
-                      ["Due Date", formatDate(selected.due)],
-                      ["GRN", GRN_LABEL[selected.grn]],
-                      ["Approval Status", APPROVAL_LABEL[selected.approval]],
-                      ["Payment Status", PAY_LABEL[selected.pay]],
-                    ].map(([label, value]) => (
-                      <div key={label} className="drawer-row">
-                        <div className="drawer-label">{label}</div>
-                        <div className="drawer-value">{value}</div>
-                      </div>
-                    ))}
-                    {selected.keterangan && (
-                      <div className="drawer-row">
-                        <div className="drawer-label">Description</div>
-                        <div className="drawer-value">{selected.keterangan}</div>
-                      </div>
-                    )}
-                  </div>
-                  <div className="drawer-section">
-                    <div className="drawer-section-title">Tax</div>
-                    {[
-                      ["DPP", formatRupiah(selected.dpp)],
-                      ["PPN (11%)", formatRupiah(selected.ppn)],
-                      ["PPh 23", selected.pph23 > 0 ? formatRupiah(selected.pph23) : "—"],
-                    ].map(([label, value]) => (
-                      <div key={label} className="drawer-row">
-                        <div className="drawer-label">{label}</div>
-                        <div className="drawer-value mono">{value}</div>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-              {drawerTab === "items" && (
-                <div className="drawer-section">
-                  <div className="drawer-section-title">Line Items</div>
-                  <table className="items-table">
-                    <thead><tr><th>Description</th><th className="r">Qty</th><th className="r">Price</th><th className="r">Subtotal</th></tr></thead>
-                    <tbody>
-                      {selected.items.map((item, i) => (
-                        <tr key={i}>
-                          <td>
-                            <div>{item.desc}</div>
-                            <div style={{ fontSize: 10, color: "var(--color-action)", fontFamily: "var(--font-mono)" }}>{item.acct} · {item.acctName}</div>
-                          </td>
-                          <td className="r">{item.qty.toLocaleString("id-ID")}</td>
-                          <td className="r">{formatRupiah(item.price)}</td>
-                          <td className="r">{formatRupiah(item.subtotal)}</td>
-                        </tr>
-                      ))}
-                      <tr className="items-total-row"><td colSpan={3}>Total</td><td className="r">{formatRupiah(selected.total)}</td></tr>
-                    </tbody>
-                  </table>
-                </div>
-              )}
-              {drawerTab === "audit" && (
-                <div className="drawer-section">
-                  <div className="drawer-section-title">Audit History</div>
-                  <div className="audit-list">
-                    {selected.audit.map((a, i) => (
-                      <div key={i} className="audit-item">
-                        <div className={`audit-dot ${a.type}`} />
-                        <div>
-                          <div className="audit-action">{a.action}</div>
-                          <div className="audit-by">{a.by} · {formatDate(a.date)} {a.time}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {drawerTab === "ai" && (
-                <div className="drawer-section">
-                  <div className="drawer-section-title">AI Insight</div>
-                  <div style={{ padding: 12, background: "var(--ai-surface)", border: "1px solid var(--ai-border)", borderRadius: "var(--radius-md)", marginBottom: 10 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "var(--color-action)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 4 }}>✦ Extraction & Matching</div>
-                    <div style={{ fontSize: 12, color: "var(--color-text-secondary)", lineHeight: 1.55 }}>
-                      OCR extracted {selected.items.length} item{selected.items.length === 1 ? "" : "s"} with an average accuracy of <strong>96%</strong>. {selected.grn === "matched" ? "PO matched ✓" : selected.grn === "pending" ? "Awaiting PO match" : "PO mismatch — needs review."}
-                    </div>
-                  </div>
-                  {selected.pay === "overdue" && (
-                    <div style={{ padding: 12, background: "var(--color-danger-surface)", border: "1px solid var(--color-danger-border)", borderRadius: "var(--radius-md)", marginBottom: 10 }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: "var(--color-danger-text)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 4 }}>⚠ Past Due</div>
-                      <div style={{ fontSize: 12, color: "var(--color-text-secondary)", lineHeight: 1.55 }}>
-                        This bill is past its due date. Potential late fees from the vendor — consider paying immediately or negotiating a grace period.
-                      </div>
-                    </div>
-                  )}
-                  <div style={{ padding: 12, background: "var(--color-surface-sunken)", border: "1px solid var(--color-border-default)", borderRadius: "var(--radius-md)" }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "var(--color-text-tertiary)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 4 }}>Vendor History</div>
-                    <div style={{ fontSize: 12, color: "var(--color-text-secondary)", lineHeight: 1.55 }}>
-                      Klay AI detected this vendor typically receives payment NET 30. Average cycle from issue to payment is <strong>22 days</strong>.
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-            <DrawerFooter
-              bill={selected}
-              onAction={(label) => { showToast(`${label} — ${selected.id} (demo)`); setSelectedId(null); }}
-              onSecondary={(label) => showToast(`${label} — ${selected.id} (demo)`)}
-            />
-          </div>
-        </>
-      )}
 
       {/* ── Klay AI drawers ────────────────────────────────────────── */}
       <div

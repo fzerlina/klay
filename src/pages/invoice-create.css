@@ -68,6 +68,77 @@
 .upload-zone-icon{width:44px;height:44px;border-radius:50%;background:var(--color-surface-sunken);display:flex;align-items:center;justify-content:center;margin:0 auto 12px}
 .upload-zone-icon svg{width:20px;height:20px;stroke:var(--color-text-tertiary);fill:none;stroke-width:1.5}
 .upload-zone-cta{font-family:var(--font-sans);font-size:13px;font-weight:600;padding:9px 22px;background:var(--color-action);color:#fff;border:none;border-radius:var(--radius-md);cursor:pointer}
+
+/* Compact upload zone for the single-page Create flow — drop zone sits at
+   the top of the form rather than dominating its own wizard step. */
+.upload-card .form-sec-title{margin-bottom:10px}
+.upload-zone-compact{display:flex;align-items:center;gap:14px;border:2px dashed var(--color-border-default);border-radius:var(--radius-md);padding:14px 16px;cursor:pointer;transition:all var(--transition-fast);background:var(--color-surface-raised)}
+.upload-zone-compact:hover{border-color:var(--color-action);background:var(--ai-surface)}
+.upload-zone-compact .upload-zone-icon{width:36px;height:36px;margin:0;flex-shrink:0}
+.upload-zone-compact .upload-zone-icon svg{width:16px;height:16px}
+.upload-zone-text{flex:1;min-width:0}
+.upload-zone-title{font-size:13px;font-weight:700;color:var(--color-text-primary);line-height:1.3}
+.upload-zone-sub{font-size:11px;color:var(--color-text-tertiary);margin-top:2px;line-height:1.4}
+.upload-zone-compact .upload-zone-cta{padding:7px 14px;font-size:12px;flex-shrink:0}
+.upload-skip-hint{margin-top:8px;font-size:11px;color:var(--color-text-tertiary);font-style:italic}
+
+/* Tax treatment card — plain-language sentences keyed off vendor master
+   (PRD Zone 5). Two-column rows: small label on the left, sentence + a
+   subtle rule note on the right. */
+.tax-line{display:flex;align-items:flex-start;gap:14px;padding:8px 0;border-bottom:1px solid var(--color-surface-sunken)}
+.tax-line:last-child{border-bottom:none}
+.tax-line-lbl{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--color-text-tertiary);width:80px;flex-shrink:0;margin-top:1px}
+.tax-line-body{flex:1;min-width:0}
+.tax-line-sentence{font-size:12.5px;color:var(--color-text-primary);line-height:1.45}
+.tax-net .tax-line-lbl{font-size:11px;text-transform:none;font-weight:600;letter-spacing:0;color:var(--color-text-secondary)}
+
+/* Three-tier account suggestion chip (PRD Zone 3). Tier 1 (blue) — vendor
+   history. Tier 2 (yellow) — description inference. Tier 3 (grey) —
+   category range, informational only. Tiers 1 & 2 are clickable buttons
+   that one-tap apply the suggested account. */
+.bd-suggest-chip{display:flex;align-items:flex-start;gap:5px;margin-top:5px;padding:4px 8px;border-radius:8px;font-family:var(--font-sans);font-size:10.5px;line-height:1.35;text-align:left;cursor:pointer;border:1px solid;transition:background var(--transition-fast)}
+.bd-suggest-chip[disabled]{cursor:default;opacity:.85}
+.bd-suggest-glyph{font-size:10px;font-weight:700;flex-shrink:0;margin-top:1px}
+.bd-suggest-body{display:flex;flex-direction:column;min-width:0}
+.bd-suggest-acct{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bd-suggest-sentence{opacity:.85;font-size:10px;white-space:normal}
+.bd-suggest-tier-1{background:#E2ECFB;color:#1A46C8;border-color:#C7D7F2}
+.bd-suggest-tier-1:hover:not([disabled]){background:#CFDDF5}
+.bd-suggest-tier-2{background:#FFF6E0;color:#6B4F00;border-color:#E4D2A0}
+.bd-suggest-tier-2:hover:not([disabled]){background:#FFECC2}
+.bd-suggest-tier-3{background:var(--color-surface-sunken);color:var(--color-text-tertiary);border-color:var(--color-border-default);cursor:default;font-style:italic}
+
+/* "Create new vendor: …" affordance at the bottom of the combobox list
+   (PRD Zone 4). One click opens the inline-create overlay. */
+.cust-combo-create{display:flex;align-items:center;gap:8px;width:100%;padding:8px 10px;background:var(--color-surface-sunken);border:none;border-top:1px solid var(--color-border-default);cursor:pointer;font-family:var(--font-sans);font-size:12px;color:var(--color-action);text-align:left;transition:background var(--transition-fast)}
+.cust-combo-create:hover{background:var(--ai-surface)}
+.cust-combo-create svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2;flex-shrink:0}
+
+/* ── Inline vendor creation modal (PRD Zone 4) ───────────────────────────── */
+.bd-overlay{position:fixed;inset:0;background:rgba(8,7,6,.32);z-index:90;animation:fadeIn var(--transition-fast)}
+.bd-modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(520px,calc(100vw - 40px));max-height:calc(100vh - 40px);background:var(--color-surface-raised);border:1px solid var(--color-border-default);border-radius:var(--radius-lg);box-shadow:0 24px 64px -16px rgba(0,0,0,.32),0 0 0 1px rgba(0,0,0,.04);z-index:100;display:flex;flex-direction:column;animation:modalIn var(--transition-base)}
+@keyframes modalIn{from{opacity:0;transform:translate(-50%,-48%)}to{opacity:1;transform:translate(-50%,-50%)}}
+
+.bd-modal-head{display:flex;align-items:flex-start;gap:12px;padding:18px 22px 14px;border-bottom:1px solid var(--color-border-default)}
+.bd-modal-title{font-size:15px;font-weight:700;color:var(--color-text-primary);line-height:1.3}
+.bd-modal-sub{margin-top:3px;font-size:11.5px;color:var(--color-text-tertiary);line-height:1.4}
+.bd-modal-close{margin-left:auto;width:28px;height:28px;border-radius:var(--radius-sm);background:var(--color-surface-sunken);border:1px solid var(--color-border-default);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:background var(--transition-fast)}
+.bd-modal-close:hover{background:var(--color-border-default)}
+.bd-modal-close svg{width:12px;height:12px;stroke:var(--color-text-tertiary);fill:none;stroke-width:2}
+
+.bd-modal-body{flex:1;overflow-y:auto;padding:18px 22px;display:flex;flex-direction:column;gap:12px}
+.bd-modal-body .form-fld label{font-size:11px;font-weight:600;color:var(--color-text-secondary);margin-bottom:4px;display:block}
+.bd-modal-body .form-fld input,.bd-modal-body .form-fld select{width:100%;font-family:var(--font-sans);font-size:12px;padding:8px 10px;border:1px solid var(--color-border-default);border-radius:var(--radius-sm);background:#fff;color:var(--color-text-primary)}
+.bd-modal-body .form-fld input:focus,.bd-modal-body .form-fld select:focus{outline:2px solid rgba(184,90,14,.25);border-color:var(--color-action)}
+
+.bd-modal-foot{display:flex;justify-content:flex-end;gap:8px;padding:14px 22px;border-top:1px solid var(--color-border-default);background:var(--color-surface-sunken)}
+.bd-modal-btn{font-family:var(--font-sans);font-size:12px;font-weight:600;padding:8px 16px;border-radius:var(--radius-md);cursor:pointer;border:1px solid;transition:all var(--transition-fast)}
+.bd-modal-btn.primary{background:var(--color-action);color:#fff;border-color:var(--color-action)}
+.bd-modal-btn.primary:hover:not(:disabled){background:var(--color-action-hover)}
+.bd-modal-btn.primary:disabled{opacity:.5;cursor:not-allowed}
+.bd-modal-btn.ghost{background:var(--color-surface-raised);color:var(--color-text-secondary);border-color:var(--color-border-default)}
+.bd-modal-btn.ghost:hover{border-color:#c8c2ba}
+
 .ftgrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;width:100%;max-width:600px;margin-bottom:12px}
 .ftcard{background:var(--color-surface-raised);border:1px solid var(--color-border-default);border-radius:var(--radius-md);padding:12px}
 .ftcard-icon{width:28px;height:28px;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;margin-bottom:6px}

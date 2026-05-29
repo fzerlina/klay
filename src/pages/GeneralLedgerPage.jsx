@@ -1,12 +1,13 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { formatDate } from "../lib/format";
 import {
-  JOURNAL_ENTRIES,
+  JOURNAL_ENTRIES as SEED_JOURNAL_ENTRIES,
   BILL_REFS,
   RECONCILIATION,
   ANOMALY_FLAGS,
   ANOMALIES,
 } from "../data/seed/journalEntries";
+import { useJournalEntries } from "../state/JournalEntriesContext";
 import { INVOICES } from "../data/seed/invoices";
 import AiChatDrawer from "./AiChatDrawer";
 import SummaryDrawer from "./SummaryDrawer";
@@ -29,7 +30,7 @@ function mapRefType(t) {
 }
 
 // Build a per-line GL row dforet with running balance.
-function buildGLRows() {
+function buildGLRows(JOURNAL_ENTRIES) {
   const sorted = [...JOURNAL_ENTRIES].sort((a, b) => a.je_date.localeCompare(b.je_date));
   const rows = [];
   let runBal = 500000000;
@@ -62,8 +63,13 @@ function buildGLRows() {
   return rows;
 }
 
-const ALL_ROWS = buildGLRows();
-const ACCT_OPTIONS = [...new Set(ALL_ROWS.map((r) => r.acct + "|" + r.acctName))]
+// ACCT_OPTIONS is derived from the static seed because (a) it powers a
+// select dropdown that doesn't need to react to newly posted JEs, and (b)
+// new bills only reuse existing account codes — there are no new accounts
+// created at runtime in the demo. ALL_ROWS, by contrast, is reactive (see
+// the component body) so newly posted JEs appear in the GL immediately.
+const SEED_ROWS = buildGLRows(SEED_JOURNAL_ENTRIES);
+const ACCT_OPTIONS = [...new Set(SEED_ROWS.map((r) => r.acct + "|" + r.acctName))]
   .sort()
   .map((a) => { const [code, name] = a.split("|"); return { code, name }; });
 
@@ -346,6 +352,11 @@ export default function GeneralLedgerPage() {
     toastTmr.current = setTimeout(() => setToast(""), 1800);
   }
 
+  // JEs from the context — reactive, so newly-posted bills appear here
+  // immediately after the Approve action on Bill Detail.
+  const { entries: JOURNAL_ENTRIES } = useJournalEntries();
+  const ALL_ROWS = useMemo(() => buildGLRows(JOURNAL_ENTRIES), [JOURNAL_ENTRIES]);
+
   // Stats for current dforet
   const stats = useMemo(() => {
     const postedCount  = JOURNAL_ENTRIES.filter((j) => j.status === "posted").length;
@@ -357,7 +368,7 @@ export default function GeneralLedgerPage() {
     const totalDebit  = ALL_ROWS.reduce((s, r) => s + r.debit, 0);
     const totalCredit = ALL_ROWS.reduce((s, r) => s + r.credit, 0);
     return { postedCount, pendingCount, draftCount, matchedCount, unmatchedCount, anomalyCount, totalDebit, totalCredit };
-  }, []);
+  }, [JOURNAL_ENTRIES, ALL_ROWS]);
 
   // Days to close — relative to a demo TODAY
   const daysToClose = useMemo(() => {
@@ -382,7 +393,7 @@ export default function GeneralLedgerPage() {
     anomalyes: Object.keys(ANOMALY_FLAGS).map((k) => JOURNAL_ENTRIES.find((j) => j.je_number === k)).filter(Boolean),
     pendingEntries: JOURNAL_ENTRIES.filter((j) => j.status === "pending"),
     unmatchedEntries: JOURNAL_ENTRIES.filter((j) => j.status === "posted" && !RECONCILIATION[j.je_number]),
-  }), [stats, daysToClose, periodLabel]);
+  }), [stats, daysToClose, periodLabel, JOURNAL_ENTRIES]);
 
   function askAi(question) {
     setSummaryOpen(false);

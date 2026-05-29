@@ -27,6 +27,18 @@ export function formatDate(input) {
   });
 }
 
+// "15 Apr 2025" — English short month names. Use on surfaces that prefer
+// English over the Indonesian locale's (Mei/Agu/Okt/Des). Bills List and
+// Bill Detail both surface English dates so the same demo reads cleanly
+// alongside English UI strings.
+const MONTHS_EN_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+export function formatDateEn(input) {
+  if (!input) return DASH;
+  const d = new Date(input);
+  if (isNaN(d.getTime())) return DASH;
+  return `${d.getDate()} ${MONTHS_EN_SHORT[d.getMonth()]} ${d.getFullYear()}`;
+}
+
 export function initials(name) {
   if (!name) return "";
   return name.trim().split(/\s+/).map((w) => w[0] || "").join("").slice(0, 2).toUpperCase();

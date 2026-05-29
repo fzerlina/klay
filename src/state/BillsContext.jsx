@@ -69,7 +69,22 @@ export function BillsProvider({ children }) {
     return record;
   }, [bills]);
 
-  const value = useMemo(() => ({ bills, addBill }), [bills, addBill]);
+  // Apply a partial patch to a bill. Optionally append one audit entry in the
+  // same update so the workflow transition + its audit log are atomic. Used
+  // by BillDetailPage's ActionBar to simulate posting: workflow transition,
+  // payment recording, etc.
+  const updateBill = useCallback((id, patch, auditEntry) => {
+    setBills((prev) => prev.map((b) => {
+      if (b.id !== id) return b;
+      const next = { ...b, ...patch };
+      if (auditEntry) {
+        next.audit = [...(b.audit || []), auditEntry];
+      }
+      return next;
+    }));
+  }, []);
+
+  const value = useMemo(() => ({ bills, addBill, updateBill }), [bills, addBill, updateBill]);
 
   return <BillsContext.Provider value={value}>{children}</BillsContext.Provider>;
 }
