@@ -6,6 +6,7 @@ import DimensionsPage from "./pages/DimensionsPage";
 import BillsPage from "./pages/BillsPage";
 import BillCreatePage from "./pages/BillCreatePage";
 import BillDetailPage from "./pages/BillDetailPage";
+import ApAgingPage from "./pages/ApAgingPage";
 import InvoicesPage from "./pages/InvoicesPage";
 import InvoiceCreatePage from "./pages/InvoiceCreatePage";
 import VendorsPage from "./pages/VendorsPage";
@@ -48,6 +49,7 @@ export default function App() {
                 <Route path="/bills" element={<BillsPage />} />
                 <Route path="/bills/new" element={<BillCreatePage />} />
                 <Route path="/bills/:id" element={<BillDetailPage />} />
+                <Route path="/ap-aging" element={<ApAgingPage />} />
                 <Route path="/invoices" element={<InvoicesPage />} />
                 <Route path="/invoices/new" element={<InvoiceCreatePage />} />
                 <Route path="/vendors" element={<VendorsPage />} />

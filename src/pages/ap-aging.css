@@ -1,0 +1,182 @@
+/* ── AP AGING — page-specific styles ───────────────────────────────────
+   The page uses Bills-List canonical classes (lg-head / lg-title / bp-kpi-card
+   / bp-tabs-row / lg-filter-row / lg-card / lg-table-wrap). This file only
+   adds AP-Aging-specific surfaces: reconciliation badge, discount pill,
+   discount banner, relationship pill, decision-queue grid, aging-table grid,
+   stuck popover, and the multi-select action bar. */
+
+.apa-page{position:relative}
+
+/* ── Reconciliation badge (TP-01) — sits below page title ──────────────── */
+.apa-recon-badge{display:inline-flex;align-items:center;gap:9px;padding:5px 12px;border-radius:9999px;border:1px solid;font-size:11.5px;font-weight:600;letter-spacing:.005em;margin-top:10px;cursor:default}
+.apa-recon-badge svg{width:11px;height:11px;flex-shrink:0}
+.apa-recon-badge.ok{background:var(--color-success-surface);color:var(--color-success-text);border-color:var(--color-success-border)}
+.apa-recon-badge.mismatch{background:var(--color-danger-surface);color:var(--color-danger-text);border-color:var(--color-danger-border)}
+.apa-recon-badge.unavailable{background:var(--color-surface-sunken);color:var(--color-text-tertiary);border-color:var(--color-border-strong)}
+.apa-recon-badge .apa-recon-delta{font-family:var(--font-mono);font-size:11px;font-weight:700;opacity:.85}
+
+/* ── KPI warn tone override (matches bp-kpi-val warn) ────────────────── */
+.bp-kpi-val.warn{color:var(--color-warning-text)}
+
+/* Active state for filterable KPI cards (mirrors Bills List's selectCard
+   pattern). Brand-wash background + bottom rail highlight + active CTA. */
+.bp-kpi-card.active{background:var(--color-brand-wash);position:relative}
+.bp-kpi-card.active::after{content:'';position:absolute;left:18px;right:18px;bottom:0;height:2px;background:var(--color-brand);border-radius:2px}
+.bp-kpi-card.active .bp-kpi-cta{color:var(--color-brand-deep);font-weight:700}
+.bp-kpi-card .bp-kpi-cta:disabled{opacity:.4;cursor:not-allowed}
+
+/* Active-filter banner sits in the lg-filter-row next to the sort label */
+.apa-active-filter{display:inline-flex;align-items:center;gap:8px;margin-left:auto;font-size:11.5px;color:var(--color-text-secondary);background:var(--color-brand-wash);border:1px solid var(--color-brand-subtle);padding:5px 10px;border-radius:9999px}
+.apa-active-filter strong{color:var(--color-brand-deep);font-weight:700}
+.apa-active-filter-dot{width:6px;height:6px;border-radius:50%;background:var(--color-brand);flex-shrink:0}
+.apa-active-filter-clear{background:transparent;border:none;color:var(--color-brand);font-family:var(--font-sans);font-size:11.5px;font-weight:600;cursor:pointer;padding:0 0 0 6px;border-left:1px solid var(--color-brand-subtle);margin-left:2px;transition:color var(--transition-fast)}
+.apa-active-filter-clear:hover{color:var(--color-brand-deep);text-decoration:underline;text-underline-offset:2px}
+
+/* ── Discount-expiring banner (between head and table card) ──────────── */
+.apa-discount-banner{display:flex;align-items:center;gap:12px;padding:12px 18px;margin:14px 24px 0;background:var(--color-warning-surface);border:1px solid var(--color-warning-border);border-radius:10px;font-size:12.5px;color:var(--color-warning-text)}
+.apa-discount-banner svg.apa-banner-icon{width:16px;height:16px;flex-shrink:0;color:var(--color-warning-text)}
+.apa-discount-banner-body{flex:1;min-width:0}
+.apa-discount-banner-body strong{font-weight:700}
+.apa-discount-banner-dismiss{background:transparent;border:none;padding:4px;cursor:pointer;color:var(--color-warning-text);opacity:.7;display:inline-flex;align-items:center;justify-content:center;border-radius:4px}
+.apa-discount-banner-dismiss:hover{opacity:1;background:rgba(0,0,0,.04)}
+.apa-discount-banner-dismiss svg{width:13px;height:13px}
+
+/* ── Sort label (inside table card lg-filter-row) ─────────────────────── */
+.apa-sort-label{font-size:12px;color:var(--color-text-tertiary);display:inline-flex;align-items:center;gap:5px;cursor:default}
+.apa-sort-label strong{color:var(--color-text-secondary);font-weight:600}
+.apa-info{width:13px;height:13px;border-radius:50%;background:var(--color-surface-sunken);color:var(--color-text-tertiary);display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;cursor:help;margin-left:3px}
+
+/* ── Pinned amber section above Decision Queue (RETURNED) ──────────── */
+.apa-pinned{background:var(--color-warning-surface);border-bottom:1px solid var(--color-warning-border);padding:10px 18px;display:flex;align-items:center;gap:10px;font-size:12px;color:var(--color-warning-text);font-weight:600}
+.apa-pinned svg{width:13px;height:13px;flex-shrink:0}
+.apa-pinned-count{font-family:var(--font-mono);background:var(--color-warning-border);color:var(--color-warning-text);padding:1px 7px;border-radius:9999px;font-weight:800;font-size:10.5px}
+
+/* ── Decision Queue grid (9 cols, no avatar) ──────────────────────────── */
+.apa-dq-row,.apa-dq-header{display:grid;grid-template-columns:28px minmax(160px,1.6fr) minmax(90px,1fr) 110px 130px 110px 110px 70px;align-items:center;gap:10px;padding:11px 18px;font-size:12.5px;border-bottom:1px solid var(--color-border-subtle)}
+.apa-dq-header{background:var(--color-surface-sunken);font-family:var(--font-sans);font-size:9.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--color-text-tertiary);padding:9px 18px;border-bottom:.5px solid var(--color-border-default);border-top:.5px solid var(--color-border-default)}
+.apa-dq-row{cursor:pointer;transition:background var(--transition-fast)}
+.apa-dq-row:hover{background:var(--color-surface-sunken)}
+.apa-dq-row:last-child{border-bottom:none}
+.apa-dq-row.returned{background:var(--color-warning-surface)}
+.apa-dq-row.returned:hover{background:rgba(248,217,151,.45)}
+.apa-dq-row.selected{background:var(--color-action-wash)}
+.apa-dq-row.selected:hover{background:var(--color-action-subtle)}
+
+.apa-checkbox{width:16px;height:16px;border:1.5px solid var(--color-border-strong);border-radius:4px;background:var(--color-surface-raised);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:background var(--transition-fast),border-color var(--transition-fast)}
+.apa-checkbox.checked{background:var(--color-action);border-color:var(--color-action)}
+.apa-checkbox.checked svg{width:10px;height:10px;color:#fff}
+.apa-checkbox:hover{border-color:var(--color-text-tertiary)}
+
+/* ── Vendor cell — no avatar, no vendor code ──────────────────────────── */
+.apa-vendor-cell{display:flex;align-items:center;gap:8px;min-width:0}
+.apa-vendor-name{font-size:12.5px;color:var(--color-text-primary);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;min-width:0}
+.apa-vendor-count{font-size:10.5px;color:var(--color-text-tertiary);font-family:var(--font-mono);margin-left:8px;font-weight:500;flex-shrink:0}
+
+/* Relationship pill (TP-02) */
+.apa-rel-pill{display:inline-flex;align-items:center;font-family:var(--font-mono);font-size:9px;font-weight:700;letter-spacing:.04em;padding:1px 6px;border-radius:9999px;text-transform:uppercase;line-height:1.5;margin-left:6px;flex-shrink:0}
+.apa-rel-pill.strategic{background:#d8efe2;color:#0c5631;border:1px solid #a8d9bc}
+.apa-rel-pill.at_risk{background:var(--color-danger-surface);color:var(--color-danger-text);border:1px solid var(--color-danger-border)}
+.apa-rel-pill.standard{display:none}
+.apa-rel-pill{cursor:help}
+
+/* Invoice no + date */
+.apa-inv-cell{display:flex;flex-direction:column;min-width:0}
+.apa-inv-no{font-family:var(--font-mono);font-size:11.5px;color:var(--color-text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.apa-inv-date{font-size:10.5px;color:var(--color-text-tertiary);margin-top:1px}
+.apa-inv-accrual{font-family:var(--font-mono);font-size:9px;font-weight:700;background:var(--color-action-wash);color:var(--color-action);padding:1px 5px;border-radius:4px;letter-spacing:.04em;display:inline-flex;align-items:center;margin-left:5px}
+
+/* Money */
+.apa-money{font-family:var(--font-mono);font-size:12px;color:var(--color-text-primary);font-weight:600;text-align:right;white-space:nowrap}
+.apa-money-sub{font-family:var(--font-mono);font-size:10.5px;color:var(--color-text-tertiary);text-align:right;margin-top:1px;font-weight:500}
+
+/* Discount pill (TP-03) */
+.apa-disc-pill{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:9999px;font-size:10.5px;font-weight:700;border:1px solid;font-family:var(--font-mono);letter-spacing:.02em;white-space:nowrap}
+.apa-disc-pill svg{width:9px;height:9px}
+.apa-disc-pill.ok{background:var(--color-success-surface);color:var(--color-success-text);border-color:var(--color-success-border)}
+.apa-disc-pill.warn{background:var(--color-warning-surface);color:var(--color-warning-text);border-color:var(--color-warning-border)}
+.apa-disc-pill.danger{background:var(--color-danger-surface);color:var(--color-danger-text);border-color:var(--color-danger-border)}
+.apa-disc-pill.captured{background:#d8efe2;color:#0c5631;border-color:#a8d9bc}
+.apa-disc-pill.muted{background:var(--color-surface-sunken);color:var(--color-text-tertiary);border-color:var(--color-border-strong)}
+.apa-disc-pill{cursor:help}
+.apa-disc-amt{font-size:9.5px;color:var(--color-text-tertiary);margin-top:2px;font-family:var(--font-mono);text-align:left}
+
+/* Status pill — workflow_status only. Cause sentences belong on Bills List
+   (its review-driven "Pending Review · opened 2d ago · 3 fields flagged"
+   pattern). On AP Aging the equivalent is TP-05 ("Why is this stuck?") which
+   only surfaces on actually-stuck rows via the ? popover, not every row. */
+.apa-status{display:flex;flex-direction:column;min-width:0}
+.apa-status-pill{display:inline-flex;align-items:center;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:9999px;border:1px solid;letter-spacing:.02em;text-transform:uppercase;font-family:var(--font-mono);width:fit-content}
+.apa-status-pill.draft{background:var(--color-surface-sunken);color:var(--color-text-tertiary);border-color:var(--color-border-strong)}
+.apa-status-pill.review{background:var(--color-warning-surface);color:var(--color-warning-text);border-color:var(--color-warning-border)}
+.apa-status-pill.returned{background:var(--color-danger-surface);color:var(--color-danger-text);border-color:var(--color-danger-border)}
+.apa-status-pill.approved{background:var(--color-action-wash);color:var(--color-action);border-color:var(--color-action-subtle)}
+.apa-status-pill.posted{background:#d8efe2;color:#0c5631;border-color:#a8d9bc}
+.apa-status-pill.exception{background:#fce6e6;color:#7a1a1a;border-color:#eab8b8}
+.apa-status-pill.accrual{background:#e8e0f5;color:#4a2d8f;border-color:#c5b3e8}
+.apa-status-pill{cursor:help}
+.apa-status-pill.stuck{box-shadow:0 0 0 2px var(--color-warning-surface)}
+
+/* Due date + age (combined cell) */
+.apa-due-date{font-family:var(--font-mono);font-size:11.5px;color:var(--color-text-primary);font-weight:600}
+.apa-age-sub{font-size:10px;color:var(--color-text-tertiary);margin-top:1px;font-family:var(--font-mono);font-weight:500}
+.apa-age-sub.overdue{color:var(--color-danger-text);font-weight:600}
+.apa-age-sub.due-soon{color:var(--color-warning-text);font-weight:600}
+
+/* TP-05 ("Why is this stuck?") is now folded into the Status pill's title
+   tooltip rather than a separate ? popover — keeps the row uncluttered and
+   centralizes the status explanation in one place. See StatusCell in JSX. */
+
+/* ── Action bar (multi-select footer) ──────────────────────────────────── */
+.apa-action-bar{position:sticky;bottom:0;left:0;right:0;background:var(--color-surface-deep);color:#fff;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:11px 24px;font-size:12.5px;font-weight:500;z-index:20;animation:apa-slide-up .15s ease}
+@keyframes apa-slide-up{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.apa-action-bar-info{display:inline-flex;align-items:center;gap:14px}
+.apa-action-bar-count{font-family:var(--font-mono);font-weight:700;font-size:12px;background:rgba(255,255,255,.16);padding:2px 8px;border-radius:9999px}
+.apa-action-bar-total{font-family:var(--font-mono);color:rgba(255,255,255,.85)}
+.apa-action-bar-total strong{color:#fff;font-weight:700}
+.apa-action-bar-actions{display:inline-flex;align-items:center;gap:8px}
+.apa-action-bar-btn{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-sans);font-size:12px;font-weight:600;padding:7px 13px;border-radius:6px;cursor:pointer;border:1px solid rgba(255,255,255,.22);background:transparent;color:#fff;transition:background var(--transition-fast)}
+.apa-action-bar-btn:hover{background:rgba(255,255,255,.10)}
+.apa-action-bar-btn.primary{background:var(--color-brand);border-color:var(--color-brand)}
+.apa-action-bar-btn.primary:hover{background:var(--color-brand-hover);border-color:var(--color-brand-hover)}
+.apa-action-bar-btn svg{width:12px;height:12px}
+
+/* ── Aging Table view (vendor pivot, no avatar) ───────────────────────── */
+.apa-at-header,.apa-at-vendor{display:grid;grid-template-columns:minmax(220px,1.6fr) repeat(6,minmax(80px,1fr)) 110px 130px;gap:8px;align-items:center;padding:11px 18px;font-size:12px;border-bottom:1px solid var(--color-border-subtle)}
+.apa-at-header{background:var(--color-surface-sunken);font-family:var(--font-sans);font-size:9.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--color-text-tertiary);padding:9px 18px;border-top:.5px solid var(--color-border-default);border-bottom:.5px solid var(--color-border-default)}
+.apa-at-header > div{text-align:right}
+.apa-at-header > div:first-child{text-align:left}
+.apa-at-vendor{cursor:pointer}
+.apa-at-vendor:hover{background:var(--color-surface-sunken)}
+.apa-at-vendor > div{text-align:right;font-family:var(--font-mono);font-size:12px;color:var(--color-text-secondary);font-weight:500}
+.apa-at-vendor > div:first-child{text-align:left}
+.apa-at-vendor .apa-vendor-cell{font-family:var(--font-sans)}
+.apa-at-vendor.dimmed{opacity:.35;pointer-events:none}
+.apa-at-vendor.accrual-active{background:var(--color-action-wash)}
+.apa-at-vendor.accrual-active:hover{background:var(--color-action-subtle)}
+.apa-at-vendor.accrual-active .apa-at-cell-accrual{background:var(--color-action);color:#fff;padding:2px 8px;border-radius:6px;font-weight:700}
+.apa-at-vendor .apa-at-cell-zero{color:var(--color-text-tertiary);opacity:.5}
+.apa-at-vendor .apa-at-cell-strong{color:var(--color-text-primary);font-weight:700}
+.apa-at-vendor .apa-at-cell-accrual{color:var(--color-action);font-weight:600}
+
+.apa-at-expand{display:block;background:var(--color-surface-sunken)}
+.apa-at-expand .apa-at-inv{display:grid;grid-template-columns:1.4fr 110px 110px 100px 100px 90px 100px;gap:8px;align-items:center;padding:8px 18px 8px 40px;font-size:11.5px;color:var(--color-text-secondary);border-bottom:1px solid var(--color-border-subtle)}
+.apa-at-inv > div{font-family:var(--font-mono);font-size:11px}
+.apa-at-inv > div:first-child{font-family:var(--font-sans);color:var(--color-text-secondary)}
+.apa-at-inv > .apa-at-inv-amt{text-align:right;font-weight:600}
+.apa-at-chevron{width:12px;height:12px;color:var(--color-text-tertiary);transition:transform var(--transition-fast);flex-shrink:0;margin-right:2px}
+.apa-at-vendor.expanded .apa-at-chevron{transform:rotate(90deg);color:var(--color-action)}
+
+.apa-at-grand{display:grid;grid-template-columns:minmax(220px,1.6fr) repeat(6,minmax(80px,1fr)) 110px 130px;gap:8px;align-items:center;padding:12px 18px;font-size:12.5px;font-weight:800;background:var(--color-surface-sunken);border-top:2px solid var(--color-border-strong);font-family:var(--font-mono)}
+.apa-at-grand > div{text-align:right;color:var(--color-text-primary)}
+.apa-at-grand > div:first-child{text-align:left;font-family:var(--font-display);font-size:13.5px;letter-spacing:-.005em}
+
+/* ── Empty state ──────────────────────────────────────────────────────── */
+.apa-empty{padding:60px 24px;text-align:center;color:var(--color-text-tertiary);display:flex;flex-direction:column;align-items:center;gap:8px}
+.apa-empty svg{width:36px;height:36px;color:var(--color-border-strong)}
+.apa-empty-title{font-family:var(--font-display);font-size:15px;font-weight:700;color:var(--color-text-secondary)}
+.apa-empty-sub{font-size:12px;max-width:360px;line-height:1.5}
+
+/* ── Responsive ───────────────────────────────────────────────────────── */
+@media (max-width: 900px){
+  .apa-dq-row,.apa-dq-header{grid-template-columns:28px 1.2fr 90px 100px 110px 90px 28px;gap:8px}
+}
