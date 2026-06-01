@@ -38,14 +38,17 @@ export const STATUS_LABEL = {
 };
 
 // Period-locking helper — TRUE if a bill's accounting period falls within a
-// closed AP period. Demo logic: every period ≤ AP_CLOSED_THROUGH is closed.
+// closed AP period. Demo logic: every period ≤ closedThrough is closed.
 // In production: `is_ap_period_locked(entity_id, bill.period)`, consulting
 // `fiscal_periods.is_locked` as the canonical lock state per Subledger Memo
-// Rule 7. Phase G wires this into the Bill Detail Post button + Reassign.
+// Rule 7. The static AP_CLOSED_THROUGH is the baseline at app load; the
+// ClosePeriodContext advances it as the FM declares new periods closed.
+// Callers that need the dynamic value should pass `closedThrough` from
+// `useClosePeriod()`; legacy callers fall back to the baseline constant.
 export const AP_CLOSED_THROUGH = "2025-02";
-export function isApPeriodLocked(billDate) {
+export function isApPeriodLocked(billDate, closedThrough = AP_CLOSED_THROUGH) {
   if (!billDate) return false;
-  return billDate.slice(0, 7) <= AP_CLOSED_THROUGH;
+  return billDate.slice(0, 7) <= closedThrough;
 }
 
 // Single workflow_status derived from the existing (approval × pay) seed plus

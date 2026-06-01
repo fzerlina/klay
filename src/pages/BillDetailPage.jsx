@@ -9,7 +9,9 @@ import {
   statusCause,
   STATUS_LABEL,
   DEMO_OVERRIDES,
+  isApPeriodLocked,
 } from "../lib/billStatus";
+import { useClosePeriod } from "../state/ClosePeriodContext";
 import {
   computeFieldConfidence,
   computeReviewBrief,
@@ -626,7 +628,7 @@ function SourceDocument({ bill, vendor }) {
 // it on period-lock status. SoD enforcement is deferred — see the
 // "demo: SoD not enforced" note on the left of the bar.
 
-function ActionBar({ bill, onAction, onSecondary, gateReason }) {
+function ActionBar({ bill, onAction, onSecondary, gateReason, periodLocked, lockedPeriodLabel, onReassign }) {
   if (!bill) return null;
   const ws = workflowStatus(bill);
   const ov = DEMO_OVERRIDES[bill.id] || {};
@@ -636,6 +638,19 @@ function ActionBar({ bill, onAction, onSecondary, gateReason }) {
   // primaries (Record payment, Release hold, etc.) are not gated.
   const gateableStates = ws === "DRAFT" || ws === "PENDING_REVIEW" || ws === "RETURNED";
   const gated = !!gateReason && gateableStates;
+  // Period-lock gate: when the bill's accounting period is closed, all client
+  // users (FM included) are blocked from posting via normal flow. Per PRD,
+  // the Post button is disabled with a Reassign affordance — the FM either
+  // reassigns the bill to the current open period or reopens the closed
+  // period via Settings → Period Locking (not surfaced here).
+  //
+  // The banner appears whenever the period is locked (any workflow state) so
+  // the FM always sees the reason. The primary-action disable only kicks in
+  // for workflow states where posting is the next step.
+  const periodActionGated = !!periodLocked && (gateableStates || ws === "APPROVED");
+  const periodGateReason = periodActionGated
+    ? `${lockedPeriodLabel || "Period"} is closed — reassign to current open period to post`
+    : null;
 
   // Resolve sub-actions for EXCEPTION based on the seeded reason text
   const exceptionPrimaryLabel = (() => {
@@ -662,29 +677,49 @@ function ActionBar({ bill, onAction, onSecondary, gateReason }) {
     default:               primary = "Edit";               secondaries = [];
   }
 
+  const anyDisabled = gated || periodActionGated;
+
   return (
-    <div className="bd-actionbar">
-      <div className="bd-actionbar-note">demo: SoD not enforced</div>
-      <div className="bd-actionbar-buttons">
-        {secondaries.map((label) => (
-          <button key={label} type="button" className="drawer-btn ghost" onClick={() => onSecondary(label)}>
-            {label}
-          </button>
-        ))}
-        {primary && (
-          <button
-            type="button"
-            className={`drawer-btn primary${gated ? " disabled" : ""}`}
-            disabled={gated}
-            title={gated ? gateReason : undefined}
-            onClick={() => !gated && onAction(primary)}
-          >
-            {primary}
-            {gated && <span className="bd-actionbar-gate"> · resolve flags first</span>}
-          </button>
-        )}
+    <>
+      {periodLocked && (
+        <div className="bd-period-locked-banner">
+          <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <rect x="2.5" y="5.5" width="7" height="5" rx="0.8"/><path d="M4.2 5.5V3.8a1.8 1.8 0 0 1 3.6 0v1.7"/>
+          </svg>
+          <span>
+            <strong>{lockedPeriodLabel} is closed.</strong> This bill's accounting period was locked by the AP close declaration. Reassign to the current open period to continue, or reopen the period from Settings → Period Locking.
+          </span>
+          {onReassign && (
+            <button type="button" className="bd-period-locked-cta" onClick={onReassign}>
+              Reassign to current period
+            </button>
+          )}
+        </div>
+      )}
+      <div className="bd-actionbar">
+        <div className="bd-actionbar-note">demo: SoD not enforced</div>
+        <div className="bd-actionbar-buttons">
+          {secondaries.map((label) => (
+            <button key={label} type="button" className="drawer-btn ghost" onClick={() => onSecondary(label)}>
+              {label}
+            </button>
+          ))}
+          {primary && (
+            <button
+              type="button"
+              className={`drawer-btn primary${anyDisabled ? " disabled" : ""}`}
+              disabled={anyDisabled}
+              title={periodActionGated ? periodGateReason : (gated ? gateReason : undefined)}
+              onClick={() => !anyDisabled && onAction(primary)}
+            >
+              {primary}
+              {periodActionGated && <span className="bd-actionbar-gate"> · period closed</span>}
+              {!periodActionGated && gated && <span className="bd-actionbar-gate"> · resolve flags first</span>}
+            </button>
+          )}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -701,11 +736,19 @@ function nowAuditStamp() {
   return { date: d.toISOString().slice(0, 10), time: d.toTimeString().slice(0, 5) };
 }
 
+const MONTH_LABEL = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+function periodLabel(yyyymm) {
+  if (!yyyymm) return "";
+  const [y, m] = yyyymm.split("-").map((n) => parseInt(n, 10));
+  return `${MONTH_LABEL[m - 1] || ""} ${y}`;
+}
+
 export default function BillDetailPage() {
   const navigate = useNavigate();
   const { id } = useParams();
   const { bills, updateBill } = useBills();
   const { addJournalEntry, peekNextJeNumber } = useJournalEntries();
+  const { closedThrough } = useClosePeriod();
   const [tab, setTab] = useState("detail");
   const [toast, setToast] = useState("");
   const toastTmr = useRef(null);
@@ -747,6 +790,29 @@ export default function BillDetailPage() {
   const gateReason = realBlockers.length > 0
     ? `${realBlockers.length} flagged field${realBlockers.length === 1 ? "" : "s"} need attention before posting`
     : null;
+
+  // Period-lock gate — read the dynamic closedThrough from ClosePeriodContext.
+  // When the bill's accounting period is locked, the Post action is disabled
+  // and a Reassign affordance lets the FM move the bill to the current open
+  // period (the path of least resistance per the AP Close PRD).
+  const billPeriodLocked = isApPeriodLocked(bill.date, closedThrough);
+  const lockedPeriodLabel = billPeriodLocked ? periodLabel(bill.date?.slice(0, 7)) : null;
+  function onReassignToCurrentPeriod() {
+    // Demo behavior: advance the bill's date to the first day of the next
+    // open period (closedThrough + 1 month). In production this would be a
+    // user-confirmed period change via the bill's period field.
+    const [y, m] = closedThrough.split("-").map((n) => parseInt(n, 10));
+    const nextY = m === 12 ? y + 1 : y;
+    const nextM = m === 12 ? 1 : m + 1;
+    const newDate = `${nextY}-${String(nextM).padStart(2, "0")}-01`;
+    updateBill(bill.id, { date: newDate }, {
+      type:   "reassigned",
+      action: `Reassigned to ${periodLabel(`${nextY}-${String(nextM).padStart(2, "0")}`)} (was ${lockedPeriodLabel})`,
+      by:     FM_USER,
+      ...nowAuditStamp(),
+    });
+    showToast(`Reassigned to ${periodLabel(`${nextY}-${String(nextM).padStart(2, "0")}`)} — period unlocked for this bill`);
+  }
 
   // ── Action handlers — actually mutate the bill (and post a JE on Approve)
   function onPrimary(label) {
@@ -1140,6 +1206,9 @@ export default function BillDetailPage() {
       <ActionBar
         bill={bill}
         gateReason={gateReason}
+        periodLocked={billPeriodLocked}
+        lockedPeriodLabel={lockedPeriodLabel}
+        onReassign={onReassignToCurrentPeriod}
         onAction={onPrimary}
         onSecondary={onSecondary}
       />

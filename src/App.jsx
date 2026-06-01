@@ -23,6 +23,7 @@ import { BillsProvider } from "./state/BillsContext";
 import { VendorsProvider } from "./state/VendorsContext";
 import { CustomersProvider } from "./state/CustomersContext";
 import { JournalEntriesProvider } from "./state/JournalEntriesContext";
+import { ClosePeriodProvider } from "./state/ClosePeriodContext";
 
 function ComingSoon({ title }) {
   return (
@@ -39,6 +40,7 @@ export default function App() {
         <VendorsProvider>
           <CustomersProvider>
             <JournalEntriesProvider>
+            <ClosePeriodProvider>
             <Routes>
               <Route element={<Layout />}>
                 <Route index element={<Navigate to="/journal-entry" replace />} />
@@ -63,6 +65,7 @@ export default function App() {
                 <Route path="*" element={<Navigate to="/journal-entry" replace />} />
               </Route>
             </Routes>
+            </ClosePeriodProvider>
             </JournalEntriesProvider>
           </CustomersProvider>
         </VendorsProvider>

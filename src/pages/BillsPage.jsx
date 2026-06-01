@@ -13,6 +13,7 @@ import {
   urgencyScore,
 } from "../lib/billStatus";
 import { useBills } from "../state/BillsContext";
+import { useClosePeriod } from "../state/ClosePeriodContext";
 import AiChatDrawer, { SparkleIcon as DrawerSparkle } from "./AiChatDrawer";
 import SummaryDrawer from "./SummaryDrawer";
 import { computeBillsInsights, makeBillsAiContext } from "./ai-bills-context";
@@ -572,6 +573,7 @@ function BillsAiSearchPanel({ search, rows }) {
 export default function BillsPage() {
   const navigate = useNavigate();
   const { bills } = useBills();
+  const { closedThrough } = useClosePeriod();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState({ kind: "tab", value: "semua" });
   const [anomalyFilter, setAnomalyFilter] = useState(false);
@@ -666,15 +668,15 @@ export default function BillsPage() {
     ];
   }, [monthPfx]);
 
-  const insights = useMemo(() => computeBillsInsights(bills), [bills]);
+  const insights = useMemo(() => computeBillsInsights(bills, closedThrough), [bills, closedThrough]);
   const aiContext = useMemo(() => makeBillsAiContext(bills), [bills]);
 
   // ── New Bills summary stats (for SUMMARY + Perlu Dibayar / Pending Review / Draft / AP Outstanding cards)
   // Period-locked bills are excluded from "Due for Payment" per PRD — they can't be posted in their current state.
   const billStats = useMemo(() => {
-    const verifiedReady = bills.filter((b) => b.approval === "approved" && b.pay === "unpaid" && !isApPeriodLocked(b.date));
+    const verifiedReady = bills.filter((b) => b.approval === "approved" && b.pay === "unpaid" && !isApPeriodLocked(b.date, closedThrough));
     const verifiedReadySum = verifiedReady.reduce((s, b) => s + b.total, 0);
-    const perluDibayar = bills.filter((b) => b.approval === "approved" && b.pay !== "paid" && !isApPeriodLocked(b.date));
+    const perluDibayar = bills.filter((b) => b.approval === "approved" && b.pay !== "paid" && !isApPeriodLocked(b.date, closedThrough));
     const perluDibayarSum = perluDibayar.reduce((s, b) => s + b.sisa, 0);
     const reviewList = bills.filter((b) => b.approval === "review");
     const reviewSum = reviewList.reduce((s, b) => s + b.total, 0);
@@ -704,7 +706,7 @@ export default function BillsPage() {
       outstandingDraft,
       outstandingDraftCount,
     };
-  }, [bills]);
+  }, [bills, closedThrough]);
 
   const todayLabel = useMemo(() => formatDate(TODAY.toISOString().slice(0, 10)), []);
   const monthLabel = useMemo(() => formatMonthLabel(monthPfx), [monthPfx]);
@@ -777,10 +779,10 @@ export default function BillsPage() {
       // is the place to see drafts.
       else if (filter.value === "allUnpaid")     list = list.filter((b) => b.pay !== "paid" && b.approval !== "draft");
       else if (filter.value === "apClose")       list = list.filter((b) => b.date && b.date.startsWith(monthPfx) && (b.approval !== "approved" || b.pay !== "paid"));
-      else if (filter.value === "periodLocked")  list = list.filter((b) => isApPeriodLocked(b.date) && (b.approval === "review" || (b.approval === "approved" && b.pay !== "paid")));
+      else if (filter.value === "periodLocked")  list = list.filter((b) => isApPeriodLocked(b.date, closedThrough) && (b.approval === "review" || (b.approval === "approved" && b.pay !== "paid")));
     }
     return list;
-  }, [filter, monthPfx, bills]);
+  }, [filter, monthPfx, bills, closedThrough]);
 
   const vendorsInCorpus = useMemo(() => {
     const counts = new Map();

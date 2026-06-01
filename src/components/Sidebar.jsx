@@ -1,38 +1,45 @@
 import { useState, useEffect } from "react";
 import { NavLink } from "react-router-dom";
 
-// Mini progress ring shown next to the Close menu item. Reinforces Klay's
-// 0-day closing USP — the user can see close health without leaving any page.
-function CloseProgressRing({ done = 5, awaiting = 3, working = 0, total = 8 }) {
-  const R = 7;
+// Close hero card pinned at the top of the sidebar (above the Overview section).
+// Reinforces Klay's 0-day-closing USP and gives the FM a constant signal of
+// where the close stands without leaving any page. The gate count is a
+// representative default for the demo (8 of 13 gates green at fresh load —
+// AP 2/5 + AR 4/5 + GL 2/3); the Close Command Center page is the live source.
+function CloseHeroCard({ collapsed }) {
+  const green = 8;
+  const total = 13;
+  const R = 13;
   const C = 2 * Math.PI * R;
-  const doneLen     = total ? (done     / total) * C : 0;
-  const awaitingLen = total ? (awaiting / total) * C : 0;
-  const workingLen  = total ? (working  / total) * C : 0;
-  const overall = total ? Math.round((done / total) * 100) : 0;
+  const greenLen = total ? (green / total) * C : 0;
+  const pct = total ? Math.round((green / total) * 100) : 0;
   return (
-    <span className="sb-progress-ring" aria-label={`Close: ${done} of ${total} complete (${overall}%)`} title={`${done}/${total} complete · ${awaiting} awaiting · ${working} in progress`}>
-      <svg viewBox="0 0 20 20">
-        <circle cx="10" cy="10" r={R} fill="none" style={{ stroke: "rgba(255,255,255,0.18)" }} strokeWidth="2.4"/>
-        {done > 0 && (
-          <circle cx="10" cy="10" r={R} fill="none" style={{ stroke: "#3ec47a" }} strokeWidth="2.4"
-            strokeDasharray={`${doneLen} ${C - doneLen}`}
-            transform="rotate(-90 10 10)" strokeLinecap="round"/>
-        )}
-        {awaiting > 0 && (
-          <circle cx="10" cy="10" r={R} fill="none" style={{ stroke: "var(--color-brand)" }} strokeWidth="2.4"
-            strokeDasharray={`${awaitingLen} ${C - awaitingLen}`}
-            strokeDashoffset={-doneLen}
-            transform="rotate(-90 10 10)" strokeLinecap="round"/>
-        )}
-        {working > 0 && (
-          <circle cx="10" cy="10" r={R} fill="none" style={{ stroke: "rgba(255,255,255,0.45)" }} strokeWidth="2.4"
-            strokeDasharray={`${workingLen} ${C - workingLen}`}
-            strokeDashoffset={-(doneLen + awaitingLen)}
-            transform="rotate(-90 10 10)" strokeLinecap="round"/>
-        )}
-      </svg>
-    </span>
+    <NavLink
+      to="/close"
+      title={collapsed ? `April Close · ${green} of ${total} gates green` : undefined}
+      className={({ isActive }) => `sb-close-hero${isActive ? " active" : ""}${collapsed ? " collapsed" : ""}`}
+    >
+      <span className="sb-close-hero-ring" aria-label={`${green} of ${total} gates green (${pct}%)`}>
+        <svg viewBox="0 0 32 32">
+          <circle cx="16" cy="16" r={R} fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth="3"/>
+          {green > 0 && (
+            <circle
+              cx="16" cy="16" r={R} fill="none"
+              stroke="#3ec47a" strokeWidth="3" strokeLinecap="round"
+              strokeDasharray={`${greenLen} ${C - greenLen}`}
+              transform="rotate(-90 16 16)"
+            />
+          )}
+          <text x="16" y="20" textAnchor="middle" fontSize="10" fontWeight="700" fill="#fff" fontFamily="var(--font-display)">{green}</text>
+        </svg>
+      </span>
+      {!collapsed && (
+        <span className="sb-close-hero-body">
+          <span className="sb-close-hero-title">April Close</span>
+          <span className="sb-close-hero-sub">{green} of {total} gates green</span>
+        </span>
+      )}
+    </NavLink>
   );
 }
 
@@ -44,12 +51,6 @@ const navSections = [
         label: "Dashboard",
         to: "/dashboard",
         icon: <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>,
-      },
-      {
-        label: "Close April 2025",
-        to: "/close",
-        icon: <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="14" x2="13" y2="18"/><line x1="13" y1="14" x2="9" y2="18"/></svg>,
-        indicator: <CloseProgressRing />,
       },
     ],
   },
@@ -279,6 +280,8 @@ export default function Sidebar() {
             <span className="sb-notif-dot" />
           </button>
         </div>
+
+        <CloseHeroCard collapsed={collapsed} />
 
         {navSections.map(({ section, items }, sIdx) => (
           <div key={section}>

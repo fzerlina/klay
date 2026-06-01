@@ -19,7 +19,7 @@ function shortName(name) {
 // ── Insights (cycle in the AiSubtitle) ────────────────────────────────────
 // Each insight has { id, node (JSX), question (string seed for chat) }
 
-export function computeBillsInsights(bills) {
+export function computeBillsInsights(bills, closedThrough = "2025-02") {
   const overdue = bills.filter((b) => b.pay === "overdue");
   const totalOverdue = overdue.reduce((s, b) => s + b.sisa, 0);
 
@@ -62,9 +62,10 @@ export function computeBillsInsights(bills) {
   const readyToPostTotal = readyToPost.reduce((s, b) => s + b.total, 0);
 
   // Period-locked: bills in PENDING_REVIEW / APPROVED-unpaid whose `date` falls in a closed AP period.
-  // Demo rule: months ≤ 2025-02 are closed. Production would call is_ap_period_locked(entity_id, bill.period).
+  // Demo rule: months ≤ closedThrough are closed (advances when FM declares a new close
+  // via the Close Command Center). Production would call is_ap_period_locked(entity_id, bill.period).
   const periodLocked = bills.filter((b) => {
-    if (!b.date || b.date.slice(0, 7) > "2025-02") return false;
+    if (!b.date || b.date.slice(0, 7) > closedThrough) return false;
     if (b.approval === "review") return true;
     if (b.approval === "approved" && b.pay !== "paid") return true;
     return false;
