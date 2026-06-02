@@ -4,6 +4,7 @@ import { useBills } from "../state/BillsContext";
 import { useVendors } from "../state/VendorsContext";
 import { formatDate, initials } from "../lib/format";
 import { previewJournalLines } from "../lib/billJournalPreview";
+import "./modules.css";
 import "./invoice-create.css";
 import "./bill-detail.css";
 
@@ -684,19 +685,38 @@ export default function BillCreatePage() {
   const canSubmit = vendor && items.length > 0 && total > 0;
 
   return (
-    <div className="addpage">
-      {/* ── Header ────────────────────────────────────────────────── */}
-      <div className="ap-head">
-        <div className="ap-title">New Bill</div>
-        <button className="ap-close" onClick={() => navigate("/bills")}>
-          <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </button>
+    <div className="bd-page bd-create">
+      {/* ── Header (mirrors Bill Detail) ──────────────────────────── */}
+      <div className="bd-head">
+        <button className="bd-back" onClick={() => navigate("/bills")}>← Bills</button>
+        <div className="bd-head-main">
+          <div className="drawer-av bill">{vendor ? (vendor.initials || initials(vendor.name)) : "+"}</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="bd-title">{vendor?.name || "New Bill"}</div>
+            <div className="bd-sub">
+              <span>New bill</span>
+              {invNo && (
+                <>
+                  <span className="bd-sub-sep">·</span>
+                  <span className="bd-mono">{invNo}</span>
+                </>
+              )}
+              <span className="bd-sub-sep">·</span>
+              <span>Issued {formatDate(date)}</span>
+            </div>
+          </div>
+          <div className="bd-head-total">
+            <div className="bd-head-total-lbl">Total</div>
+            <div className="bd-head-total-val">{curr.symbol} {fmtNum(total)}</div>
+          </div>
+        </div>
       </div>
 
-      {/* ── Two-column body: form on the left, A4 preview on the right ── */}
-      <div className="ap-split">
-        {/* Form side */}
-        <div className="ap-form-side">
+      {/* ── Two-panel body: document left, form right (mirrors Bill Detail) ── */}
+      <div className="bd-main">
+        {/* Form side (right) */}
+        <div className="bd-form">
+          <div className="bd-form-body">
           {/* Upload zone — visual primary action per PRD. Manual fields
               stay visible below regardless; the zone is a shortcut, not a
               gate. Phase F will replace the A4 reconstruction with the
@@ -1122,13 +1142,13 @@ export default function BillCreatePage() {
             </div>
           )}
           <div style={{ height: 20 }} />
+          </div>
         </div>
 
-        {/* Document preview side — A4 reconstruction from form data. PRD
-            says this slot should hold the source document (the uploaded
-            PDF/photo). Phase F-equivalent for Create will swap the mock
-            for the real source. */}
-        <div className="ap-preview-side">
+        {/* Document side (left) — A4 reconstruction from form data, mirrors
+            the Bill Detail source panel. */}
+        <div className="bd-source">
+          <div className="ap-doc-host">
           <div className="ap-prev-bar">
             <div className="ap-prev-lbl">
               <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/></svg>
@@ -1237,6 +1257,7 @@ export default function BillCreatePage() {
               {vendor?.email || "—"} · {vendor?.phone || ""}
             </div>
           </div>
+          </div>
         </div>
       </div>
 
@@ -1259,18 +1280,22 @@ export default function BillCreatePage() {
         </div>
       )}
 
-      {/* ── Footer ───────────────────────────────────────────────── */}
-      <div className="ap-foot">
-        <button className="ap-btn" onClick={() => navigate("/bills")}>Cancel</button>
-        <span className="ap-hint">{canSubmit ? "Changes are saved when you click Save Draft or Submit" : ""}</span>
-        <button className="ap-btn" onClick={onSaveDraft} disabled={!canSubmit}>
-          <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v14a2 2 0 01-2 2z"/></svg>
-          Save Draft
-        </button>
-        <button className="ap-btn-send" onClick={onSubmitForReview} disabled={!canSubmit}>
-          <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
-          Submit for Review
-        </button>
+      {/* ── Action bar (mirrors Bill Detail) ──────────────────────── */}
+      <div className="bd-actionbar">
+        <div className="bd-actionbar-note">
+          {canSubmit ? "Saved when you click Save Draft or Submit" : "Pick a vendor and add at least one item to continue"}
+        </div>
+        <div className="bd-actionbar-buttons">
+          <button className="drawer-btn ghost" onClick={() => navigate("/bills")}>Cancel</button>
+          <button className="drawer-btn ghost" onClick={onSaveDraft} disabled={!canSubmit}>
+            <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v14a2 2 0 01-2 2z"/></svg>
+            Save Draft
+          </button>
+          <button className="drawer-btn primary" onClick={onSubmitForReview} disabled={!canSubmit}>
+            <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+            Submit for Review
+          </button>
+        </div>
       </div>
 
       {createVendorOpen && (
