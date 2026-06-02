@@ -25,6 +25,7 @@ import { VENDORS } from "../src/data/seed/vendors.js";
 import { CUSTOMERS } from "../src/data/seed/customers.js";
 import { BILLS } from "../src/data/seed/bills.js";
 import { INVOICES } from "../src/data/seed/invoices.js";
+import { deriveBillDetailFields } from "./bill-detail-fields.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -322,7 +323,7 @@ function makeBill(idx) {
   const total = dpp + ppn;
   const sisa = pay === "paid" ? 0 : total;
 
-  return {
+  const head = {
     id, vendor: vendor.id, vendorName: vendor.name, initials: vendor.initials,
     poNo: isDraft ? "—" : `PO${String(idx).padStart(3, "0")}`,
     invNo: isDraft ? "—" : `INV-${vendor.code.replace("V-", "V")}-${date.replace(/-/g, "")}`,
@@ -336,6 +337,11 @@ function makeBill(idx) {
       "Pembelian sesuai PO yang disetujui.",
       "Restock inventory bulanan.",
     ]) : "",
+  };
+
+  return {
+    ...head,
+    ...deriveBillDetailFields(head, vendor, idx),
     items,
     audit: [{
       type: "created",

@@ -486,22 +486,81 @@ function StatusStepper({ bill, brief }) {
   );
 }
 
-// ─── Source Document (left panel) ───────────────────────────────────────────
-// HTML mock rendered from bill + vendor data. Faithful enough that the FM
-// can compare the form on the right against what was "scanned" on the left.
-// Phase F replaces this with a real PDF for BILL007 (the OCR/AI hero) and
-// wires bounding-box highlight on field focus.
+// ─── Source Documents (left panel) ──────────────────────────────────────────
+// The left panel shows the vendor invoice by default but is switchable: the
+// reference rows on the right (PO / GRN / Contract / Faktur Pajak) and a
+// segmented control in the toolbar swap in the matching source document.
+// Each is an HTML mock rendered from bill + vendor data — faithful enough that
+// the FM can compare the form on the right against the "scanned" source.
 
-function SourceDocument({ bill, vendor }) {
+const KLAY_NPWP = "01.234.567.8-901.000";
+const KLAY_ADDRESS = "Jl. Sudirman Kav. 52, Jakarta 12190";
+
+const DOC_DEFS = [
+  { key: "invoice",  label: "Vendor Invoice" },
+  { key: "po",       label: "Purchase Order" },
+  { key: "grn",      label: "Goods Receipt" },
+  { key: "contract", label: "Contract" },
+  { key: "faktur",   label: "Faktur Pajak" },
+];
+
+// Which source documents exist for this bill — drives both the switcher and
+// whether a given reference row is clickable.
+function availableDocs(bill) {
+  const has = {
+    invoice:  true,
+    po:       bill.poNo && bill.poNo !== "—",
+    grn:      !!bill.grnNo,
+    contract: !!bill.contractNo,
+    faktur:   !!bill.fakturNo,
+  };
+  return DOC_DEFS.filter((d) => has[d.key]);
+}
+
+function SourcePanel({ bill, vendor, docView, setDocView }) {
+  const docs = availableDocs(bill);
+  const active = docs.some((d) => d.key === docView) ? docView : "invoice";
+  const meta =
+    active === "invoice" ? (bill.isAI ? "OCR extraction (email ingest)" : "Manual entry") :
+    active === "po"       ? "Procurement record" :
+    active === "grn"      ? "Warehouse receipt" :
+    active === "contract" ? "Master agreement" :
+                            "DJP e-Faktur";
   return (
     <div className="bd-doc-wrap">
       <div className="bd-doc-toolbar">
         <span className="bd-doc-toolbar-lbl">Source Document</span>
         <span className="bd-doc-toolbar-sep">·</span>
-        <span className="bd-doc-toolbar-meta">
-          {bill.isAI ? "OCR extraction (email ingest)" : "Manual entry"}
-        </span>
+        <span className="bd-doc-toolbar-meta">{meta}</span>
       </div>
+      {docs.length > 1 && (
+        <div className="bd-doc-switch" role="tablist">
+          {docs.map((d) => (
+            <button
+              key={d.key}
+              type="button"
+              role="tab"
+              aria-selected={active === d.key}
+              className={`bd-doc-switch-tab${active === d.key ? " active" : ""}`}
+              onClick={() => setDocView(d.key)}
+            >
+              {d.label}
+            </button>
+          ))}
+        </div>
+      )}
+      {active === "invoice"  && <SourceInvoice  bill={bill} vendor={vendor} />}
+      {active === "po"       && <SourcePO       bill={bill} vendor={vendor} />}
+      {active === "grn"      && <SourceGRN      bill={bill} vendor={vendor} />}
+      {active === "contract" && <SourceContract bill={bill} vendor={vendor} />}
+      {active === "faktur"   && <SourceFaktur   bill={bill} vendor={vendor} />}
+    </div>
+  );
+}
+
+function SourceInvoice({ bill, vendor }) {
+  return (
+    <>
       <div className="bd-doc-page">
         <div className="bd-doc-letterhead">
           <div className="bd-doc-vendor-name">{vendor?.name || bill.vendorName}</div>
@@ -617,6 +676,250 @@ function SourceDocument({ bill, vendor }) {
           {vendor?.email || ""} {vendor?.phone ? " · " + vendor.phone : ""}
         </div>
       </div>
+    </>
+  );
+}
+
+// ── Purchase Order ────────────────────────────────────────────────────────
+function SourcePO({ bill, vendor }) {
+  const ppn = bill.ppn || 0;
+  return (
+    <div className="bd-doc-page">
+      <div className="bd-doc-letterhead">
+        <div className="bd-doc-vendor-name">PT Klay Indonesia</div>
+        <div className="bd-doc-vendor-meta">{KLAY_ADDRESS}</div>
+        <div className="bd-doc-vendor-meta">NPWP <span className="bd-mono">{KLAY_NPWP}</span></div>
+      </div>
+      <div className="bd-doc-divider" />
+      <div className="bd-doc-title">PURCHASE ORDER</div>
+      <div className="bd-doc-header">
+        <div className="bd-doc-header-block">
+          <div className="bd-doc-lbl">Supplier</div>
+          <div className="bd-doc-val">{vendor?.name || bill.vendorName}</div>
+          {vendor?.address && <div className="bd-doc-val-sub">{vendor.address}</div>}
+        </div>
+        <div className="bd-doc-header-block">
+          <div className="bd-doc-lbl">PO No.</div>
+          <div className="bd-doc-val bd-mono">{bill.poNo}</div>
+          <div className="bd-doc-lbl bd-doc-lbl-spaced">PO Date</div>
+          <div className="bd-doc-val">{formatDateEn(bill.date)}</div>
+        </div>
+        <div className="bd-doc-header-block">
+          <div className="bd-doc-lbl">Payment Terms</div>
+          <div className="bd-doc-val">{vendor?.payment_terms || "—"}</div>
+          <div className="bd-doc-lbl bd-doc-lbl-spaced">Status</div>
+          <div className="bd-doc-val">Approved</div>
+        </div>
+      </div>
+      <table className="bd-doc-items">
+        <thead>
+          <tr>
+            <th className="bd-doc-items-num">#</th>
+            <th>Description</th>
+            <th className="r">Qty</th>
+            <th className="r">Unit Price</th>
+            <th className="r">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {bill.items.map((item, i) => (
+            <tr key={i}>
+              <td className="bd-doc-items-num">{String(i + 1).padStart(2, "0")}</td>
+              <td>{item.desc}</td>
+              <td className="r bd-mono">{item.qty.toLocaleString("id-ID")}</td>
+              <td className="r bd-mono">{item.price.toLocaleString("id-ID")}</td>
+              <td className="r bd-mono">{item.subtotal.toLocaleString("id-ID")}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="bd-doc-totals">
+        <div className="bd-doc-tr"><span className="lbl">Subtotal (DPP)</span><span className="val bd-mono">{bill.dpp.toLocaleString("id-ID")}</span></div>
+        <div className="bd-doc-tr"><span className="lbl">PPN</span><span className="val bd-mono">{ppn.toLocaleString("id-ID")}</span></div>
+        <div className="bd-doc-tr grand"><span className="lbl">PO Total</span><span className="val bd-mono">Rp {(bill.dpp + ppn).toLocaleString("id-ID")}</span></div>
+      </div>
+      <div className="bd-doc-notes">
+        <div className="bd-doc-lbl">Authorized by</div>
+        <div className="bd-doc-val">Procurement · PT Klay Indonesia</div>
+      </div>
+      <div className="bd-doc-footer">This purchase order is issued subject to Klay standard procurement terms.</div>
+    </div>
+  );
+}
+
+// ── Goods Receipt Note ──────────────────────────────────────────────────────
+function SourceGRN({ bill, vendor }) {
+  const mismatch = bill.grn === "mismatch";
+  return (
+    <div className="bd-doc-page">
+      <div className="bd-doc-letterhead">
+        <div className="bd-doc-vendor-name">PT Klay Indonesia — Warehouse</div>
+        <div className="bd-doc-vendor-meta">{KLAY_ADDRESS}</div>
+      </div>
+      <div className="bd-doc-divider" />
+      <div className="bd-doc-title">GOODS RECEIPT NOTE</div>
+      <div className="bd-doc-header">
+        <div className="bd-doc-header-block">
+          <div className="bd-doc-lbl">GRN No.</div>
+          <div className="bd-doc-val bd-mono">{bill.grnNo}</div>
+          <div className="bd-doc-lbl bd-doc-lbl-spaced">PO Reference</div>
+          <div className="bd-doc-val bd-mono">{bill.poNo && bill.poNo !== "—" ? bill.poNo : "—"}</div>
+        </div>
+        <div className="bd-doc-header-block">
+          <div className="bd-doc-lbl">Supplier</div>
+          <div className="bd-doc-val">{vendor?.name || bill.vendorName}</div>
+          <div className="bd-doc-lbl bd-doc-lbl-spaced">Received Date</div>
+          <div className="bd-doc-val">{formatDateEn(bill.date)}</div>
+        </div>
+        <div className="bd-doc-header-block">
+          <div className="bd-doc-lbl">Match Status</div>
+          <div className={`bd-doc-val${mismatch ? " bd-doc-flag" : ""}`}>
+            {GRN_LABEL[bill.grn] || "—"}
+          </div>
+        </div>
+      </div>
+      <table className="bd-doc-items">
+        <thead>
+          <tr>
+            <th className="bd-doc-items-num">#</th>
+            <th>Description</th>
+            <th className="r">Qty Ordered</th>
+            <th className="r">Qty Received</th>
+            <th className="r">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {bill.items.map((item, i) => {
+            const recv = mismatch && i === 0 ? Math.max(0, Math.round(item.qty * 0.9)) : item.qty;
+            const ok = recv === item.qty;
+            return (
+              <tr key={i}>
+                <td className="bd-doc-items-num">{String(i + 1).padStart(2, "0")}</td>
+                <td>{item.desc}</td>
+                <td className="r bd-mono">{item.qty.toLocaleString("id-ID")}</td>
+                <td className="r bd-mono">{recv.toLocaleString("id-ID")}</td>
+                <td className={`r${ok ? "" : " bd-doc-flag"}`}>{ok ? "OK" : "Short"}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <div className="bd-doc-notes">
+        <div className="bd-doc-lbl">Received by</div>
+        <div className="bd-doc-val">Warehouse Staff · PT Klay Indonesia</div>
+        {mismatch && (
+          <>
+            <div className="bd-doc-lbl bd-doc-lbl-spaced">Note</div>
+            <div className="bd-doc-val">Quantity received does not match the invoiced quantity — flagged for AP review.</div>
+          </>
+        )}
+      </div>
+      <div className="bd-doc-footer">Goods inspected and recorded at receipt.</div>
+    </div>
+  );
+}
+
+// ── Contract / Master agreement ─────────────────────────────────────────────
+function SourceContract({ bill, vendor }) {
+  return (
+    <div className="bd-doc-page">
+      <div className="bd-doc-letterhead">
+        <div className="bd-doc-vendor-name">Supply &amp; Service Agreement</div>
+        <div className="bd-doc-vendor-meta">PT Klay Indonesia &nbsp;×&nbsp; {vendor?.name || bill.vendorName}</div>
+      </div>
+      <div className="bd-doc-divider" />
+      <div className="bd-doc-title">CONTRACT</div>
+      <div className="bd-doc-header">
+        <div className="bd-doc-header-block">
+          <div className="bd-doc-lbl">Contract No.</div>
+          <div className="bd-doc-val bd-mono">{bill.contractNo}</div>
+          <div className="bd-doc-lbl bd-doc-lbl-spaced">Effective</div>
+          <div className="bd-doc-val">1 Jan 2025 – 31 Dec 2025</div>
+        </div>
+        <div className="bd-doc-header-block">
+          <div className="bd-doc-lbl">Vendor</div>
+          <div className="bd-doc-val">{vendor?.name || bill.vendorName}</div>
+          {vendor?.tax_id && <div className="bd-doc-val-sub">NPWP {vendor.tax_id}</div>}
+        </div>
+        <div className="bd-doc-header-block">
+          <div className="bd-doc-lbl">Payment Terms</div>
+          <div className="bd-doc-val">{vendor?.payment_terms || "—"}</div>
+        </div>
+      </div>
+      <div className="bd-doc-notes">
+        <div className="bd-doc-lbl">Scope of Work</div>
+        <div className="bd-doc-val">
+          {bill.keterangan || `Recurring supply of ${bill.items[0]?.acctName || "goods & services"} as per agreed schedule.`}
+        </div>
+        <div className="bd-doc-lbl bd-doc-lbl-spaced">Pricing</div>
+        <div className="bd-doc-val">As per agreed rate card. This bill draws against the contract.</div>
+      </div>
+      <div className="bd-doc-meta-row">
+        <div className="bd-doc-meta-block">
+          <div className="bd-doc-lbl">For PT Klay Indonesia</div>
+          <div className="bd-doc-sign">Budi Santoso</div>
+          <div className="bd-doc-val-sub">Finance Manager</div>
+        </div>
+        <div className="bd-doc-meta-block">
+          <div className="bd-doc-lbl">For {vendor?.name || bill.vendorName}</div>
+          <div className="bd-doc-sign">{vendor?.contact || "Authorized Signatory"}</div>
+          <div className="bd-doc-val-sub">Authorized Signatory</div>
+        </div>
+      </div>
+      <div className="bd-doc-footer">Executed in two counterparts, each an original.</div>
+    </div>
+  );
+}
+
+// ── Faktur Pajak (Indonesian tax invoice) ──────────────────────────────────
+function SourceFaktur({ bill, vendor }) {
+  return (
+    <div className="bd-doc-page bd-doc-faktur">
+      <div className="bd-doc-faktur-head">
+        <div>
+          <div className="bd-doc-lbl">Kode dan Nomor Seri Faktur Pajak</div>
+          <div className="bd-doc-faktur-no bd-mono">{bill.fakturNo}</div>
+        </div>
+        <div className="bd-doc-faktur-stamp">FAKTUR PAJAK</div>
+      </div>
+      <div className="bd-doc-divider" />
+      <div className="bd-doc-faktur-party">
+        <div className="bd-doc-lbl">Pengusaha Kena Pajak</div>
+        <div className="bd-doc-val">{vendor?.name || bill.vendorName}</div>
+        {vendor?.address && <div className="bd-doc-val-sub">{vendor.address}</div>}
+        <div className="bd-doc-val-sub">NPWP : {vendor?.tax_id || "—"}</div>
+      </div>
+      <div className="bd-doc-faktur-party">
+        <div className="bd-doc-lbl">Pembeli Barang Kena Pajak / Penerima Jasa Kena Pajak</div>
+        <div className="bd-doc-val">PT Klay Indonesia</div>
+        <div className="bd-doc-val-sub">{KLAY_ADDRESS}</div>
+        <div className="bd-doc-val-sub">NPWP : {KLAY_NPWP}</div>
+      </div>
+      <table className="bd-doc-items">
+        <thead>
+          <tr>
+            <th className="bd-doc-items-num">No.</th>
+            <th>Nama Barang Kena Pajak / Jasa Kena Pajak</th>
+            <th className="r">Harga Jual</th>
+          </tr>
+        </thead>
+        <tbody>
+          {bill.items.map((item, i) => (
+            <tr key={i}>
+              <td className="bd-doc-items-num">{String(i + 1).padStart(2, "0")}</td>
+              <td>{item.desc}</td>
+              <td className="r bd-mono">{item.subtotal.toLocaleString("id-ID")}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="bd-doc-totals">
+        <div className="bd-doc-tr"><span className="lbl">Dasar Pengenaan Pajak</span><span className="val bd-mono">{bill.dpp.toLocaleString("id-ID")}</span></div>
+        <div className="bd-doc-tr grand"><span className="lbl">PPN = 11% × DPP</span><span className="val bd-mono">{(bill.ppn || 0).toLocaleString("id-ID")}</span></div>
+      </div>
+      <div className="bd-doc-footer">
+        Masa Pajak {bill.taxReportingPeriod || formatDateEn(bill.date)} · Faktur Pajak ini sah sesuai ketentuan DJP.
+      </div>
     </div>
   );
 }
@@ -723,6 +1026,89 @@ function ActionBar({ bill, onAction, onSecondary, gateReason, periodLocked, lock
   );
 }
 
+// ─── Detail-tab row helpers ─────────────────────────────────────────────────
+
+// A plain read-only label/value row (no confidence indicator).
+function PlainRow({ label, value, mono }) {
+  return (
+    <div className="drawer-row">
+      <div className="drawer-label">{label}</div>
+      <div className={`drawer-value${mono ? " mono" : ""}`}>{value}</div>
+    </div>
+  );
+}
+
+// Indented sub-row, used for the items nested under Payment Status.
+function SubRow({ label, value }) {
+  return (
+    <div className="drawer-row bd-subrow">
+      <div className="drawer-label">{label}</div>
+      <div className="drawer-value">{value}</div>
+    </div>
+  );
+}
+
+// A reference row whose value, when present, is a link that switches the
+// source document shown on the left.
+function RefRow({ label, value, onClick }) {
+  const has = value && value !== "—";
+  return (
+    <div className="drawer-row bd-ref-row">
+      <div className="drawer-label">{label}</div>
+      <div className="drawer-value mono">
+        {has ? (
+          <button type="button" className="bd-ref-link" onClick={onClick}>{value}</button>
+        ) : (
+          <span className="bd-ref-empty">—</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// A tax-rate row: the rate is an editable chip (click → inline % input); the
+// computed amount sits beside it. Saving recomputes the downstream totals.
+function RateRow({ label, rate, amount, onSaveRate }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const pct = +((rate || 0) * 100).toFixed(2);
+  function start() { setDraft(String(pct)); setEditing(true); }
+  function commit() {
+    const n = parseFloat(draft);
+    if (!Number.isFinite(n) || n < 0) { setEditing(false); return; }
+    onSaveRate(n / 100);
+    setEditing(false);
+  }
+  return (
+    <div className="drawer-row bd-rate-row">
+      <div className="drawer-label">{label}</div>
+      <div className="drawer-value bd-rate-value">
+        {editing ? (
+          <span className="bd-rate-edit">
+            <input
+              type="number"
+              step="0.01"
+              className="bd-rate-input"
+              value={draft}
+              autoFocus
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") commit(); if (e.key === "Escape") setEditing(false); }}
+            />
+            <span className="bd-rate-pct">%</span>
+            <button type="button" className="bd-field-edit-btn save" onClick={commit}>Save</button>
+            <button type="button" className="bd-field-edit-btn cancel" onClick={() => setEditing(false)}>Cancel</button>
+          </span>
+        ) : (
+          <>
+            <button type="button" className="bd-rate-chip" onClick={start} title="Edit rate">{pct}%</button>
+            <span className="bd-rate-amt mono">{formatRupiah(amount)}</span>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Page ───────────────────────────────────────────────────────────────────
 
 // Demo user identities — there's no current-user concept yet, so the audit
@@ -750,6 +1136,7 @@ export default function BillDetailPage() {
   const { addJournalEntry, peekNextJeNumber } = useJournalEntries();
   const { closedThrough } = useClosePeriod();
   const [tab, setTab] = useState("detail");
+  const [docView, setDocView] = useState("invoice");
   const [toast, setToast] = useState("");
   const toastTmr = useRef(null);
 
@@ -937,6 +1324,46 @@ export default function BillDetailPage() {
   };
   const parseText = (v) => String(v).trim();
 
+  // ── Tax-rate edits (Item Details) — changing a rate recomputes the
+  // downstream amounts. PPN drives Total (and Remaining); PPh is a
+  // withholding that only affects Net Payable, not Total.
+  function setPpnRate(r) {
+    const ppn = Math.round(bill.dpp * r);
+    const total = bill.dpp + ppn;
+    updateBill(bill.id, {
+      ppnRate: r,
+      ppn,
+      total,
+      sisa: bill.pay === "paid" ? 0 : total,
+    }, {
+      type:   "edited",
+      action: `PPN rate set to ${(r * 100).toFixed(2)}% — recalculated to ${formatRupiah(ppn)}`,
+      by:     AP_USER,
+      ...nowAuditStamp(),
+    });
+    showToast(`PPN recalculated at ${(r * 100).toFixed(2)}%`);
+  }
+  function setPphRate(r) {
+    const pph23 = Math.round(bill.dpp * r);
+    updateBill(bill.id, { pphRate: r, pph23 }, {
+      type:   "edited",
+      action: `PPh rate set to ${(r * 100).toFixed(2)}% — recalculated to ${formatRupiah(pph23)}`,
+      by:     AP_USER,
+      ...nowAuditStamp(),
+    });
+    showToast(`PPh recalculated at ${(r * 100).toFixed(2)}%`);
+  }
+
+  // Effective rates — prefer the stored rate, fall back to deriving from the
+  // amount (covers bills created before the rate fields existed).
+  const ppnRate = bill.ppnRate != null ? bill.ppnRate : (bill.dpp > 0 && bill.ppn ? bill.ppn / bill.dpp : 0);
+  const pphRate = bill.pphRate != null ? bill.pphRate : (bill.dpp > 0 && bill.pph23 ? bill.pph23 / bill.dpp : 0);
+  const netPayable = bill.total - (bill.pph23 || 0);
+
+  // Compliance / status label maps for the new Detail rows.
+  const RECON_LABEL = { reconciled: "Reconciled", unreconciled: "Unreconciled" };
+  const TAX_STATUS_LABEL = { reported: "Reported", pending: "Pending", "not-applicable": "Not applicable" };
+
   return (
     <div className="bd-page">
       {/* ── Header ────────────────────────────────────────────────── */}
@@ -967,9 +1394,9 @@ export default function BillDetailPage() {
 
       {/* ── Two-panel body ────────────────────────────────────────── */}
       <div className="bd-main">
-        {/* Left: source document */}
+        {/* Left: source document (switchable) */}
         <div className="bd-source">
-          <SourceDocument bill={bill} vendor={vendor} />
+          <SourcePanel bill={bill} vendor={vendor} docView={docView} setDocView={setDocView} />
         </div>
 
         {/* Right: review brief + status stepper + form. When the bill is in
@@ -992,7 +1419,6 @@ export default function BillDetailPage() {
           <div className="drawer-tabs bd-tabs">
             {[
               ["detail",  "Detail"],
-              ["items",   "Items"],
               ["posting", "Posting"],
               ["vendor",  "Vendor"],
               ["audit",   "Audit"],
@@ -1029,7 +1455,13 @@ export default function BillDetailPage() {
                   </div>
                   <FieldRow
                     label="Vendor Invoice No."
-                    value={bill.invNo}
+                    value={
+                      bill.invNo && bill.invNo !== "—" ? (
+                        <button type="button" className="bd-ref-link" onClick={() => setDocView("invoice")}>
+                          {bill.invNo}
+                        </button>
+                      ) : bill.invNo
+                    }
                     confidence={fields.invNo}
                     fieldName="invNo"
                     rawValue={bill.invNo === "—" ? "" : bill.invNo}
@@ -1039,18 +1471,7 @@ export default function BillDetailPage() {
                     onConfirm={() => confirmField("invNo")}
                   />
                   <FieldRow
-                    label="PO No."
-                    value={bill.poNo}
-                    confidence={fields.poNo}
-                    fieldName="poNo"
-                    rawValue={bill.poNo === "—" ? "" : bill.poNo}
-                    inputType="text"
-                    parser={parseText}
-                    onSave={(v) => editField("poNo", v)}
-                    onConfirm={() => confirmField("poNo")}
-                  />
-                  <FieldRow
-                    label="Date"
+                    label="Invoice Date"
                     value={formatDateEn(bill.date)}
                     confidence={fields.date}
                     fieldName="date"
@@ -1061,14 +1482,17 @@ export default function BillDetailPage() {
                     onConfirm={() => confirmField("date")}
                   />
                   <FieldRow label="Due Date" value={formatDateEn(bill.due)} confidence={fields.due} />
-                  <div className="drawer-row">
-                    <div className="drawer-label">GRN</div>
-                    <div className="drawer-value">{GRN_LABEL[bill.grn]}</div>
-                  </div>
-                  <div className="drawer-row">
-                    <div className="drawer-label">Payment Status</div>
-                    <div className="drawer-value">{PAY_LABEL[bill.pay]}</div>
-                  </div>
+                  <PlainRow label="Discount Due Date" value={bill.discountDueDate ? formatDateEn(bill.discountDueDate) : "—"} />
+                  <PlainRow label="GRN Status" value={GRN_LABEL[bill.grn] || "—"} />
+                  <PlainRow label="Payment Status" value={PAY_LABEL[bill.pay]} />
+                  <SubRow
+                    label="Bank Reconciliation Status"
+                    value={RECON_LABEL[bill.bankReconStatus] || "—"}
+                  />
+                  <SubRow
+                    label="Payment Date & Time"
+                    value={bill.paymentDate ? `${formatDateEn(bill.paymentDate)}${bill.paymentTime ? " · " + bill.paymentTime : ""}` : "—"}
+                  />
                   {bill.keterangan && (
                     <div className="drawer-row">
                       <div className="drawer-label">Description</div>
@@ -1076,61 +1500,68 @@ export default function BillDetailPage() {
                     </div>
                   )}
                 </div>
+
                 <div className="drawer-section">
                   <div className="drawer-section-title">Tax</div>
-                  <FieldRow
-                    label="DPP"
-                    value={formatRupiah(bill.dpp)}
-                    confidence={fields.dpp}
-                    mono
-                    fieldName="dpp"
-                    rawValue={bill.dpp}
-                    inputType="number"
-                    parser={parseInt0}
-                    onSave={(v) => editField("dpp", v)}
-                    onConfirm={() => confirmField("dpp")}
+                  <PlainRow
+                    label="Tax Reporting Period"
+                    value={bill.taxReportingPeriod ? periodLabel(bill.taxReportingPeriod) : "—"}
                   />
-                  <FieldRow label="PPN (11%)" value={formatRupiah(bill.ppn)} confidence={fields.ppn} mono />
-                  <FieldRow
-                    label="PPh 23"
-                    value={bill.pph23 > 0 ? formatRupiah(bill.pph23) : "—"}
-                    confidence={fields.pph23}
-                    mono
-                  />
-                  {fields.faktur && (
-                    <FieldRow
-                      label="Faktur Pajak"
-                      value={
-                        bill.faktur_pajak
-                          ? bill.faktur_pajak
-                          : fields.faktur.visual_state === "RED" ? "—" : "Not applicable"
-                      }
-                      confidence={fields.faktur}
-                      fieldName="faktur_pajak"
-                      rawValue={bill.faktur_pajak || ""}
-                      inputType="text"
-                      parser={parseText}
-                      onSave={(v) => editField("faktur_pajak", v)}
-                    />
-                  )}
-                  <FieldRow
-                    label="Total"
-                    value={formatRupiah(bill.total)}
-                    confidence={fields.total}
-                    mono
-                    fieldName="total"
-                    rawValue={bill.total}
-                    inputType="number"
-                    parser={parseInt0}
-                    onSave={(v) => editField("total", v)}
-                    onConfirm={() => confirmField("total")}
-                  />
-                  <FieldRow
-                    label="Net Payable"
-                    value={formatRupiah(bill.total - (bill.pph23 || 0))}
-                    confidence={fields.net_payable}
-                    mono
-                  />
+                  <div className="drawer-row">
+                    <div className="drawer-label">Tax Reporting Status</div>
+                    <div className="drawer-value">
+                      <span className={`bd-tax-status bd-tax-${bill.taxReportingStatus || "not-applicable"}`}>
+                        {TAX_STATUS_LABEL[bill.taxReportingStatus] || "—"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="drawer-section">
+                  <div className="drawer-section-title">References</div>
+                  <RefRow label="PO #"           value={bill.poNo}       onClick={() => setDocView("po")} />
+                  <RefRow label="GRN #"          value={bill.grnNo}      onClick={() => setDocView("grn")} />
+                  <RefRow label="Contract #"     value={bill.contractNo} onClick={() => setDocView("contract")} />
+                  <RefRow label="Faktur Pajak"   value={bill.fakturNo}   onClick={() => setDocView("faktur")} />
+                </div>
+
+                <div className="drawer-section">
+                  <div className="drawer-section-title">Item Details</div>
+                  <table className="items-table">
+                    <thead>
+                      <tr>
+                        <th>Description</th>
+                        <th className="r">Qty</th>
+                        <th className="r">Price</th>
+                        <th className="r">Subtotal</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {bill.items.map((item, i) => (
+                        <tr key={i}>
+                          <td>
+                            <div>{item.desc}</div>
+                            <div style={{ fontSize: 10, color: "var(--color-action)", fontFamily: "var(--font-mono)" }}>
+                              {item.acct} · {item.acctName}
+                            </div>
+                          </td>
+                          <td className="r">{item.qty.toLocaleString("id-ID")}</td>
+                          <td className="r">{formatRupiah(item.price)}</td>
+                          <td className="r">{formatRupiah(item.subtotal)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="bd-amounts">
+                    <PlainRow label="DPP" value={formatRupiah(bill.dpp)} mono />
+                    <RateRow label="PPN" rate={ppnRate} amount={bill.ppn} onSaveRate={setPpnRate} />
+                    <RateRow label="PPh" rate={pphRate} amount={bill.pph23} onSaveRate={setPphRate} />
+                    <div className="drawer-row bd-amt-strong">
+                      <div className="drawer-label">Total</div>
+                      <div className="drawer-value mono">{formatRupiah(bill.total)}</div>
+                    </div>
+                    <PlainRow label="Net Payable" value={formatRupiah(netPayable)} mono />
+                  </div>
                 </div>
               </>
             )}
@@ -1145,41 +1576,6 @@ export default function BillDetailPage() {
 
             {tab === "vendor" && (
               <VendorContextPanel vendor={vendor} />
-            )}
-
-            {tab === "items" && (
-              <div className="drawer-section">
-                <div className="drawer-section-title">Line Items</div>
-                <table className="items-table">
-                  <thead>
-                    <tr>
-                      <th>Description</th>
-                      <th className="r">Qty</th>
-                      <th className="r">Price</th>
-                      <th className="r">Subtotal</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {bill.items.map((item, i) => (
-                      <tr key={i}>
-                        <td>
-                          <div>{item.desc}</div>
-                          <div style={{ fontSize: 10, color: "var(--color-action)", fontFamily: "var(--font-mono)" }}>
-                            {item.acct} · {item.acctName}
-                          </div>
-                        </td>
-                        <td className="r">{item.qty.toLocaleString("id-ID")}</td>
-                        <td className="r">{formatRupiah(item.price)}</td>
-                        <td className="r">{formatRupiah(item.subtotal)}</td>
-                      </tr>
-                    ))}
-                    <tr className="items-total-row">
-                      <td colSpan={3}>Total</td>
-                      <td className="r">{formatRupiah(bill.total)}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
             )}
 
             {tab === "audit" && (

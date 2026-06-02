@@ -1052,3 +1052,208 @@
   background: var(--color-warning-text);
   color: #fff;
 }
+
+/* ── Source-document switcher + extra doc bits ───────────────────────────── */
+
+.bd-doc-toolbar-meta { color: var(--color-text-tertiary); }
+
+.bd-doc-switch {
+  display: flex;
+  gap: 4px;
+  margin: 0 auto 12px;
+  max-width: 560px;
+  padding: 3px;
+  background: var(--color-surface-sunken, #efeae2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+}
+.bd-doc-switch-tab {
+  flex: 1 0 auto;
+  white-space: nowrap;
+  padding: 6px 12px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: calc(var(--radius-sm) - 2px);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+.bd-doc-switch-tab:hover { color: var(--color-text); }
+.bd-doc-switch-tab.active {
+  background: var(--color-surface-raised, #fff);
+  border-color: var(--color-border);
+  color: var(--color-text);
+  box-shadow: 0 1px 2px rgba(0,0,0,.06);
+}
+
+/* Mismatch / short-receipt flag inside a doc */
+.bd-doc-flag {
+  color: var(--color-danger-text, #b4231f);
+  font-weight: 700;
+}
+
+/* Contract signature line */
+.bd-doc-sign {
+  margin-top: 14px;
+  padding-top: 4px;
+  border-top: 1px solid #C8BFB2;
+  font-family: var(--font-serif, Georgia, serif);
+  font-size: 14px;
+  font-style: italic;
+  color: #1F1810;
+}
+
+/* Faktur Pajak */
+.bd-doc-faktur { background: #FCFBF7; }
+.bd-doc-faktur-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.bd-doc-faktur-no {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1F1810;
+  margin-top: 2px;
+}
+.bd-doc-faktur-stamp {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  color: #b4231f;
+  border: 1.5px solid #b4231f;
+  border-radius: 3px;
+  padding: 4px 10px;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+.bd-doc-faktur-party {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: rgba(184,160,122,.06);
+  border: 1px solid #E8DFD2;
+  border-radius: 3px;
+}
+.bd-doc-faktur-party + .bd-doc-faktur-party { margin-top: 8px; }
+
+/* ── Detail-tab row helpers ──────────────────────────────────────────────── */
+
+/* Indented sub-row (nested under Payment Status) */
+.bd-subrow .drawer-label {
+  padding-left: 14px;
+  position: relative;
+  color: var(--color-text-tertiary);
+}
+.bd-subrow .drawer-label::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 50%;
+  width: 6px;
+  height: 1px;
+  background: var(--color-border);
+}
+
+/* Reference rows — clickable links to source docs */
+.bd-ref-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-family: var(--font-mono);
+  color: var(--color-action);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.bd-ref-link:hover { color: var(--color-action-hover); }
+.bd-ref-empty { color: var(--color-text-tertiary); }
+
+/* Editable tax-rate rows */
+.bd-rate-value {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.bd-rate-chip {
+  padding: 1px 7px;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--color-action);
+  background: var(--color-action-subtle, rgba(0,90,200,.08));
+  border: 1px solid transparent;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+.bd-rate-chip:hover {
+  border-color: var(--color-action);
+  background: var(--color-surface-raised, #fff);
+}
+.bd-rate-amt { color: var(--color-text); }
+.bd-rate-edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.bd-rate-input {
+  width: 60px;
+  padding: 3px 6px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  text-align: right;
+  border: 1px solid var(--color-action);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised, #fff);
+}
+.bd-rate-input::-webkit-outer-spin-button,
+.bd-rate-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.bd-rate-pct { font-size: 12px; color: var(--color-text-secondary); }
+
+/* Amounts block (DPP / PPN / PPh / Total / Net Payable) */
+.bd-amounts {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border);
+}
+.bd-amt-strong .drawer-label,
+.bd-amt-strong .drawer-value {
+  font-weight: 700;
+  color: var(--color-text);
+}
+.bd-amt-strong {
+  border-top: 1px solid var(--color-border);
+  margin-top: 2px;
+  padding-top: 6px;
+}
+
+/* Tax reporting status pill */
+.bd-tax-status {
+  display: inline-block;
+  padding: 1px 9px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 999px;
+  border: 1px solid;
+}
+.bd-tax-reported {
+  color: var(--color-success-text, #1a7a3c);
+  background: var(--color-success-subtle, rgba(26,122,60,.1));
+  border-color: var(--color-success-text, #1a7a3c);
+}
+.bd-tax-pending {
+  color: var(--color-warning-text, #9a6b00);
+  background: var(--color-warning-subtle, rgba(154,107,0,.1));
+  border-color: var(--color-warning-text, #9a6b00);
+}
+.bd-tax-not-applicable {
+  color: var(--color-text-tertiary);
+  background: transparent;
+  border-color: var(--color-border);
+}
