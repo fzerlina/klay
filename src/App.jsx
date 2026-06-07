@@ -36,6 +36,23 @@ function ComingSoon({ title }) {
   );
 }
 
+function UnderConstruction({ title }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flex: 1, gap: 14, color: "var(--color-text-secondary)", textAlign: "center", padding: 32 }}>
+      <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--color-text-tertiary)" }}>
+        <path d="M2 20h20" />
+        <path d="M4 20V10l8-5 8 5v10" />
+        <path d="M9 20v-6h6v6" />
+      </svg>
+      <div style={{ fontSize: 18, fontWeight: 600, color: "var(--color-text-primary)" }}>{title} is under construction</div>
+      <div style={{ fontSize: 13, maxWidth: 420, lineHeight: 1.6 }}>
+        We're still building this page. In the meantime, use the sidebar to reach
+        Bills, Invoices, the General Ledger, and the rest of your workspace.
+      </div>
+    </div>
+  );
+}
+
 // Sends the current persona to the first page their role can reach.
 function RoleLanding() {
   const { landingPath } = useCurrentUser();
@@ -74,6 +91,7 @@ export default function App() {
             <Routes>
               <Route element={<Layout />}>
                 <Route index element={<RoleLanding />} />
+                <Route path="/dashboard" element={<UnderConstruction title="Dashboard" />} />
                 <Route path="/general-ledger" element={<GeneralLedgerPage />} />
                 <Route path="/journal-entry" element={<JournalEntryPage />} />
                 <Route path="/chart-of-accounts" element={<ChartOfAccountsPage />} />
