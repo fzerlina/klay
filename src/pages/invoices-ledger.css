@@ -473,6 +473,69 @@
 .lg-klay-modal-btn.primary{background:var(--color-action);border-color:var(--color-action);color:#fff}
 .lg-klay-modal-btn.primary:hover{background:var(--color-action-hover);border-color:var(--color-action-hover)}
 
+/* ── DRAFT JOURNAL ENTRY COMPOSER ─────────────────────────────────────────── */
+.dje-backdrop{position:fixed;inset:0;background:rgba(8,7,6,.42);z-index:210;display:flex;align-items:flex-start;justify-content:center;padding:40px 24px;overflow:auto}
+.dje-modal{background:var(--color-surface-raised);border:1px solid var(--color-border-default);border-radius:var(--radius-lg);width:min(760px,100%);box-shadow:0 16px 48px rgba(8,7,6,.22);display:flex;flex-direction:column;max-height:calc(100vh - 80px)}
+.dje-head{display:flex;align-items:flex-start;justify-content:space-between;padding:18px 20px 14px;border-bottom:1px solid var(--color-border-subtle)}
+.dje-title{font-family:var(--font-display);font-size:18px;font-weight:700;color:var(--color-text-primary);letter-spacing:-.01em}
+.dje-sub{font-family:var(--font-mono);font-size:11px;color:var(--color-text-tertiary);margin-top:2px}
+.dje-x{background:transparent;border:none;cursor:pointer;padding:4px;color:var(--color-text-tertiary);line-height:0}
+.dje-x svg{width:14px;height:14px;stroke:currentColor;stroke-width:1.6}
+.dje-x:hover{color:var(--color-text-primary)}
+
+.dje-body{padding:16px 20px;overflow:auto}
+.dje-meta{display:flex;gap:12px;margin-bottom:18px}
+.dje-field{display:flex;flex-direction:column;gap:4px}
+.dje-field-grow{flex:1}
+.dje-field-lbl{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--color-text-tertiary)}
+.dje-input{font-family:var(--font-sans);font-size:12.5px;padding:7px 10px;border:1px solid var(--color-border-default);border-radius:var(--radius-sm);background:var(--color-surface-raised);color:var(--color-text-primary);outline:none}
+.dje-input:focus{border-color:var(--color-action);box-shadow:0 0 0 2px var(--color-action-wash)}
+
+.dje-lines-hdr{display:flex;align-items:baseline;gap:10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--color-text-secondary);margin-bottom:8px}
+.dje-hint{font-weight:400;text-transform:none;letter-spacing:0;font-size:11px;color:var(--color-text-tertiary)}
+
+.dje-line{border:1px solid var(--color-border-default);border-radius:var(--radius-md);padding:10px 12px;margin-bottom:8px;background:var(--color-surface-sunken)}
+.dje-line.has-err{border-color:#C4453A;box-shadow:0 0 0 2px rgba(196,69,58,.10)}
+.dje-line-main{display:flex;gap:8px;align-items:center}
+.dje-acct{flex:1;min-width:0}
+.dje-amt{width:120px;text-align:right;font-family:var(--font-mono)}
+.dje-line-del{width:26px;height:26px;flex-shrink:0;border:1px solid var(--color-border-default);border-radius:var(--radius-sm);background:var(--color-surface-raised);color:var(--color-text-tertiary);cursor:pointer;font-size:15px;line-height:1}
+.dje-line-del:hover:not(:disabled){color:#C4453A;border-color:#C4453A}
+.dje-line-del:disabled{opacity:.4;cursor:not-allowed}
+.dje-desc{width:100%;margin-top:8px;font-size:12px}
+
+.dje-dims{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:10px;padding-top:10px;border-top:1px dashed var(--color-border-subtle)}
+.dje-dims-lbl{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--color-text-tertiary);margin-right:2px}
+.dje-dims-none{font-size:11px;color:var(--color-text-tertiary);font-style:italic}
+.dje-dim-pick{display:inline-flex;align-items:center;gap:5px;padding:3px 8px 3px 7px;border:1px dashed var(--color-border-default);border-radius:9999px;background:var(--color-surface-raised)}
+.dje-dim-pick.set{border-style:solid}
+.dje-dim-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.dje-dim-sel{border:none;background:transparent;font-family:var(--font-sans);font-size:11px;font-weight:600;color:var(--color-text-secondary);outline:none;cursor:pointer;padding:0;max-width:160px}
+.dje-line-err{margin-top:8px;font-size:11px;color:#C4453A;font-weight:500}
+
+.dje-add-line{width:100%;padding:9px;border:1px dashed var(--color-border-default);border-radius:var(--radius-md);background:transparent;color:var(--color-text-secondary);font-family:var(--font-sans);font-size:12px;font-weight:600;cursor:pointer}
+.dje-add-line:hover{background:var(--color-surface-sunken);color:var(--color-text-primary);border-color:var(--color-text-tertiary)}
+
+.dje-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 20px;border-top:1px solid var(--color-border-subtle);flex-wrap:wrap}
+.dje-totals{display:flex;align-items:center;gap:14px;font-family:var(--font-mono);font-size:12px;color:var(--color-text-secondary)}
+.dje-totals strong{color:var(--color-text-primary)}
+.dje-bal{font-family:var(--font-sans);font-size:11px;font-weight:700;padding:3px 9px;border-radius:9999px}
+.dje-bal.ok{background:#E1F5EE;color:#0F6E56}
+.dje-bal.off{background:#FBF0F0;color:#A02020}
+.dje-foot-actions{display:flex;gap:8px;margin-left:auto}
+.dje-btn{font-family:var(--font-sans);font-size:12.5px;font-weight:600;padding:8px 16px;border-radius:var(--radius-sm);cursor:pointer;border:1px solid var(--color-border-default);background:var(--color-surface-raised);color:var(--color-text-secondary)}
+.dje-btn:hover{color:var(--color-text-primary)}
+.dje-btn.primary{background:var(--color-action);border-color:var(--color-action);color:#fff}
+.dje-btn.primary:hover:not(:disabled){background:var(--color-action-hover);border-color:var(--color-action-hover)}
+.dje-btn.primary:disabled{opacity:.45;cursor:not-allowed}
+
+/* Per-line dimension chips in the JE lines drawer */
+.je-line-dims{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:8px;padding-top:8px;border-top:1px dashed var(--color-border-subtle)}
+.je-line-dim{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:9999px;font-size:10px;line-height:1.5}
+.je-line-dim-k{font-weight:500;opacity:.7}
+.je-line-dim-v{font-weight:700}
+.je-line-dim-sim{font-size:9px;font-style:italic;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.04em}
+
 /* ── KLAY AI DRAWER ───────────────────────────────────────────────────────── */
 .ai-backdrop{position:absolute;inset:0;background:rgba(8,7,6,.18);opacity:0;pointer-events:none;transition:opacity .2s ease;z-index:80}
 .ai-backdrop.open{opacity:1;pointer-events:auto}

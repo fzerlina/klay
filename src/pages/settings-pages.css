@@ -43,6 +43,11 @@
 .coa-tag.contra{background:#EEEDFE;color:#3C3489}
 .coa-tag.ctrl{background:#FBEAF0;color:#993556}
 
+.coa-row td.dims{min-width:240px}
+.coa-dim-chips{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.coa-dim-chip{display:inline-block;font-size:9px;font-weight:600;padding:2px 7px;border-radius:9999px;line-height:1.5;white-space:nowrap}
+.coa-dim-none{color:var(--color-text-tertiary);font-size:11px}
+
 .coa-row-act{background:transparent;border:none;color:var(--color-text-secondary);cursor:pointer;font-size:13px;padding:3px 5px;border-radius:6px;line-height:1;font-family:var(--font-sans)}
 .coa-row-act:hover{background:var(--color-surface-sunken);color:var(--color-text-primary)}
 

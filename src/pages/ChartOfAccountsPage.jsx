@@ -1,5 +1,6 @@
 import { useState, useMemo, Fragment } from "react";
 import { COA } from "../data/seed/coa";
+import { DIM_BY_KEY, paletteFor, dimensionsForAccount } from "../data/seed/dimensions";
 import "./invoices-ledger.css";
 import "./settings-pages.css";
 
@@ -147,6 +148,7 @@ export default function ChartOfAccountsPage() {
           <tr>
             <th>Code</th>
             <th>Account name</th>
+            <th>Dimensions</th>
             <th />
             <th />
           </tr>
@@ -154,7 +156,7 @@ export default function ChartOfAccountsPage() {
         <tbody>
           {filteredSections.length === 0 && (
             <tr>
-              <td colSpan={4} style={{ padding: 32, textAlign: "center", color: "var(--color-text-tertiary)", fontSize: 12 }}>
+              <td colSpan={5} style={{ padding: 32, textAlign: "center", color: "var(--color-text-tertiary)", fontSize: 12 }}>
                 No accounts match your filter.
               </td>
             </tr>
@@ -162,7 +164,7 @@ export default function ChartOfAccountsPage() {
           {filteredSections.map((sec) => (
             <Fragment key={sec.key}>
               <tr className="coa-section-row">
-                <td colSpan={4}>{sec.label}</td>
+                <td colSpan={5}>{sec.label}</td>
               </tr>
               {sec.subs.map((sub, si) => {
                 const showSub = sec.subs.length > 1 && sub.label;
@@ -170,7 +172,7 @@ export default function ChartOfAccountsPage() {
                   <Fragment key={si}>
                     {showSub && (
                       <tr className="coa-subsection-row">
-                        <td colSpan={4}>{sub.label}</td>
+                        <td colSpan={5}>{sub.label}</td>
                       </tr>
                     )}
                     {sub.rows.map((acct) => {
@@ -184,6 +186,30 @@ export default function ChartOfAccountsPage() {
                             {acct.name}
                             {isControl && <span className="coa-tag ctrl">CTRL</span>}
                             {isContra && <span className="coa-tag contra">CONTRA</span>}
+                          </td>
+                          <td className="dims">
+                            {(() => {
+                              const keys = dimensionsForAccount(acct);
+                              if (keys.length === 0) return <span className="coa-dim-none">—</span>;
+                              return (
+                                <span className="coa-dim-chips">
+                                  {keys.map((k) => {
+                                    const dim = DIM_BY_KEY[k];
+                                    if (!dim) return null;
+                                    const pal = paletteFor(dim.cls);
+                                    return (
+                                      <span
+                                        className="coa-dim-chip"
+                                        key={k}
+                                        style={{ background: pal.bg, color: pal.fg }}
+                                      >
+                                        {dim.label}
+                                      </span>
+                                    );
+                                  })}
+                                </span>
+                              );
+                            })()}
                           </td>
                           <td className="lock-col">
                             {locked && (

@@ -8,6 +8,9 @@ import AiChatDrawer from "./AiChatDrawer";
 import SummaryDrawer from "./SummaryDrawer";
 import ReconReviewModal, { RECON_TOTAL, RECON_MATCHED, RECON_UNMATCHED } from "../components/ReconReviewModal";
 import { computeJournalTasks, makeJournalAiContext } from "./ai-journal-context";
+import DraftJournalModal from "./DraftJournalModal";
+import { DIM_BY_KEY, paletteFor, dimensionsForAccount, sampleDimensionValue } from "../data/seed/dimensions";
+import { COA_BY_CODE } from "../data/seed/coa";
 import "./modules.css";
 import "./invoices-ledger.css";
 
@@ -447,8 +450,8 @@ function KlayActionModal({ intent, onClose }) {
 }
 
 export default function JournalEntryPage() {
-  const { entries: JOURNAL_ENTRIES } = useJournalEntries();
-  const { hasLevel } = useCurrentUser();
+  const { entries: JOURNAL_ENTRIES, addJournalEntry, peekNextJeNumber } = useJournalEntries();
+  const { hasLevel, user } = useCurrentUser();
   const canApprove = hasLevel("gl", "approve+post");
   const canTransact = hasLevel("gl", "transact");
   const insightsRole = canApprove ? "operator" : canTransact ? "preparer" : "viewer";
@@ -500,6 +503,8 @@ export default function JournalEntryPage() {
   const [klayQuery, setKlayQuery] = useState("");
   const [klayFilters, setKlayFilters] = useState({});
   const [klayAction, setKlayAction] = useState(null); // { query } when action modal open
+  const [draftOpen, setDraftOpen] = useState(false);
+  const [draftSeedMemo, setDraftSeedMemo] = useState("");
   const [highlightedRef, setHighlightedRef] = useState(null);
   const klayInputRef = useRef(null);
 
@@ -531,6 +536,19 @@ export default function JournalEntryPage() {
     setToast(msg);
     if (toastTmr.current) clearTimeout(toastTmr.current);
     toastTmr.current = setTimeout(() => setToast(""), 1800);
+  }
+
+  function openDraft(seedMemo = "") {
+    setKlayAction(null);
+    setDraftSeedMemo(seedMemo);
+    setDraftOpen(true);
+  }
+  function handleSaveDraft(je) {
+    addJournalEntry(je);
+    setDraftOpen(false);
+    setDraftSeedMemo("");
+    selectTab("draft");
+    showToast(`${je.je_number} saved as draft`);
   }
 
   const tasks = useMemo(() => computeJournalTasks(allRows, insightsRole), [allRows, insightsRole]);
@@ -809,7 +827,8 @@ export default function JournalEntryPage() {
       setKlayQuery("");
     } else if (intent === "action") {
       console.log("[Klay] action intent:", { query: q, verb: q.match(ACTION_VERB_RE)?.[1]?.toLowerCase() });
-      setKlayAction({ query: q });
+      if (canTransact) openDraft(q);
+      else setKlayAction({ query: q });
       setKlayQuery("");
     } else if (intent === "filter") {
       const parsed = parseKlayFilters(q);
@@ -943,7 +962,12 @@ export default function JournalEntryPage() {
               <h1 className="lg-title">Journal Entry</h1>
             </div>
             <div className="lg-head-actions">
-              <button className="lg-btn-brand" onClick={() => showToast("New Journal Entry — coming soon")}>
+              <button
+                className="lg-btn-brand"
+                disabled={!canTransact}
+                title={canTransact ? "Draft a new journal entry" : "Your role can view journals but not draft them"}
+                onClick={() => canTransact && openDraft()}
+              >
                 <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                 New Journal Entry
               </button>
@@ -1251,6 +1275,30 @@ export default function JournalEntryPage() {
                           {l.credit > 0 && <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, color: "var(--color-action)" }}>Cr {fmtRp(l.credit)}</div>}
                         </div>
                       </div>
+                      {(() => {
+                        const acct = COA_BY_CODE[l.account_code];
+                        const keys = dimensionsForAccount(acct);
+                        if (keys.length === 0) return null;
+                        const simulated = !l.dimensions;
+                        return (
+                          <div className="je-line-dims">
+                            {keys.map((k) => {
+                              const dim = DIM_BY_KEY[k];
+                              if (!dim) return null;
+                              const pal = paletteFor(dim.cls);
+                              const val = l.dimensions?.[k] ?? sampleDimensionValue(k, `${selected.je_number}|${l.account_code}|${k}`);
+                              if (!val) return null;
+                              return (
+                                <span className="je-line-dim" key={k} style={{ background: pal.bg, color: pal.fg }}>
+                                  <span className="je-line-dim-k">{dim.label}</span>
+                                  <span className="je-line-dim-v">{val}</span>
+                                </span>
+                              );
+                            })}
+                            {simulated && <span className="je-line-dim-sim" title="Illustrative values — this entry predates per-line dimension tagging">simulated</span>}
+                          </div>
+                        );
+                      })()}
                     </div>
                   ))}
                 </div>
@@ -1388,6 +1436,14 @@ export default function JournalEntryPage() {
       />
 
       <KlayActionModal intent={klayAction} onClose={() => setKlayAction(null)} />
+      <DraftJournalModal
+        open={draftOpen}
+        intentQuery={draftSeedMemo}
+        nextJeNumber={peekNextJeNumber()}
+        createdBy={user?.name}
+        onClose={() => { setDraftOpen(false); setDraftSeedMemo(""); }}
+        onSave={handleSaveDraft}
+      />
 
       <ReconReviewModal
         open={reconReviewOpen}
