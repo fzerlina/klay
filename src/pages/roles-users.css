@@ -1,0 +1,146 @@
+/* ── Roles & Users (Access settings) ─────────────────────────────────── */
+
+.roles-page .lg-empty,
+.users-page .lg-empty{padding:30px 24px;text-align:center;font-size:12.5px;color:var(--color-text-tertiary);font-style:italic}
+
+.ru-inline-link{color:var(--color-action);text-decoration:none;font-weight:500}
+.ru-inline-link:hover{text-decoration:underline}
+
+/* Section headers */
+.ru-section-hdr{display:flex;align-items:baseline;gap:8px;padding:0 32px;margin-top:22px;margin-bottom:12px}
+.ru-section-title{font-size:11px;font-weight:700;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:.1em}
+.ru-section-cnt{font-size:11px;color:var(--color-text-tertiary);font-family:var(--font-mono)}
+
+/* Role / control dot */
+.ru-role-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;display:inline-block}
+.ru-role-dot.control{background:var(--color-brand)}
+.ru-role-dot.op{background:var(--color-action)}
+
+/* ── Role cards ──────────────────────────────────────────────────────── */
+.ru-role-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;padding:0 32px}
+.ru-role-card{text-align:left;display:flex;flex-direction:column;gap:6px;padding:14px 16px;background:var(--color-surface-raised);border:1px solid var(--color-border-default);border-radius:var(--radius-md);cursor:pointer;transition:border-color var(--transition-fast),box-shadow var(--transition-fast);font-family:var(--font-sans)}
+.ru-role-card:hover{border-color:var(--color-text-tertiary)}
+.ru-role-card.active{border-color:var(--color-action);box-shadow:0 0 0 3px rgba(26,70,200,.08)}
+.ru-role-card-top{display:flex;align-items:center;gap:8px}
+.ru-role-name{font-size:14px;font-weight:700;color:var(--color-text-primary)}
+.ru-badge-system{margin-left:auto;font-size:8.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--color-text-tertiary);background:var(--color-surface-sunken);border:1px solid var(--color-border-default);border-radius:var(--radius-full);padding:2px 7px}
+.ru-role-en{font-size:11px;color:var(--color-text-tertiary);font-style:italic;margin-top:-3px}
+.ru-role-desc{font-size:12px;line-height:1.5;color:var(--color-text-secondary);font-weight:300;margin:0;flex:1}
+.ru-role-card-foot{display:flex;justify-content:space-between;gap:10px;padding-top:8px;border-top:1px solid var(--color-border-subtle);font-size:11px;color:var(--color-text-tertiary)}
+.ru-role-card-foot strong{color:var(--color-text-primary);font-weight:600}
+
+/* ── Permission matrix ───────────────────────────────────────────────── */
+.ru-matrix-wrap{padding:0 32px;overflow-x:auto}
+.ru-matrix{border-collapse:separate;border-spacing:3px;width:100%;font-size:11px}
+.ru-matrix th{font-weight:700;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.04em;font-size:9.5px;padding:6px 8px;text-align:center;white-space:nowrap}
+.ru-matrix-corner{text-align:left!important;color:var(--color-text-tertiary)}
+.ru-matrix-rowhead{text-align:left!important;font-size:11.5px!important;font-weight:600!important;color:var(--color-text-primary)!important;text-transform:none!important;letter-spacing:0!important;white-space:nowrap;display:flex;align-items:center;gap:7px;padding-right:14px!important}
+.ru-matrix tbody tr{transition:opacity var(--transition-fast)}
+.ru-matrix-dim{opacity:.32}
+.ru-matrix td{text-align:center}
+
+/* Level pills — intensity scale */
+.ru-lvl{display:inline-block;min-width:60px;padding:4px 8px;border-radius:var(--radius-sm);font-size:10px;font-weight:600;letter-spacing:.02em;border:1px solid transparent}
+.ru-lvl-none{background:transparent;color:var(--color-text-tertiary);border-color:var(--color-border-subtle)}
+.ru-lvl-view{background:var(--color-surface-sunken);color:var(--color-text-secondary);border-color:var(--color-border-default)}
+.ru-lvl-transact{background:#E9EEFB;color:#1A46C8;border-color:#BFD0F4}
+.ru-lvl-approve{background:var(--warning-surface);color:var(--warning-text);border-color:var(--warning-border)}
+.ru-lvl-post{background:#F0ECFB;color:#5B3FB5;border-color:#D6C9F0}
+.ru-lvl-approvepost{background:#EBE5FA;color:#4A2DA8;border-color:#C8B6EE;font-weight:700}
+.ru-lvl-full{background:var(--success-surface);color:var(--success-text);border-color:var(--success-border);font-weight:700}
+
+.ru-matrix-legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:14px;padding-top:12px;border-top:1px solid var(--color-border-subtle)}
+.ru-legend-item{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--color-text-secondary)}
+.ru-legend-swatch{min-width:0;width:16px;height:16px;padding:0}
+
+/* ── Segregation of Duties (Roles page display) ──────────────────────── */
+.ru-sod-intro{padding:0 32px;font-size:12.5px;line-height:1.55;color:var(--color-text-secondary);font-weight:300;max-width:760px;margin:0 0 14px}
+.ru-hard-txt{color:var(--danger-text)}
+.ru-soft-txt{color:var(--warning-text)}
+.ru-sod-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:0 32px 8px}
+.ru-sod-col{display:flex;flex-direction:column;gap:10px}
+.ru-sod-col-hdr{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px}
+.ru-sod-chip{font-size:9px;font-weight:800;letter-spacing:.08em;padding:2px 7px;border-radius:var(--radius-full);color:#fff}
+.ru-sod-chip.hard{background:var(--danger-text)}
+.ru-sod-chip.soft{background:var(--warning-text)}
+.ru-sod-card{padding:12px 14px;border-radius:var(--radius-md);border:1px solid}
+.ru-sod-card.hard{background:var(--danger-surface);border-color:var(--danger-border)}
+.ru-sod-card.soft{background:var(--warning-surface);border-color:var(--warning-border)}
+.ru-sod-pair{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:7px}
+.ru-sod-role{font-size:11.5px;font-weight:700;color:var(--color-text-primary);background:var(--color-surface-raised);border:1px solid var(--color-border-default);border-radius:var(--radius-sm);padding:2px 8px}
+.ru-sod-mod{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--color-text-tertiary);margin-left:auto}
+.ru-sod-reason{font-size:11.5px;line-height:1.5;color:var(--color-text-secondary);margin:0}
+
+/* ── Users table ─────────────────────────────────────────────────────── */
+.users-page .lg-card.lg-table-users .lg-col-header.ru-users-cols,
+.users-page .lg-row.ru-users-cols{grid-template-columns:1fr 280px 120px 180px}
+
+.ru-user-cell{display:flex;align-items:center;gap:10px;min-width:0}
+.ru-user-av{width:32px;height:32px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;background:var(--color-action)}
+.ru-user-id{display:flex;flex-direction:column;min-width:0}
+.ru-user-name{font-size:13px;font-weight:600;color:var(--color-text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ru-user-email{font-size:11px;color:var(--color-text-tertiary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.ru-user-roles{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.ru-role-chip{font-size:10.5px;font-weight:500;color:var(--color-text-secondary);background:var(--color-surface-sunken);border:1px solid var(--color-border-default);border-radius:var(--radius-full);padding:2px 8px;white-space:nowrap}
+.ru-role-chip-btn{font-family:var(--font-sans);cursor:pointer;transition:border-color var(--transition-fast),color var(--transition-fast),background var(--transition-fast)}
+.ru-role-chip-btn:hover{border-color:var(--color-action);color:var(--color-action);background:#E9EEFB}
+
+/* Role-detail drawer: module permission list */
+.rd-perm-list{display:flex;flex-direction:column;border:1px solid var(--color-border-subtle);border-radius:var(--radius-sm);overflow:hidden}
+.rd-perm-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 12px;border-bottom:1px solid var(--color-border-subtle)}
+.rd-perm-row:last-child{border-bottom:none}
+.rd-perm-row:nth-child(even){background:var(--color-surface-sunken)}
+.rd-perm-mod{font-size:12.5px;color:var(--color-text-primary)}
+/* Users table filter selects (sit beside the search box) */
+.ru-filter-select{font-family:var(--font-sans);font-size:12px;color:var(--color-text-primary);background:var(--color-surface-sunken);border:1px solid var(--color-border-default);border-radius:var(--radius-sm);padding:6px 9px;outline:none;cursor:pointer;transition:border-color var(--transition-fast)}
+.ru-filter-select:focus{border-color:var(--color-action)}
+.ru-filter-clear{font-family:var(--font-sans);font-size:12px;color:var(--color-action);background:transparent;border:none;cursor:pointer;padding:6px 4px;font-weight:600}
+.ru-filter-clear:hover{text-decoration:underline}
+
+/* Account lifecycle actions inside the user drawer */
+.ru-acct-actions{display:flex;flex-wrap:wrap;gap:8px}
+.ru-acct-btn{display:inline-flex;align-items:center;gap:7px;font-family:var(--font-sans);font-size:12px;font-weight:600;padding:8px 12px;border-radius:var(--radius-sm);background:var(--color-surface-raised);border:1px solid var(--color-border-default);color:var(--color-text-secondary);cursor:pointer;transition:all var(--transition-fast)}
+.ru-acct-btn:hover{border-color:var(--color-text-tertiary)}
+.ru-acct-btn svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.6}
+.ru-acct-btn.danger{color:var(--danger-text);border-color:var(--danger-border)}
+.ru-acct-btn.danger:hover{background:var(--danger-surface);border-color:var(--danger-text)}
+
+.ru-sod-ico{display:inline-flex;align-items:center;justify-content:center;cursor:help}
+.ru-sod-ico svg{width:15px;height:15px;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ru-sod-ico.soft svg{stroke:var(--warning-text)}
+.ru-sod-ico.hard svg{stroke:var(--danger-text)}
+
+.ru-status{display:inline-flex;align-items:center;font-size:10px;font-weight:700;letter-spacing:.04em;padding:2px 9px;border-radius:var(--radius-full);border:1px solid;text-transform:uppercase}
+.ru-status.active{background:var(--success-surface);color:var(--success-text);border-color:var(--success-border)}
+.ru-status.invited{background:#E9EEFB;color:#1A46C8;border-color:#BFD0F4}
+.ru-status.inactive{background:var(--color-surface-sunken);color:var(--color-text-tertiary);border-color:var(--color-border-default)}
+
+/* ── Drawer: role checkboxes + SoD banners ───────────────────────────── */
+.ru-role-checks{display:flex;flex-direction:column;gap:6px}
+.ru-role-check{display:flex;align-items:flex-start;gap:10px;padding:9px 11px;border:1px solid var(--color-border-default);border-radius:var(--radius-md);cursor:pointer;transition:border-color var(--transition-fast),background var(--transition-fast)}
+.ru-role-check:hover{border-color:var(--color-text-tertiary)}
+.ru-role-check.on{border-color:var(--color-action);background:#F5F8FE}
+.ru-role-check input{position:absolute;opacity:0;width:0;height:0}
+.ru-role-check-box{width:16px;height:16px;flex-shrink:0;margin-top:1px;border:1.5px solid var(--color-border-default);border-radius:4px;background:var(--color-surface-raised);display:flex;align-items:center;justify-content:center;transition:all var(--transition-fast)}
+.ru-role-check-box svg{width:11px;height:11px;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;opacity:0}
+.ru-role-check.on .ru-role-check-box{background:var(--color-action);border-color:var(--color-action)}
+.ru-role-check.on .ru-role-check-box svg{opacity:1}
+.ru-role-check-body{display:flex;flex-direction:column;gap:1px;min-width:0}
+.ru-role-check-name{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:var(--color-text-primary)}
+.ru-role-check-desc{font-size:10.5px;color:var(--color-text-tertiary);font-style:italic}
+
+.ru-sod-banner{margin:14px 0 0;padding:12px 14px;border-radius:var(--radius-md);border:1px solid}
+.ru-sod-banner.hard{background:var(--danger-surface);border-color:var(--danger-border)}
+.ru-sod-banner.soft{background:var(--warning-surface);border-color:var(--warning-border)}
+.ru-sod-banner-hdr{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700;margin-bottom:6px}
+.ru-sod-banner.hard .ru-sod-banner-hdr{color:var(--danger-text)}
+.ru-sod-banner.soft .ru-sod-banner-hdr{color:var(--warning-text)}
+.ru-sod-banner-hdr svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;flex-shrink:0}
+.ru-sod-banner p{font-size:12px;line-height:1.5;color:var(--color-text-secondary);margin:0}
+.ru-sod-banner-note{margin-top:6px!important;font-weight:600;color:var(--danger-text)!important}
+.ru-sod-banner textarea{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary);background:var(--color-surface-raised);border:1px solid var(--color-border-default);border-radius:var(--radius-sm);padding:8px 10px;outline:none;width:100%;resize:vertical;transition:border-color var(--transition-fast)}
+.ru-sod-banner textarea:focus{border-color:var(--color-action);box-shadow:0 0 0 3px rgba(26,70,200,.08)}
+
+.users-page .drawer-btn[disabled]{opacity:.5;cursor:not-allowed}
+.users-page .drawer-btn.primary[disabled]:hover{background:var(--color-action)}

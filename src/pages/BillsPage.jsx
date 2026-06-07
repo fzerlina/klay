@@ -14,6 +14,7 @@ import {
 } from "../lib/billStatus";
 import { useBills } from "../state/BillsContext";
 import { useClosePeriod } from "../state/ClosePeriodContext";
+import { useCurrentUser } from "../state/CurrentUserContext";
 import AiChatDrawer, { SparkleIcon as DrawerSparkle } from "./AiChatDrawer";
 import SummaryDrawer from "./SummaryDrawer";
 import { computeBillsInsights, makeBillsAiContext } from "./ai-bills-context";
@@ -155,7 +156,7 @@ function BpAnomalyDot({ anomalies }) {
   return <span className={`bp-anom-dot sev-${top.severity}`} title={title} aria-label={title} />;
 }
 
-function LedgerRow({ r, bucket, isChecked, onCheck, onClick, onKebab, isSelected, isAlt, onIdHover, onIdLeave, onVendorHover, onVendorLeave, showAgingBar }) {
+function LedgerRow({ r, bucket, isChecked, onCheck, onClick, onKebab, isSelected, isAlt, onIdHover, onIdLeave, onVendorHover, onVendorLeave, showAgingBar, showKebab = true }) {
   const isOverdue = r.pay === "overdue" && r.daysOverdue > 0;
   const isPaid = r.pay === "paid";
   const ws = workflowStatus(r.raw);
@@ -230,50 +231,59 @@ function LedgerRow({ r, bucket, isChecked, onCheck, onClick, onKebab, isSelected
         <span className="lg-cell-total-rp">Rp</span>{fmtRp(r.total)}
       </div>
       <div className="lg-cell-kebab" onClick={(e) => e.stopPropagation()}>
-        <button className="lg-kebab" onClick={() => onKebab(r.id)}>
-          <svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg>
-        </button>
+        {showKebab && (
+          <button className="lg-kebab" onClick={() => onKebab(r.id)}>
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg>
+          </button>
+        )}
       </div>
     </div>
   );
 }
 
-function RowMenu({ inv, onClose, onAction }) {
+function RowMenu({ inv, onClose, onAction, canTransact = true, canApprove = true }) {
   const ref = useRef(null);
   useEffect(() => {
     const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
   }, [onClose]);
-  const canApprove = inv.approval === "review" || inv.approval === "draft";
-  const canPay = inv.approval === "approved" && inv.pay !== "paid";
+  // State allows the action AND the role is permitted to perform it.
+  const showApprove = (inv.approval === "review" || inv.approval === "draft") && canApprove;
+  const showPay = inv.approval === "approved" && inv.pay !== "paid" && canApprove;
   return (
     <div className="row-menu" ref={ref} onClick={(e) => e.stopPropagation()}>
-      <div className="row-menu-item" onClick={() => onAction("edit", inv)}>
-        <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-        Edit
-      </div>
-      {canApprove && (
+      {canTransact && (
+        <div className="row-menu-item" onClick={() => onAction("edit", inv)}>
+          <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          Edit
+        </div>
+      )}
+      {showApprove && (
         <div className="row-menu-item" onClick={() => onAction("approve", inv)}>
           <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
           Approve
         </div>
       )}
-      {canPay && (
+      {showPay && (
         <div className="row-menu-item" onClick={() => onAction("pay", inv)}>
           <svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
           Record Payment
         </div>
       )}
-      <div className="row-menu-item" onClick={() => onAction("duplicate", inv)}>
-        <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-        Duplicate
-      </div>
-      <div className="row-menu-sep" />
-      <div className="row-menu-item danger" onClick={() => onAction("archive", inv)}>
-        <svg viewBox="0 0 24 24"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
-        Archive
-      </div>
+      {canTransact && (
+        <div className="row-menu-item" onClick={() => onAction("duplicate", inv)}>
+          <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+          Duplicate
+        </div>
+      )}
+      {canTransact && <div className="row-menu-sep" />}
+      {canTransact && (
+        <div className="row-menu-item danger" onClick={() => onAction("archive", inv)}>
+          <svg viewBox="0 0 24 24"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+          Archive
+        </div>
+      )}
     </div>
   );
 }
@@ -434,7 +444,7 @@ function FilterPopover({ values, onChange, vendors: vendorList, anomalyOnly, onA
   );
 }
 
-function BillsSummaryCard({ insights, onOpenSummary, onAskAboutInsight, summaryActive }) {
+function BillsSummaryCard({ insights, onOpenSummary, onAskAboutInsight, summaryActive, eyebrow = "Your Tasks" }) {
   // No auto-rotation — SME feedback. The FM wants to read each task at their
   // own pace and explicitly step between them. Numbered pager + prev/next.
   const [idx, setIdx] = useState(0);
@@ -452,7 +462,7 @@ function BillsSummaryCard({ insights, onOpenSummary, onAskAboutInsight, summaryA
     <div className="bp-kpi-card bp-kpi-summary">
       <div className="bp-kpi-summary-top">
         <div className="bp-kpi-summary-eyebrow">
-          <SparkleIcon size={12} /> YOUR TASKS
+          <SparkleIcon size={12} /> {eyebrow.toUpperCase()}
         </div>
         <button
           type="button"
@@ -572,6 +582,9 @@ function BillsAiSearchPanel({ search, rows }) {
 
 export default function BillsPage() {
   const navigate = useNavigate();
+  const { hasLevel } = useCurrentUser();
+  const canCreate = hasLevel("ap", "transact");
+  const canApprove = hasLevel("ap", "approve+post");
   const { bills } = useBills();
   const { closedThrough } = useClosePeriod();
   const [search, setSearch] = useState("");
@@ -668,7 +681,10 @@ export default function BillsPage() {
     ];
   }, [monthPfx]);
 
-  const insights = useMemo(() => computeBillsInsights(bills, closedThrough), [bills, closedThrough]);
+  // "Your Tasks" rail is role-scoped: FM/Admin see the supervisory queue,
+  // AP Staff see their prep queue, View Only sees read-only analytics.
+  const insightsRole = canApprove ? "operator" : canCreate ? "preparer" : "viewer";
+  const insights = useMemo(() => computeBillsInsights(bills, closedThrough, insightsRole), [bills, closedThrough, insightsRole]);
   const aiContext = useMemo(() => makeBillsAiContext(bills), [bills]);
 
   // ── New Bills summary stats (for SUMMARY + Perlu Dibayar / Pending Review / Draft / AP Outstanding cards)
@@ -1094,7 +1110,12 @@ export default function BillsPage() {
                   </div>
                 )}
               </div>
-              <button className="lg-btn-brand" onClick={() => navigate("/bills/new")}>
+              <button
+                className="lg-btn-brand"
+                disabled={!canCreate}
+                title={canCreate ? undefined : "Your role can't create bills"}
+                onClick={() => canCreate && navigate("/bills/new")}
+              >
                 <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                 Create Bill
               </button>
@@ -1108,21 +1129,26 @@ export default function BillsPage() {
                 onOpenSummary={() => setSummaryOpen(true)}
                 onAskAboutInsight={handleSummaryAction}
                 summaryActive={summaryOpen}
+                eyebrow={insightsRole === "viewer" ? "AP Insights" : "Your Tasks"}
               />
 
-              <div className="bp-kpi-card">
-                <div className="bp-kpi-lbl">Due for Payment</div>
-                <div className="bp-kpi-val">{billStats.perluDibayarCount} · {formatRupiah(billStats.perluDibayarSum)}</div>
-                <div className="bp-kpi-sub">Make payment now</div>
-                <button type="button" className="bp-kpi-cta" onClick={() => selectCard("perluDibayar")}>View →</button>
-              </div>
+              {canApprove && (
+                <div className="bp-kpi-card">
+                  <div className="bp-kpi-lbl">Due for Payment</div>
+                  <div className="bp-kpi-val">{billStats.perluDibayarCount} · {formatRupiah(billStats.perluDibayarSum)}</div>
+                  <div className="bp-kpi-sub">Make payment now</div>
+                  <button type="button" className="bp-kpi-cta" onClick={() => selectCard("perluDibayar")}>View →</button>
+                </div>
+              )}
 
-              <div className="bp-kpi-card">
-                <div className="bp-kpi-lbl">Pending Review</div>
-                <div className="bp-kpi-val">{billStats.reviewCount} · {formatRupiah(billStats.reviewSum)}</div>
-                <div className="bp-kpi-sub">Review and approve</div>
-                <button type="button" className="bp-kpi-cta" onClick={() => selectTab("review")}>View →</button>
-              </div>
+              {canApprove && (
+                <div className="bp-kpi-card">
+                  <div className="bp-kpi-lbl">Pending Review</div>
+                  <div className="bp-kpi-val">{billStats.reviewCount} · {formatRupiah(billStats.reviewSum)}</div>
+                  <div className="bp-kpi-sub">Review and approve</div>
+                  <button type="button" className="bp-kpi-cta" onClick={() => selectTab("review")}>View →</button>
+                </div>
+              )}
 
               <div className="bp-kpi-card">
                 <div className="bp-kpi-lbl">Draft</div>
@@ -1287,10 +1313,11 @@ export default function BillsPage() {
                               onVendorHover={onVendorHover}
                               onVendorLeave={onVendorLeave}
                               showAgingBar={onJatuhTempo}
+                              showKebab={canCreate}
                             />
                             {menuOpenFor === r.id && (
                               <div style={{ position: "absolute", right: 32, top: 32, zIndex: 5 }}>
-                                <RowMenu inv={r.raw} onClose={() => setMenuOpenFor(null)} onAction={onRowAction} />
+                                <RowMenu inv={r.raw} onClose={() => setMenuOpenFor(null)} onAction={onRowAction} canTransact={canCreate} canApprove={canApprove} />
                               </div>
                             )}
                           </div>
@@ -1324,10 +1351,11 @@ export default function BillsPage() {
                           onVendorHover={onVendorHover}
                           onVendorLeave={onVendorLeave}
                           showAgingBar={onJatuhTempo}
+                          showKebab={canCreate}
                         />
                         {menuOpenFor === r.id && (
                           <div style={{ position: "absolute", right: 32, top: 32, zIndex: 5 }}>
-                            <RowMenu inv={r.raw} onClose={() => setMenuOpenFor(null)} onAction={onRowAction} />
+                            <RowMenu inv={r.raw} onClose={() => setMenuOpenFor(null)} onAction={onRowAction} canTransact={canCreate} canApprove={canApprove} />
                           </div>
                         )}
                       </div>
@@ -1346,7 +1374,7 @@ export default function BillsPage() {
           <span><span className="lg-footer-num">{checked.size}</span> selected</span>
           {checked.size > 0 ? (
             <>
-              <button className="lg-footer-bulk-btn" onClick={() => onBulk("approve")}>Approve</button>
+              {canApprove && <button className="lg-footer-bulk-btn" onClick={() => onBulk("approve")}>Approve</button>}
               <button className="lg-footer-clear" onClick={clearChecks}>Clear selection</button>
             </>
           ) : (

@@ -190,6 +190,9 @@
 .accrual-action-tertiary{font-family:var(--font-sans);font-size:11.5px;font-weight:500;padding:6px 10px;border-radius:var(--radius-sm);cursor:pointer;background:transparent;border:none;color:var(--color-text-tertiary);transition:color var(--transition-fast)}
 .accrual-action-tertiary:hover{color:var(--color-text-primary)}
 
+.accrual-card-readonly-note{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--color-text-tertiary);font-style:italic;padding-top:12px;border-top:1px dashed var(--color-border-subtle);line-height:1.4}
+.accrual-card-readonly-note svg{color:var(--color-brand);stroke:currentColor;fill:none;stroke-width:1.7;flex-shrink:0}
+
 .accrual-empty{display:flex;align-items:center;gap:8px;padding:16px;background:var(--color-success-surface);border:1px solid var(--color-success-border);border-radius:10px;font-size:12.5px;color:var(--color-success-text);grid-column:1/-1}
 .accrual-empty svg{color:var(--color-success-text);flex-shrink:0}
 

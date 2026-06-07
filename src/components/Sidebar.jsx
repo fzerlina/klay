@@ -1,22 +1,112 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { NavLink } from "react-router-dom";
+import { useCurrentUser, PERSONAS } from "../state/CurrentUserContext";
+import { ROLES } from "../data/seed/roles";
+
+function initials(name) {
+  if (!name) return "?";
+  return name.trim().split(/\s+/).map((w) => w[0] || "").join("").slice(0, 2).toUpperCase();
+}
+
+function primaryRoleLabel(roleKeys = []) {
+  const names = roleKeys.map((k) => ROLES.find((r) => r.key === k)?.name || k);
+  if (names.length === 0) return "No role";
+  if (names.length === 1) return names[0];
+  return `${names[0]} +${names.length - 1}`;
+}
+
+// Sidebar footer control to switch the active demo persona. Flipping it re-runs
+// every can()/level() gate in the app so the nav and views change per role.
+function PersonaSwitcher({ collapsed }) {
+  const { user, setUserId } = useCurrentUser();
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  return (
+    <div className="sb-persona-wrap" ref={ref}>
+      {open && (
+        <div className="sb-persona-menu">
+          <div className="sb-persona-menu-hdr">Viewing as</div>
+          {PERSONAS.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              className={`sb-persona-opt${p.id === user.id ? " active" : ""}`}
+              onClick={() => { setUserId(p.id); setOpen(false); }}
+            >
+              <span className="sb-av">{initials(p.name)}</span>
+              <span className="sb-persona-opt-body">
+                <span className="sb-persona-opt-name">{p.name}</span>
+                <span className="sb-persona-opt-role">{primaryRoleLabel(p.roleKeys)}</span>
+              </span>
+              {p.id === user.id && (
+                <svg className="sb-persona-check" viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3" /></svg>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+      <button
+        type="button"
+        className={`sb-profile sb-persona-trigger${open ? " open" : ""}`}
+        title={collapsed ? `Viewing as ${user.name} · ${primaryRoleLabel(user.roleKeys)}` : undefined}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <span className="sb-av">{initials(user.name)}</span>
+        {!collapsed && (
+          <span className="sb-persona-id">
+            <span className="sb-persona-eyebrow">Viewing as</span>
+            <span className="sb-profile-name">{user.name}</span>
+            <span className="sb-profile-role">{primaryRoleLabel(user.roleKeys)}</span>
+          </span>
+        )}
+        {!collapsed && (
+          <svg className="sb-persona-caret" viewBox="0 0 12 12"><polyline points="3 5 6 8 9 5" /></svg>
+        )}
+      </button>
+    </div>
+  );
+}
+
+// Representative demo gate counts (fresh load). Global = AP 2/5 + AR 4/5 + GL 2/3.
+const CLOSE_GLOBAL = { green: 8, total: 13 };
+const CLOSE_MODULE_GATES = {
+  ap: { green: 2, total: 5, label: "AP" },
+  ar: { green: 4, total: 5, label: "AR" },
+  gl: { green: 2, total: 3, label: "GL" },
+};
 
 // Close hero card pinned at the top of the sidebar (above the Overview section).
-// Reinforces Klay's 0-day-closing USP and gives the FM a constant signal of
-// where the close stands without leaving any page. The gate count is a
-// representative default for the demo (8 of 13 gates green at fresh load —
-// AP 2/5 + AR 4/5 + GL 2/3); the Close Command Center page is the live source.
+// Reinforces Klay's 0-day-closing USP and gives a constant signal of where the
+// close stands without leaving any page. Scope is role-aware: close owners
+// (FM/Admin) supervise the whole period → global 8/13. A single-module operator
+// (e.g. AP Staff) sees only their module's gates — the part of the close they
+// actually move. View-only / multi-module non-owners fall back to global. The
+// Close Command Center page is the live source.
 function CloseHeroCard({ collapsed }) {
-  const green = 8;
-  const total = 13;
+  const { hasLevel } = useCurrentUser();
+  const isCloseOwner = hasLevel("ap", "approve+post");
+  const operated = isCloseOwner ? [] : ["ap", "ar", "gl"].filter((m) => hasLevel(m, "transact"));
+  const scope = operated.length === 1 ? CLOSE_MODULE_GATES[operated[0]] : null;
+  const { green, total } = scope || CLOSE_GLOBAL;
+
   const R = 13;
   const C = 2 * Math.PI * R;
   const greenLen = total ? (green / total) * C : 0;
   const pct = total ? Math.round((green / total) * 100) : 0;
+  const scopeLabel = scope ? `${scope.label} close` : "April Close";
+  const subText = scope ? `${scope.label}: ${green} of ${total} gates green` : `${green} of ${total} gates green`;
   return (
     <NavLink
       to="/close"
-      title={collapsed ? `April Close · ${green} of ${total} gates green` : undefined}
+      title={collapsed ? `${scopeLabel} · ${subText}` : undefined}
       className={({ isActive }) => `sb-close-hero${isActive ? " active" : ""}${collapsed ? " collapsed" : ""}`}
     >
       <span className="sb-close-hero-ring" aria-label={`${green} of ${total} gates green (${pct}%)`}>
@@ -35,8 +125,8 @@ function CloseHeroCard({ collapsed }) {
       </span>
       {!collapsed && (
         <span className="sb-close-hero-body">
-          <span className="sb-close-hero-title">April Close</span>
-          <span className="sb-close-hero-sub">{green} of {total} gates green</span>
+          <span className="sb-close-hero-title">{scopeLabel}</span>
+          <span className="sb-close-hero-sub">{subText}</span>
         </span>
       )}
     </NavLink>
@@ -60,16 +150,19 @@ const navSections = [
       {
         label: "Bills",
         to: "/bills",
+        module: "ap",
         icon: <svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>,
       },
       {
         label: "AP Aging",
         to: "/ap-aging",
+        module: "ap",
         icon: <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
       },
       {
         label: "Vendors",
         to: "/vendors",
+        module: "ap",
         icon: <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
       },
     ],
@@ -80,11 +173,13 @@ const navSections = [
       {
         label: "Invoices",
         to: "/invoices",
+        module: "ar",
         icon: <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>,
       },
       {
         label: "Customers",
         to: "/customers",
+        module: "ar",
         icon: <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>,
       },
     ],
@@ -95,16 +190,19 @@ const navSections = [
       {
         label: "General Ledger",
         to: "/general-ledger",
+        module: "gl",
         icon: <svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>,
       },
       {
         label: "Journal Entry",
         to: "/journal-entry",
+        module: "gl",
         icon: <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>,
       },
       {
         label: "Bank Reconciliation",
         to: "/bank-reconciliation",
+        module: "gl",
         icon: <svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><path d="M6 15h4M14 15h4"/></svg>,
       },
     ],
@@ -115,11 +213,13 @@ const navSections = [
       {
         label: "Trial Balance",
         to: "/trial-balance",
+        module: "reports",
         icon: <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>,
       },
       {
         label: "P&L",
         to: "/pl",
+        module: "reports",
         icon: <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/></svg>,
       },
     ],
@@ -130,40 +230,26 @@ const settingsSections = [
   {
     key: "accounting",
     label: "Accounting",
+    module: "settings",
     icon: <svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>,
     items: [
       { label: "Chart of accounts", to: "/chart-of-accounts" },
       { label: "Bank accounts", to: "/bank-accounts" },
       { label: "Dimensions", to: "/dimensions" },
+      { label: "Tax codes" },
+      { label: "Tax rates" },
       { label: "Fiscal year" },
       { label: "Currency" },
     ],
   },
   {
-    key: "tax",
-    label: "Tax",
-    icon: <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/></svg>,
-    items: [
-      { label: "Tax codes" },
-      { label: "Tax rates" },
-    ],
-  },
-  {
     key: "access",
     label: "Access",
+    module: "settings",
     icon: <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
     items: [
-      { label: "Roles" },
-      { label: "Users" },
-    ],
-  },
-  {
-    key: "integration",
-    label: "Integration",
-    icon: <svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>,
-    items: [
-      { label: "Bank feed" },
-      { label: "Document inbox" },
+      { label: "Users", to: "/users" },
+      { label: "Access policy", to: "/access-policy" },
     ],
   },
 ];
@@ -234,12 +320,19 @@ function readInitialCollapsed() {
 export default function Sidebar() {
   const [open, setOpen] = useState({});
   const [collapsed, setCollapsed] = useState(readInitialCollapsed);
+  const { can } = useCurrentUser();
 
   useEffect(() => {
     try { window.localStorage.setItem(STORAGE_KEY, String(collapsed)); } catch (_) {}
   }, [collapsed]);
 
   const toggle = (key) => setOpen((prev) => ({ ...prev, [key]: !prev[key] }));
+
+  // Only show nav items the current persona can reach; drop sections left empty.
+  const visibleNav = navSections
+    .map((s) => ({ ...s, items: s.items.filter((it) => can(it.module)) }))
+    .filter((s) => s.items.length > 0);
+  const visibleSettings = settingsSections.filter((s) => can(s.module));
 
   return (
     <nav className={`sb${collapsed ? " collapsed" : ""}`}>
@@ -283,7 +376,7 @@ export default function Sidebar() {
 
         <CloseHeroCard collapsed={collapsed} />
 
-        {navSections.map(({ section, items }, sIdx) => (
+        {visibleNav.map(({ section, items }, sIdx) => (
           <div key={section}>
             <div className="sb-section">{section}</div>
             {sIdx > 0 && <div className="sb-rail-divider" />}
@@ -302,10 +395,10 @@ export default function Sidebar() {
           </div>
         ))}
 
-        {!collapsed && (
+        {!collapsed && visibleSettings.length > 0 && (
           <>
             <div className="sb-section">Settings</div>
-            {settingsSections.map(({ key, label, icon, items }) => (
+            {visibleSettings.map(({ key, label, icon, items }) => (
               <div key={key}>
                 <div className="sn-item" onClick={() => toggle(key)}>
                   {icon}
@@ -345,15 +438,7 @@ export default function Sidebar() {
         )}
 
         <div className="sb-bottom">
-          <div className="sb-profile" title={collapsed ? "Sarah Wijaya · PT Sejahtera Makmur" : undefined}>
-            <div className="sb-av">SW</div>
-            {!collapsed && (
-              <div>
-                <div className="sb-profile-name">Sarah Wijaya</div>
-                <div className="sb-profile-role">PT Sejahtera Makmur</div>
-              </div>
-            )}
-          </div>
+          <PersonaSwitcher collapsed={collapsed} />
         </div>
       </div>
     </nav>

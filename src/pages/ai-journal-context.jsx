@@ -128,6 +128,201 @@ export function computeJournalInsights(entries) {
   return insights;
 }
 
+// ── "Your Tasks" rail (mirrors computeBillsInsights / computeInvoiceTasks) ──
+// `rows` are the derived JE rows (status may be auto/anomaly; debit/credit
+// pre-summed). `role` scopes the queue, same contract as the other ledgers:
+//   "operator" — FM/Admin: approval + supervisory queue
+//   "preparer" — Bookkeeper: their prep queue (anomalies, AI drafts, drafts to post)
+//   "viewer"   — view-only roles: read-only GL analytics, no action framing
+// Each task: { id, node (JSX), cta (button label), question (chat seed) }.
+export function computeJournalTasks(rows, role = "operator") {
+  const amt = (r) => (r.debit != null ? r.debit : entryDebit(r));
+  const amtC = (r) => (r.credit != null ? r.credit : entryCredit(r));
+  const sum = (list) => list.reduce((s, r) => s + amt(r), 0);
+
+  const anomalies = rows.filter((r) => r.status === "anomaly");
+  const autoDrafts = rows.filter((r) => r.status === "auto");
+  const drafts = rows.filter((r) => r.status === "draft");
+  const pending = rows.filter((r) => r.status === "pending");
+  const posted = rows.filter((r) => r.status === "posted");
+  const voids = rows.filter((r) => r.status === "void");
+
+  const draftValue = sum(drafts);
+  const pendingValue = sum(pending);
+
+  const totalDebit = rows.reduce((s, r) => s + amt(r), 0);
+  const totalCredit = rows.reduce((s, r) => s + amtC(r), 0);
+  const variance = totalDebit - totalCredit;
+  const isBalanced = Math.abs(variance) < 1;
+
+  const largestPending = pending
+    .map((r) => ({ je: r, amount: amt(r) }))
+    .sort((a, b) => b.amount - a.amount)[0];
+  const largestPosted = posted
+    .map((r) => ({ je: r, amount: amt(r) }))
+    .sort((a, b) => b.amount - a.amount)[0];
+
+  // ── Reusable task/insight builders ──────────────────────────────────────
+  const anomalyTask = anomalies.length > 0 ? {
+    id: "anomaly",
+    node: (
+      <>
+        <strong className="lg-ai-strong">{anomalies.length} journal{anomalies.length === 1 ? "" : "s"}</strong>{" "}
+        flagged by Klay — <span className="lg-ai-danger">review before posting</span>.
+      </>
+    ),
+    cta: "Review",
+    question: "Which journals did Klay flag as anomalies?",
+  } : null;
+
+  const autoTask = autoDrafts.length > 0 ? {
+    id: "auto",
+    node: (
+      <>
+        <strong className="lg-ai-strong">{autoDrafts.length} journal{autoDrafts.length === 1 ? "" : "s"}</strong>{" "}
+        Klay auto-prepared — confirm &amp; post.
+      </>
+    ),
+    cta: "Review",
+    question: "Show me the journals Klay auto-prepared",
+  } : null;
+
+  const draftTask = drafts.length > 0 ? {
+    id: "drafts",
+    node: (
+      <>
+        <strong className="lg-ai-strong">{drafts.length} draft journal{drafts.length === 1 ? "" : "s"}</strong> worth{" "}
+        <strong className="lg-ai-strong">{fmtRpShort(draftValue)}</strong> not yet posted to the GL.
+      </>
+    ),
+    cta: "View",
+    question: "Which journals are drafted but not yet posted?",
+  } : null;
+
+  const pendingTask = pending.length > 0 ? {
+    id: "pending",
+    node: (
+      <>
+        <strong className="lg-ai-strong">{pending.length} journal{pending.length === 1 ? "" : "s"}</strong> worth{" "}
+        <span className="lg-ai-danger">{fmtRpShort(pendingValue)}</span> awaiting your approval.
+      </>
+    ),
+    cta: "Review",
+    question: "Which journals are awaiting approval?",
+  } : null;
+
+  const balanceInsight = rows.length > 0 ? (isBalanced ? {
+    id: "balanced",
+    node: (
+      <>
+        Books <strong className="lg-ai-strong">balanced</strong> — debit = credit{" "}
+        <strong className="lg-ai-strong">{fmtRpShort(totalDebit)}</strong> across {rows.length} entries.
+      </>
+    ),
+    cta: "View",
+    question: "What is the total debit and credit this period?",
+  } : {
+    id: "unbalanced",
+    node: (
+      <>
+        <strong className="lg-ai-strong">GL unbalanced</strong> — variance{" "}
+        <span className="lg-ai-danger">{fmtRpShort(Math.abs(variance))}</span>{" "}
+        ({variance > 0 ? "debit heavier" : "credit heavier"}).
+      </>
+    ),
+    cta: "View",
+    question: "Why is total debit not equal to credit?",
+  }) : null;
+
+  const largestPendingInsight = largestPending ? {
+    id: "largestPending",
+    node: (
+      <>
+        Largest pending journal:{" "}
+        <strong className="lg-ai-strong">{largestPending.je.je_number}</strong>{" "}
+        ({largestPending.je.memo}) worth{" "}
+        <span className="lg-ai-danger">{fmtRpShort(largestPending.amount)}</span>.
+      </>
+    ),
+    cta: "Review",
+    question: "Show the largest pending journal",
+  } : null;
+
+  const largestPostedInsight = largestPosted ? {
+    id: "largestPosted",
+    node: (
+      <>
+        Largest posted journal:{" "}
+        <strong className="lg-ai-strong">{largestPosted.je.je_number}</strong>{" "}
+        ({largestPosted.je.memo}) worth{" "}
+        <strong className="lg-ai-strong">{fmtRpShort(largestPosted.amount)}</strong>.
+      </>
+    ),
+    cta: "View",
+    question: "Show the largest posted journal this period",
+  } : null;
+
+  const voidsInsight = voids.length > 0 ? {
+    id: "voids",
+    node: (
+      <>
+        <strong className="lg-ai-strong">{voids.length} voided journal{voids.length === 1 ? "" : "s"}</strong>{" "}
+        this period — confirm each has an audit trail.
+      </>
+    ),
+    cta: "View",
+    question: "Show voided journals",
+  } : null;
+
+  // ── Bookkeeper (preparer): their prep queue ─────────────────────────────
+  if (role === "preparer") {
+    const prep = [anomalyTask, autoTask, draftTask].filter(Boolean);
+    if (prep.length === 0) {
+      prep.push({
+        id: "empty",
+        node: <>Your journal queue is clear — no flags, AI drafts, or unposted drafts waiting.</>,
+        cta: "View",
+        question: "What's in my journal queue right now?",
+      });
+    }
+    return prep;
+  }
+
+  // ── View-only roles (viewer): read-only GL analytics ────────────────────
+  if (role === "viewer") {
+    const ro = [balanceInsight, largestPostedInsight, voidsInsight].filter(Boolean);
+    if (ro.length === 0) {
+      ro.push({
+        id: "empty",
+        node: <>No journals for this period yet.</>,
+        cta: "View",
+        question: "General journal summary",
+      });
+    }
+    return ro;
+  }
+
+  // ── FM/Admin (operator): approval + supervisory queue (default) ─────────
+  const tasks = [
+    pendingTask,
+    anomalyTask,
+    autoTask,
+    draftTask,
+    balanceInsight,
+    largestPendingInsight,
+    voidsInsight,
+  ].filter(Boolean);
+  if (tasks.length === 0) {
+    tasks.push({
+      id: "empty",
+      node: <>Nothing needs your attention in the GL right now.</>,
+      cta: "View",
+      question: "General journal summary",
+    });
+  }
+  return tasks;
+}
+
 // ── AI chat context ──────────────────────────────────────────────────────
 
 export function makeJournalAiContext(entries) {

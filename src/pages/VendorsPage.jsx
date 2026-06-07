@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { BILLS as bills } from "../data/seed/bills";
 import { useVendors } from "../state/VendorsContext";
+import { useCurrentUser } from "../state/CurrentUserContext";
 import { CAT_LABELS, PPH_LABELS, ACCT_LABELS, DEFTAX_LABELS } from "../data/labels";
 import { TODAY, daysSince } from "../lib/clock";
 import { formatRupiah, formatDate, initials } from "../lib/format";
@@ -65,7 +66,7 @@ function AiSubtitle({ insights, onOpenSummary, onOpenChat, chatActive, summaryAc
   );
 }
 
-function VendorRow({ r, isChecked, onCheck, onClick, onKebab, isSelected, isAlt }) {
+function VendorRow({ r, isChecked, onCheck, onClick, onKebab, isSelected, isAlt, showKebab = true }) {
   const stale = daysSince(r.lastTx) > 60 && r.status === "active";
   const dotTone = r.status === "inactive" ? "muted" : stale ? "warn" : (r.apBalance > 0 ? "" : "success");
   return (
@@ -108,15 +109,17 @@ function VendorRow({ r, isChecked, onCheck, onClick, onKebab, isSelected, isAlt 
         <span className={`status-badge ${r.status}`}>{r.status === "active" ? "Active" : "Inactive"}</span>
       </div>
       <div className="lg-cell-kebab" onClick={(e) => e.stopPropagation()}>
-        <button className="lg-kebab" onClick={() => onKebab(r.id)}>
-          <svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg>
-        </button>
+        {showKebab && (
+          <button className="lg-kebab" onClick={() => onKebab(r.id)}>
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg>
+          </button>
+        )}
       </div>
     </div>
   );
 }
 
-function RowMenu({ vendor, onClose, onAction }) {
+function RowMenu({ vendor, onClose, onAction, canTransact = true }) {
   const ref = useRef(null);
   useEffect(() => {
     const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
@@ -125,34 +128,38 @@ function RowMenu({ vendor, onClose, onAction }) {
   }, [onClose]);
   return (
     <div className="row-menu" ref={ref} onClick={(e) => e.stopPropagation()}>
-      <div className="row-menu-item" onClick={() => onAction("edit", vendor)}>
-        <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-        Edit
-      </div>
-      <div className="row-menu-item" onClick={() => onAction("newBill", vendor)}>
-        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-        New Bill
-      </div>
-      <div className="row-menu-item" onClick={() => onAction("duplicate", vendor)}>
-        <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-        Duplicate
-      </div>
-      <div className="row-menu-sep" />
-      {vendor.status === "active" ? (
-        <div className="row-menu-item" onClick={() => onAction("deactivate", vendor)}>
-          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
-          Deactivate
-        </div>
-      ) : (
-        <div className="row-menu-item" onClick={() => onAction("activate", vendor)}>
-          <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
-          Reactivate
-        </div>
+      {canTransact && (
+        <>
+          <div className="row-menu-item" onClick={() => onAction("edit", vendor)}>
+            <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            Edit
+          </div>
+          <div className="row-menu-item" onClick={() => onAction("newBill", vendor)}>
+            <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            New Bill
+          </div>
+          <div className="row-menu-item" onClick={() => onAction("duplicate", vendor)}>
+            <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+            Duplicate
+          </div>
+          <div className="row-menu-sep" />
+          {vendor.status === "active" ? (
+            <div className="row-menu-item" onClick={() => onAction("deactivate", vendor)}>
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+              Deactivate
+            </div>
+          ) : (
+            <div className="row-menu-item" onClick={() => onAction("activate", vendor)}>
+              <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+              Reactivate
+            </div>
+          )}
+          <div className="row-menu-item danger" onClick={() => onAction("archive", vendor)}>
+            <svg viewBox="0 0 24 24"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+            Archive
+          </div>
+        </>
       )}
-      <div className="row-menu-item danger" onClick={() => onAction("archive", vendor)}>
-        <svg viewBox="0 0 24 24"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
-        Archive
-      </div>
     </div>
   );
 }
@@ -290,6 +297,8 @@ function FilterPopover({ values, onChange, onClose }) {
 
 export default function VendorsPage() {
   const navigate = useNavigate();
+  const { hasLevel } = useCurrentUser();
+  const canCreate = hasLevel("ap", "transact");
   const { vendors } = useVendors();
   // AP balance as of vendor (derived from bills)
   const apBalance = useMemo(() => {
@@ -579,7 +588,12 @@ export default function VendorsPage() {
               />
             </div>
             <div className="lg-head-actions">
-              <button className="lg-btn-brand" onClick={() => navigate("/vendors/new")}>
+              <button
+                className="lg-btn-brand"
+                disabled={!canCreate}
+                title={canCreate ? undefined : "Your role can't add vendors"}
+                onClick={() => canCreate && navigate("/vendors/new")}
+              >
                 <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                 Add Vendor
               </button>
@@ -606,11 +620,11 @@ export default function VendorsPage() {
         {/* ── Table card ─────────────────────────────────────────────── */}
         <div className="lg-table-wrap">
           <div className="lg-card lg-table-vendor">
-            <div className="lg-pills-row">
+            <div className="bp-tabs-row">
               {tabs.map((t) => (
-                <button key={t.k} className={`lg-pill${isTabActive(t.k) ? " active" : ""}`} onClick={() => selectTab(t.k)}>
+                <button key={t.k} className={`bp-tab${isTabActive(t.k) ? " active" : ""}`} onClick={() => selectTab(t.k)}>
                   {t.lbl}
-                  <span className="lg-pill-count">{t.count}</span>
+                  <span className="bp-tab-count">{t.count}</span>
                 </button>
               ))}
             </div>
@@ -692,10 +706,11 @@ export default function VendorsPage() {
                             onKebab={(id) => setMenuOpenFor(menuOpenFor === id ? null : id)}
                             isSelected={selectedId === r.id}
                             isAlt={i % 2 === 1}
+                            showKebab={canCreate}
                           />
                           {menuOpenFor === r.id && (
                             <div style={{ position: "absolute", right: 32, top: 32, zIndex: 5 }}>
-                              <RowMenu vendor={r.raw} onClose={() => setMenuOpenFor(null)} onAction={onRowAction} />
+                              <RowMenu vendor={r.raw} onClose={() => setMenuOpenFor(null)} onAction={onRowAction} canTransact={canCreate} />
                             </div>
                           )}
                         </div>
@@ -716,10 +731,11 @@ export default function VendorsPage() {
                         onKebab={(id) => setMenuOpenFor(menuOpenFor === id ? null : id)}
                         isSelected={selectedId === r.id}
                         isAlt={i % 2 === 1}
+                        showKebab={canCreate}
                       />
                       {menuOpenFor === r.id && (
                         <div style={{ position: "absolute", right: 32, top: 32, zIndex: 5 }}>
-                          <RowMenu vendor={r.raw} onClose={() => setMenuOpenFor(null)} onAction={onRowAction} />
+                          <RowMenu vendor={r.raw} onClose={() => setMenuOpenFor(null)} onAction={onRowAction} canTransact={canCreate} />
                         </div>
                       )}
                     </div>
@@ -737,7 +753,7 @@ export default function VendorsPage() {
           <span><span className="lg-footer-num">{checked.size}</span> selected</span>
           {checked.size > 0 ? (
             <>
-              <button className="lg-footer-bulk-btn" onClick={() => onBulk("archive")}>Archive</button>
+              {canCreate && <button className="lg-footer-bulk-btn" onClick={() => onBulk("archive")}>Archive</button>}
               <button className="lg-footer-clear" onClick={clearChecks}>Clear selection</button>
             </>
           ) : (

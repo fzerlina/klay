@@ -983,6 +983,12 @@
   border: 1px solid var(--color-border-default);
   cursor: not-allowed;
 }
+.bd-actionbar .drawer-btn.ghost.disabled,
+.bd-actionbar .drawer-btn.ghost[disabled] {
+  color: var(--color-text-tertiary);
+  opacity: .5;
+  cursor: not-allowed;
+}
 .bd-actionbar-gate {
   font-weight: 500;
   opacity: .75;
@@ -1195,6 +1201,15 @@
 .bd-rate-chip:hover {
   border-color: var(--color-action);
   background: var(--color-surface-raised, #fff);
+}
+.bd-rate-chip-static {
+  color: var(--color-text-secondary);
+  background: var(--color-surface-sunken);
+  cursor: default;
+}
+.bd-rate-chip-static:hover {
+  border-color: transparent;
+  background: var(--color-surface-sunken);
 }
 .bd-rate-amt { color: var(--color-text); }
 .bd-rate-edit {

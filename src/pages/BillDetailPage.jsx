@@ -12,6 +12,8 @@ import {
   isApPeriodLocked,
 } from "../lib/billStatus";
 import { useClosePeriod } from "../state/ClosePeriodContext";
+import { useCurrentUser } from "../state/CurrentUserContext";
+import { LEVELS } from "../data/seed/roles";
 import {
   computeFieldConfidence,
   computeReviewBrief,
@@ -29,6 +31,35 @@ import "./bill-detail.css";
 const GRN_LABEL      = { matched: "Matched", pending: "Pending", mismatch: "Mismatch" };
 const APPROVAL_LABEL = { approved: "Approved", review: "Review", draft: "Draft" };
 const PAY_LABEL      = { paid: "Paid", unpaid: "Unpaid", overdue: "Overdue" };
+
+// ─── Per-action permission tiers ─────────────────────────────────────────────
+// AP gating is two-tier (matches the permission matrix): "transact" covers data
+// prep the AP clerk owns (submit/edit/delete/cancel a bill), while "approve+post"
+// covers the decision & money moves only the Finance Manager makes (approve,
+// record payment, holds, reverts). Actions not listed are view-only (View GL,
+// receipts, comments) and need just the module's view level. Used by ActionBar.
+const AP_ACTION_LEVEL = {
+  "Approve":           "approve+post",
+  "Record payment":    "approve+post",
+  "Put on hold":       "approve+post",
+  "Return to AP":      "approve+post",
+  "Release hold":      "approve+post",
+  "Revert to review":  "approve+post",
+  "Revert to unpaid":  "approve+post",
+  "Submit for review": "transact",
+  "Edit":              "transact",
+  "Delete":            "transact",
+  "Edit & resubmit":   "transact",
+  "Cancel bill":       "transact",
+  "Skip — mark for later": "transact",
+  // EXCEPTION-state primaries (all data-prep)
+  "Verify & resubmit": "transact",
+  "Mark as new":       "transact",
+  "Confirm vendor":    "transact",
+  "Classify document": "transact",
+  "Enter manually":    "transact",
+  "Resolve":           "transact",
+};
 
 // ─── Review Brief ───────────────────────────────────────────────────────────
 // PRD: a plain-language summary of what requires attention appears at the top
@@ -91,15 +122,15 @@ function ReviewBrief({ brief }) {
 
 function FieldRow({
   label, value, confidence, mono,
-  fieldName, rawValue, inputType, parser, onSave, onConfirm,
+  fieldName, rawValue, inputType, parser, onSave, onConfirm, canEdit = true,
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
 
   const vs = confidence?.visual_state;
   const cls = vs ? ` bd-field-${vs.toLowerCase()}` : "";
-  const editable = !!onSave && (vs === "YELLOW" || vs === "RED");
-  const showConfirm = !!onConfirm && vs === "YELLOW";
+  const editable = canEdit && !!onSave && (vs === "YELLOW" || vs === "RED");
+  const showConfirm = canEdit && !!onConfirm && vs === "YELLOW";
 
   function startEdit() {
     setDraft(rawValue == null ? "" : String(rawValue));
@@ -931,7 +962,7 @@ function SourceFaktur({ bill, vendor }) {
 // it on period-lock status. SoD enforcement is deferred — see the
 // "demo: SoD not enforced" note on the left of the bar.
 
-function ActionBar({ bill, onAction, onSecondary, gateReason, periodLocked, lockedPeriodLabel, onReassign }) {
+function ActionBar({ bill, onAction, onSecondary, gateReason, periodLocked, lockedPeriodLabel, onReassign, perm, note }) {
   if (!bill) return null;
   const ws = workflowStatus(bill);
   const ov = DEMO_OVERRIDES[bill.id] || {};
@@ -980,6 +1011,18 @@ function ActionBar({ bill, onAction, onSecondary, gateReason, periodLocked, lock
     default:               primary = "Edit";               secondaries = [];
   }
 
+  // Role-based permission gate: the active persona's AP level may not allow
+  // the primary action at all (e.g. AP Staff can't Approve). When blocked,
+  // this wins the tooltip — it's a more fundamental "no" than the flag/period
+  // gates, which only matter once you're allowed to act in the first place.
+  const permCheck = (label) => (perm ? perm(label) : { allowed: true });
+  // Permission-blocked actions are HIDDEN (a role that can never do this
+  // shouldn't see a dead button). State blocks — unresolved flags or a closed
+  // period — stay visible-but-disabled, since they're informative ("you could
+  // do this, just not yet") and apply to everyone regardless of role.
+  const visibleSecondaries = secondaries.filter((label) => permCheck(label).allowed);
+  const primaryPerm = primary ? permCheck(primary) : { allowed: true };
+  const showPrimary = !!primary && primaryPerm.allowed;
   const anyDisabled = gated || periodActionGated;
 
   return (
@@ -1000,14 +1043,19 @@ function ActionBar({ bill, onAction, onSecondary, gateReason, periodLocked, lock
         </div>
       )}
       <div className="bd-actionbar">
-        <div className="bd-actionbar-note">demo: SoD not enforced</div>
+        <div className="bd-actionbar-note">{note || "demo: SoD not enforced"}</div>
         <div className="bd-actionbar-buttons">
-          {secondaries.map((label) => (
-            <button key={label} type="button" className="drawer-btn ghost" onClick={() => onSecondary(label)}>
+          {visibleSecondaries.map((label) => (
+            <button
+              key={label}
+              type="button"
+              className="drawer-btn ghost"
+              onClick={() => onSecondary(label)}
+            >
               {label}
             </button>
           ))}
-          {primary && (
+          {showPrimary && (
             <button
               type="button"
               className={`drawer-btn primary${anyDisabled ? " disabled" : ""}`}
@@ -1068,7 +1116,7 @@ function RefRow({ label, value, onClick }) {
 
 // A tax-rate row: the rate is an editable chip (click → inline % input); the
 // computed amount sits beside it. Saving recomputes the downstream totals.
-function RateRow({ label, rate, amount, onSaveRate }) {
+function RateRow({ label, rate, amount, onSaveRate, canEdit = true }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const pct = +((rate || 0) * 100).toFixed(2);
@@ -1100,7 +1148,11 @@ function RateRow({ label, rate, amount, onSaveRate }) {
           </span>
         ) : (
           <>
-            <button type="button" className="bd-rate-chip" onClick={start} title="Edit rate">{pct}%</button>
+            {canEdit ? (
+              <button type="button" className="bd-rate-chip" onClick={start} title="Edit rate">{pct}%</button>
+            ) : (
+              <span className="bd-rate-chip bd-rate-chip-static">{pct}%</span>
+            )}
             <span className="bd-rate-amt mono">{formatRupiah(amount)}</span>
           </>
         )}
@@ -1135,6 +1187,7 @@ export default function BillDetailPage() {
   const { bills, updateBill } = useBills();
   const { addJournalEntry, peekNextJeNumber } = useJournalEntries();
   const { closedThrough } = useClosePeriod();
+  const { hasLevel, level, user } = useCurrentUser();
   const [tab, setTab] = useState("detail");
   const [docView, setDocView] = useState("invoice");
   const [toast, setToast] = useState("");
@@ -1165,6 +1218,22 @@ export default function BillDetailPage() {
   const vendor = VENDORS.find((v) => v.id === bill.vendor);
   const fields = computeFieldConfidence(bill, vendor);
   const brief = computeReviewBrief(bill, fields);
+
+  // Role-based action gating (AP module). canEditAp covers inline field/rate
+  // edits (transact). apActionPerm(label) resolves a workflow button against
+  // its required tier and returns a tooltip reason when the persona is short.
+  const canEditAp = hasLevel("ap", "transact");
+  const apLevelLabel = LEVELS[level("ap")]?.label || "None";
+  const apActionPerm = (label) => {
+    const req = AP_ACTION_LEVEL[label] || "view";
+    const allowed = hasLevel("ap", req);
+    return {
+      allowed,
+      reason: allowed
+        ? undefined
+        : `Requires ${LEVELS[req].label} access on Accounts Payable — you have ${apLevelLabel}.`,
+    };
+  };
 
   // Gate the Post button on YELLOW/RED fields — but exclude the Faktur Pajak
   // RED that fires on every PKP-vendor bill in the demo (the seed doesn't
@@ -1469,6 +1538,7 @@ export default function BillDetailPage() {
                     parser={parseText}
                     onSave={(v) => editField("invNo", v)}
                     onConfirm={() => confirmField("invNo")}
+                    canEdit={canEditAp}
                   />
                   <FieldRow
                     label="Invoice Date"
@@ -1480,6 +1550,7 @@ export default function BillDetailPage() {
                     parser={parseText}
                     onSave={(v) => editField("date", v)}
                     onConfirm={() => confirmField("date")}
+                    canEdit={canEditAp}
                   />
                   <FieldRow label="Due Date" value={formatDateEn(bill.due)} confidence={fields.due} />
                   <PlainRow label="Discount Due Date" value={bill.discountDueDate ? formatDateEn(bill.discountDueDate) : "—"} />
@@ -1554,8 +1625,8 @@ export default function BillDetailPage() {
                   </table>
                   <div className="bd-amounts">
                     <PlainRow label="DPP" value={formatRupiah(bill.dpp)} mono />
-                    <RateRow label="PPN" rate={ppnRate} amount={bill.ppn} onSaveRate={setPpnRate} />
-                    <RateRow label="PPh" rate={pphRate} amount={bill.pph23} onSaveRate={setPphRate} />
+                    <RateRow label="PPN" rate={ppnRate} amount={bill.ppn} onSaveRate={setPpnRate} canEdit={canEditAp} />
+                    <RateRow label="PPh" rate={pphRate} amount={bill.pph23} onSaveRate={setPphRate} canEdit={canEditAp} />
                     <div className="drawer-row bd-amt-strong">
                       <div className="drawer-label">Total</div>
                       <div className="drawer-value mono">{formatRupiah(bill.total)}</div>
@@ -1607,6 +1678,8 @@ export default function BillDetailPage() {
         onReassign={onReassignToCurrentPeriod}
         onAction={onPrimary}
         onSecondary={onSecondary}
+        perm={apActionPerm}
+        note={`Viewing as ${user.name} · ${apLevelLabel} on AP`}
       />
 
       {toast && <div className="toast show">{toast}</div>}

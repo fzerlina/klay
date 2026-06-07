@@ -1,5 +1,5 @@
 import { CUSTOMERS } from "../data/seed/customers";
-import { daysSince } from "../lib/clock";
+import { TODAY, daysSince } from "../lib/clock";
 import { initials } from "../lib/format";
 import { ChatChip } from "./AiChatDrawer";
 
@@ -14,6 +14,203 @@ function shortName(name) {
   if (!name) return "—";
   const tokens = name.split(/\s+/).filter((t) => t && !/^(PT|CV|UD|Toko|Cooperative)$/i.test(t));
   return tokens.slice(0, 2).join(" ");
+}
+
+// ── "Your Tasks" rail (mirrors computeBillsInsights on the AP side) ─────────
+// `rows` are the derived invoice rows (approval may be auto/anomaly). `role`
+// scopes the queue, same contract as Bills:
+//   "operator" — FM/Admin: collections + supervisory queue
+//   "preparer" — AR Staff: their prep queue (anomalies, AI drafts, drafts to send)
+//   "viewer"   — View Only: read-only analytics, no action framing
+// Each task: { id, node (JSX), cta (button label), question (chat seed) }.
+export function computeInvoiceTasks(rows, role = "operator") {
+  const anomalies = rows.filter((i) => i.approval === "anomaly");
+  const autoDrafts = rows.filter((i) => i.approval === "auto");
+  const drafts = rows.filter((i) => i.approval === "draft");
+  const draftsTotal = drafts.reduce((s, i) => s + i.total, 0);
+
+  const overdue = rows.filter((i) => i.payStatus === "overdue");
+  const totalOverdue = overdue.reduce((s, i) => s + i.total, 0);
+  const overdue60 = overdue.filter((i) => daysSince(i.due) >= 60);
+  const overdue60Total = overdue60.reduce((s, i) => s + i.total, 0);
+
+  // Cash IN next 7 days — sent, unpaid invoices coming due
+  const todayKey = TODAY.toISOString().slice(0, 10);
+  const in7 = new Date(TODAY);
+  in7.setDate(TODAY.getDate() + 7);
+  const in7Key = in7.toISOString().slice(0, 10);
+  const dueSoon = rows.filter(
+    (i) => i.payStatus !== "lunas" && i.approval === "sent" && i.due && i.due > todayKey && i.due <= in7Key,
+  );
+  const dueSoonTotal = dueSoon.reduce((s, i) => s + i.total, 0);
+
+  const avgDpd = overdue.length
+    ? Math.round(overdue.reduce((s, i) => s + Math.max(0, daysSince(i.due)), 0) / overdue.length)
+    : 0;
+  const largest = overdue.reduce((m, i) => (i.total > (m?.total || 0) ? i : m), null);
+
+  // Top customers by overdue concentration
+  const byCustomer = new Map();
+  for (const inv of overdue) {
+    const prev = byCustomer.get(inv.customer) || { id: inv.customer, name: inv.customerName, amount: 0 };
+    prev.amount += inv.total;
+    byCustomer.set(inv.customer, prev);
+  }
+  const top3 = Array.from(byCustomer.values()).sort((a, b) => b.amount - a.amount).slice(0, 3);
+  const top3Pct = totalOverdue ? Math.round((top3.reduce((s, c) => s + c.amount, 0) / totalOverdue) * 100) : 0;
+
+  // ── Reusable task/insight builders ──────────────────────────────────────
+  const anomalyTask = anomalies.length > 0 ? {
+    id: "anomaly",
+    node: (
+      <>
+        <strong className="lg-ai-strong">{anomalies.length} invoice{anomalies.length === 1 ? "" : "s"}</strong>{" "}
+        flagged by Klay — <span className="lg-ai-danger">review before sending</span>.
+      </>
+    ),
+    cta: "Review",
+    question: "Which invoices did Klay flag as anomalies?",
+  } : null;
+
+  const autoTask = autoDrafts.length > 0 ? {
+    id: "auto",
+    node: (
+      <>
+        <strong className="lg-ai-strong">{autoDrafts.length} draft{autoDrafts.length === 1 ? "" : "s"}</strong>{" "}
+        Klay parsed from WhatsApp / email — confirm &amp; send.
+      </>
+    ),
+    cta: "Review",
+    question: "Show me the invoices Klay drafted from WhatsApp and email",
+  } : null;
+
+  const draftTask = drafts.length > 0 ? {
+    id: "drafts",
+    node: (
+      <>
+        <strong className="lg-ai-strong">{drafts.length} draft{drafts.length === 1 ? "" : "s"}</strong> worth{" "}
+        <strong className="lg-ai-strong">{fmtRpShort(draftsTotal)}</strong> not yet sent to customers.
+      </>
+    ),
+    cta: "View",
+    question: "Which invoices are drafted but not yet sent?",
+  } : null;
+
+  const chaseTask = overdue60.length > 0 ? {
+    id: "overdueChase",
+    node: (
+      <>
+        <strong className="lg-ai-strong">{overdue60.length} invoice{overdue60.length === 1 ? "" : "s"}</strong> worth{" "}
+        <span className="lg-ai-danger">{fmtRpShort(overdue60Total)}</span> are 60+ days overdue — chase for payment.
+      </>
+    ),
+    cta: "View",
+    question: "Which customers are more than 60 days overdue?",
+  } : null;
+
+  const cashflowTask = dueSoon.length > 0 ? {
+    id: "cashflowIn",
+    node: (
+      <>
+        <strong className="lg-ai-strong">{dueSoon.length} invoice{dueSoon.length === 1 ? "" : "s"}</strong> worth{" "}
+        <strong className="lg-ai-strong">{fmtRpShort(dueSoonTotal)}</strong> come due in the next{" "}
+        <strong className="lg-ai-strong">7 days</strong>.
+      </>
+    ),
+    cta: "View",
+    question: "What cash should we expect to collect this week?",
+  } : null;
+
+  const concentrationInsight = top3.length > 0 && totalOverdue > 0 ? {
+    id: "concentration",
+    node: (
+      <>
+        <strong className="lg-ai-strong">{top3.length} customer{top3.length === 1 ? "" : "s"}</strong>{" "}
+        ({top3.map((c, i) => (
+          <span key={c.id}>{i > 0 ? ", " : ""}{shortName(c.name)}</span>
+        ))}) account for{" "}
+        <strong className="lg-ai-strong">{top3Pct}%</strong> of{" "}
+        <span className="lg-ai-danger">{fmtRpShort(totalOverdue)}</span> in overdue receivables.
+      </>
+    ),
+    cta: "View",
+    question: "Which customers pay us late most often?",
+  } : null;
+
+  const avgDpdInsight = overdue.length > 0 && avgDpd > 0 ? {
+    id: "avgDpd",
+    node: (
+      <>
+        Average <strong className="lg-ai-strong">{avgDpd} days overdue</strong> across{" "}
+        <strong className="lg-ai-strong">{overdue.length} unpaid invoice{overdue.length === 1 ? "" : "s"}</strong>.
+      </>
+    ),
+    cta: "View",
+    question: "What is our average days-late on customer payments?",
+  } : null;
+
+  const largestInsight = largest && largest.total > 0 ? {
+    id: "largest",
+    node: (
+      <>
+        Largest overdue receivable:{" "}
+        <span className="lg-ai-danger">{fmtRpShort(largest.total)}</span> from{" "}
+        <strong className="lg-ai-strong">{shortName(largest.customerName)}</strong>{" "}
+        ({Math.max(0, daysSince(largest.due))} days overdue).
+      </>
+    ),
+    cta: "View",
+    question: `Show details for invoice ${largest.invNo || largest.id} from ${shortName(largest.customerName)}`,
+  } : null;
+
+  // ── AR Staff (preparer): their prep queue ───────────────────────────────
+  if (role === "preparer") {
+    const prep = [anomalyTask, autoTask, draftTask].filter(Boolean);
+    if (prep.length === 0) {
+      prep.push({
+        id: "empty",
+        node: <>Your invoice queue is clear — no flags, AI drafts, or unsent drafts waiting.</>,
+        cta: "View",
+        question: "What's in my invoice queue right now?",
+      });
+    }
+    return prep;
+  }
+
+  // ── View Only (viewer): read-only analytics ─────────────────────────────
+  if (role === "viewer") {
+    const ro = [concentrationInsight, avgDpdInsight, largestInsight].filter(Boolean);
+    if (ro.length === 0) {
+      ro.push({
+        id: "empty",
+        node: <>All receivables are within term today — nothing overdue.</>,
+        cta: "View",
+        question: "How is AR collection tracking this week?",
+      });
+    }
+    return ro;
+  }
+
+  // ── FM/Admin (operator): collections + supervisory queue (default) ──────
+  const tasks = [
+    anomalyTask,
+    autoTask,
+    chaseTask,
+    cashflowTask,
+    concentrationInsight,
+    avgDpdInsight,
+    draftTask,
+    largestInsight,
+  ].filter(Boolean);
+  if (tasks.length === 0) {
+    tasks.push({
+      id: "empty",
+      node: <>All receivables are within term today — nothing overdue.</>,
+      cta: "View",
+      question: "How is AR collection tracking this week?",
+    });
+  }
+  return tasks;
 }
 
 function computeTopCustomers(invoices) {

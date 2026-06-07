@@ -596,11 +596,11 @@ export default function CustomersPage() {
         {/* ── Table card ─────────────────────────────────────────────── */}
         <div className="lg-table-wrap">
           <div className="lg-card lg-table-customer">
-            <div className="lg-pills-row">
+            <div className="bp-tabs-row">
               {tabs.map((t) => (
-                <button key={t.k} className={`lg-pill${isTabActive(t.k) ? " active" : ""}`} onClick={() => selectTab(t.k)}>
+                <button key={t.k} className={`bp-tab${isTabActive(t.k) ? " active" : ""}`} onClick={() => selectTab(t.k)}>
                   {t.lbl}
-                  <span className="lg-pill-count">{t.count}</span>
+                  <span className="bp-tab-count">{t.count}</span>
                 </button>
               ))}
             </div>

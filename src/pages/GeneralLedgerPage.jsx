@@ -1,5 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { formatDate } from "../lib/format";
+import { useCurrentUser } from "../state/CurrentUserContext";
 import {
   JOURNAL_ENTRIES as SEED_JOURNAL_ENTRIES,
   BILL_REFS,
@@ -110,7 +112,7 @@ function SparkleIcon({ size = 11 }) {
   );
 }
 
-function AiSubtitle({ insights, onOpenSummary, onOpenChat, chatActive, summaryActive }) {
+function AiSubtitle({ insights, onOpenSummary, onOpenChat, chatActive, summaryActive, primaryLabel = "Summary & Closing" }) {
   const [idx, setIdx] = useState(0);
   const [fading, setFading] = useState(false);
   useEffect(() => {
@@ -135,7 +137,7 @@ function AiSubtitle({ insights, onOpenSummary, onOpenChat, chatActive, summaryAc
       </p>
       <div className="lg-ai-ctas">
         <button type="button" className={`lg-ai-cta-primary${summaryActive ? " active" : ""}`} onClick={onOpenSummary}>
-          <SparkleIcon /> Summary & Closing
+          <SparkleIcon /> {primaryLabel}
         </button>
         <button type="button" className={`lg-ai-cta-secondary${chatActive ? " active" : ""}`} onClick={onOpenChat}>
           {chatActive ? "Continue chat" : "Ask Klay AI"} →
@@ -322,6 +324,11 @@ function FilterPopover({ values, onChange, onClose }) {
 // ── Page ──────────────────────────────────────────────────────────────────
 
 export default function GeneralLedgerPage() {
+  const navigate = useNavigate();
+  const { hasLevel } = useCurrentUser();
+  const canApprove = hasLevel("gl", "approve+post");
+  const canTransact = hasLevel("gl", "transact");
+  const insightsRole = canApprove ? "operator" : canTransact ? "preparer" : "viewer";
   const [period, setPeriod] = useState("2025-01");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState({ kind: "tab", value: "all" });
@@ -401,14 +408,17 @@ export default function GeneralLedgerPage() {
     setAiOpen(true);
   }
 
-  // KPI cards (5 cells)
+  // KPI cards (5 cells) — action-framed: directive subs + deep-links. The GL is
+  // an analytical surface, so the actionable cells route to where the work
+  // actually happens (JE for approvals, Bank Rec for matching) rather than
+  // turning GL into a task queue. Subs are role-aware.
   const runningBalance = useMemo(() => ALL_ROWS.length > 0 ? ALL_ROWS[ALL_ROWS.length - 1].balance : 500000000, []);
   const kpis = [
-    { lbl: "Running Balance", card: null,        val: "Rp " + fmtShort(runningBalance), sub: `${periodLabel}`,             tone: "primary" },
-    { lbl: "JE Pending",      card: "pending",   val: String(stats.pendingCount),         sub: "awaiting approval",        tone: "warn"    },
-    { lbl: "Anomaly",         card: "anomaly",   val: String(stats.anomalyCount),         sub: "needs review",             tone: "danger"  },
-    { lbl: "Unmatched",       card: "unmatched", val: String(stats.unmatchedCount),       sub: "to transactions bank",        tone: "danger"  },
-    { lbl: "Auto Recon AI",   card: "matched",   val: String(stats.matchedCount),         sub: "matched by AI",            tone: "primary" },
+    { lbl: "Running Balance", action: { kind: "none" },                       val: "Rp " + fmtShort(runningBalance), sub: `${periodLabel}`,                                       tone: "primary" },
+    { lbl: "JE Pending",      action: { kind: "nav", to: "/journal-entry?tab=pending" }, val: String(stats.pendingCount), sub: canApprove ? "Approve in JE →" : "awaiting approval",  tone: "warn"    },
+    { lbl: "Anomaly",         action: { kind: "card", card: "anomaly" },      val: String(stats.anomalyCount),       sub: "needs review",                                         tone: "danger"  },
+    { lbl: "Unmatched",       action: { kind: "nav", to: "/bank-reconciliation" }, val: String(stats.unmatchedCount), sub: canTransact ? "Match in Bank Rec →" : "unmatched to bank", tone: "danger"  },
+    { lbl: "Auto Recon AI",   action: { kind: "card", card: "matched" },      val: String(stats.matchedCount),       sub: "matched by AI",                                        tone: "primary" },
   ];
 
   const tabs = [
@@ -586,6 +596,7 @@ export default function GeneralLedgerPage() {
                 onOpenChat={() => setAiOpen(true)}
                 chatActive={aiOpen}
                 summaryActive={summaryOpen}
+                primaryLabel={insightsRole === "viewer" ? "GL Insights" : "Summary & Closing"}
               />
             </div>
             <div className="lg-head-actions">
@@ -597,20 +608,30 @@ export default function GeneralLedgerPage() {
           </div>
 
           <div className="lg-kpi-strip kpi-5">
-            {kpis.map((k) => (
-              <button
-                type="button"
-                className={`lg-kpi-cell${k.card && isCardActive(k.card) ? " active" : ""}`}
-                key={k.lbl}
-                onClick={() => k.card && selectCard(isCardActive(k.card) ? null : k.card)}
-                aria-pressed={k.card ? isCardActive(k.card) : false}
-                style={!k.card ? { cursor: "default" } : undefined}
-              >
-                <div className="lg-kpi-lbl">{k.lbl}</div>
-                <div className={`lg-kpi-val${k.tone === "danger" ? " danger" : k.tone === "warn" ? " warn" : ""}`}>{k.val}</div>
-                <div className="lg-kpi-sub">{k.sub}</div>
-              </button>
-            ))}
+            {kpis.map((k) => {
+              const isCard = k.action.kind === "card";
+              const isNav = k.action.kind === "nav";
+              const active = isCard && isCardActive(k.action.card);
+              const onClick = isCard
+                ? () => selectCard(active ? null : k.action.card)
+                : isNav
+                ? () => navigate(k.action.to)
+                : undefined;
+              return (
+                <button
+                  type="button"
+                  className={`lg-kpi-cell${active ? " active" : ""}`}
+                  key={k.lbl}
+                  onClick={onClick}
+                  aria-pressed={isCard ? active : undefined}
+                  style={k.action.kind === "none" ? { cursor: "default" } : undefined}
+                >
+                  <div className="lg-kpi-lbl">{k.lbl}</div>
+                  <div className={`lg-kpi-val${k.tone === "danger" ? " danger" : k.tone === "warn" ? " warn" : ""}`}>{k.val}</div>
+                  <div className="lg-kpi-sub">{k.sub}</div>
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -634,11 +655,11 @@ export default function GeneralLedgerPage() {
             <div className="lg-pt-arr"><svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
           </div>
           <div className="lg-card lg-table-gl">
-            <div className="lg-pills-row">
+            <div className="bp-tabs-row">
               {tabs.map((t) => (
-                <button key={t.k} className={`lg-pill${isTabActive(t.k) ? " active" : ""}`} onClick={() => selectTab(t.k)}>
+                <button key={t.k} className={`bp-tab${isTabActive(t.k) ? " active" : ""}`} onClick={() => selectTab(t.k)}>
                   {t.lbl}
-                  <span className="lg-pill-count">{t.count}</span>
+                  <span className="bp-tab-count">{t.count}</span>
                 </button>
               ))}
             </div>

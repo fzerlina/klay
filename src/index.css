@@ -43,7 +43,10 @@ body{font-family:var(--font-sans);background:var(--color-surface-base);color:var
 
 /* Content layer — above textures. Right padding > 16 keeps content inside the visible
    sidebar area (the rightmost 16px is covered by main's negative margin overlap). */
-.sb-content{position:relative;z-index:1;display:flex;flex-direction:column;height:100%;width:100%;padding:14px 22px 0 14px;min-height:0;box-sizing:border-box}
+.sb-content{position:relative;z-index:1;display:flex;flex-direction:column;height:100%;width:100%;padding:14px 22px 0 14px;min-height:0;box-sizing:border-box;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.22) transparent}
+.sb-content::-webkit-scrollbar{width:6px}
+.sb-content::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.22);border-radius:3px}
+.sb-content::-webkit-scrollbar-track{background:transparent}
 .sb.collapsed .sb-content{width:100%;padding:14px 16px 14px 0;align-items:center}
 
 /* Top — Klay logomark + wordmark */
@@ -128,6 +131,26 @@ body{font-family:var(--font-sans);background:var(--color-surface-base);color:var
 .sb-profile-role{font-size:11px;color:var(--sidebar-text-muted);margin-top:1px}
 .sb.collapsed .sb-profile-name,.sb.collapsed .sb-profile-role{display:none}
 
+/* Persona switcher (demo: change the active role) */
+.sb-persona-wrap{position:relative}
+.sb-persona-trigger{width:100%;border:none;background:transparent;text-align:left;font:inherit}
+.sb-persona-trigger.open{background:rgba(255,255,255,0.07)}
+.sb-persona-id{display:flex;flex-direction:column;min-width:0;flex:1}
+.sb-persona-eyebrow{font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--sidebar-text-muted);line-height:1.2}
+.sb-persona-caret{width:12px;height:12px;flex-shrink:0;fill:none;stroke:var(--sidebar-text-muted);stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.sb.collapsed .sb-persona-caret{display:none}
+.sb-persona-menu{position:absolute;left:6px;right:6px;bottom:calc(100% + 6px);background:var(--color-surface-raised);border:1px solid var(--color-border-default);border-radius:12px;box-shadow:var(--shadow-md,0 8px 24px rgba(0,0,0,.18));padding:6px;z-index:20;max-height:60vh;overflow:auto}
+.sb.collapsed .sb-persona-menu{left:6px;right:auto;width:220px}
+.sb-persona-menu-hdr{font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--color-text-tertiary);padding:6px 8px 4px}
+.sb-persona-opt{display:flex;align-items:center;gap:10px;width:100%;padding:7px 8px;border:none;background:transparent;border-radius:8px;cursor:pointer;text-align:left;transition:background var(--transition-fast)}
+.sb-persona-opt:hover{background:var(--color-surface-sunken)}
+.sb-persona-opt.active{background:var(--color-surface-sunken)}
+.sb-persona-opt .sb-av{background:var(--color-action);border:none;color:#fff}
+.sb-persona-opt-body{display:flex;flex-direction:column;min-width:0;flex:1}
+.sb-persona-opt-name{font-size:12.5px;font-weight:600;color:var(--color-text-primary);line-height:1.25}
+.sb-persona-opt-role{font-size:11px;color:var(--color-text-secondary);margin-top:1px}
+.sb-persona-check{width:12px;height:12px;flex-shrink:0;fill:none;stroke:var(--color-action);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
 /* Collapse toggle button — sits half-on-sidebar, half-on-main's rounded-corner overlap */
 .sb-toggle{position:absolute;top:26px;right:5px;width:22px;height:22px;border-radius:11px;background:var(--sidebar-toggle-bg);border:1px solid rgba(255,255,255,0.18);color:rgba(255,255,255,0.85);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;box-shadow:0 1px 4px rgba(8,7,6,0.18);transition:background var(--transition-fast),color var(--transition-fast),transform var(--transition-fast);z-index:10}
 .sb-toggle:hover{background:#4A1A0A;color:#fff;transform:scale(1.08)}
@@ -136,6 +159,16 @@ body{font-family:var(--font-sans);background:var(--color-surface-base);color:var
 
 /* MAIN — rounded top-left & bottom-left corners overlap the sidebar by 16px */
 .main{flex:1;min-width:0;display:flex;flex-direction:column;height:100vh;overflow:hidden;background:var(--color-surface-base);border-top-left-radius:16px;border-bottom-left-radius:16px;margin-left:-16px;position:relative;z-index:1}
+
+/* Role gate — shown when the current persona can't access a route's module */
+.no-access{flex:1;display:flex;align-items:center;justify-content:center;padding:40px}
+.no-access-card{max-width:420px;text-align:center;background:var(--color-surface-raised);border:1px solid var(--color-border-default);border-radius:16px;padding:36px 32px;box-shadow:var(--shadow-sm)}
+.no-access-ico{width:48px;height:48px;margin:0 auto 16px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:var(--color-surface-sunken);color:var(--color-text-tertiary)}
+.no-access-ico svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.no-access-title{font-family:var(--font-display);font-size:18px;font-weight:600;color:var(--color-text-primary);margin:0 0 8px}
+.no-access-body{font-family:var(--font-sans);font-size:13px;line-height:1.55;color:var(--color-text-secondary);margin:0 0 20px}
+.no-access-btn{display:inline-flex;align-items:center;justify-content:center;padding:8px 16px;border-radius:var(--radius-sm);background:var(--color-action);color:#fff;font-family:var(--font-sans);font-size:13px;font-weight:500;text-decoration:none;transition:opacity var(--transition-fast)}
+.no-access-btn:hover{opacity:.9}
 
 /* TOPBAR */
 .topbar{height:52px;flex-shrink:0;background:var(--color-surface-raised);border-bottom:1px solid var(--color-border-default);display:flex;align-items:center;padding:0 20px;gap:10px;z-index:auto}

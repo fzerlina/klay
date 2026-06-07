@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import { useCurrentUser } from "../state/CurrentUserContext";
 import { TODAY, daysSince } from "../lib/clock";
 import { formatRupiah, formatDateEn } from "../lib/format";
 import { workflowStatus, DEMO_OVERRIDES } from "../lib/billStatus";
@@ -194,21 +195,25 @@ function DueCell({ line }) {
 }
 
 // ── Decision Queue row ────────────────────────────────────────────────────
-function DecisionQueueRow({ line, selected, onToggleSelect, onClick }) {
+function DecisionQueueRow({ line, selected, onToggleSelect, onClick, canSelect = true }) {
   const isReturned = line.workflow_status === "RETURNED";
   return (
     <div
       className={`apa-dq-row${isReturned ? " returned" : ""}${selected ? " selected" : ""}`}
       onClick={onClick}
     >
-      <span
-        className={`apa-checkbox${selected ? " checked" : ""}`}
-        onClick={(e) => { e.stopPropagation(); onToggleSelect(line.id); }}
-        role="checkbox"
-        aria-checked={selected}
-      >
-        {selected && I.check}
-      </span>
+      {canSelect ? (
+        <span
+          className={`apa-checkbox${selected ? " checked" : ""}`}
+          onClick={(e) => { e.stopPropagation(); onToggleSelect(line.id); }}
+          role="checkbox"
+          aria-checked={selected}
+        >
+          {selected && I.check}
+        </span>
+      ) : (
+        <span aria-hidden />
+      )}
 
       <div className="apa-vendor-cell">
         <div className="apa-vendor-name">
@@ -302,6 +307,11 @@ function EmptyState({ title, sub, icon }) {
 // ── Page ───────────────────────────────────────────────────────────────────
 export default function ApAgingPage() {
   const navigate = useNavigate();
+  // AP Aging is a read surface (PRD). The only write-initiating affordances are
+  // the payment-request controls — gated to transact+ (AP Staff, FM, Admin).
+  // View Only sees the full analytical surface but not these controls.
+  const { hasLevel } = useCurrentUser();
+  const canTransact = hasLevel("ap", "transact");
   const [view, setView] = useState("queue");   // "queue" | "table"
   const [selected, setSelected] = useState(new Set());
   const [bannerDismissed, setBannerDismissed] = useState(false);
@@ -416,10 +426,12 @@ export default function ApAgingPage() {
               {I.download}
               Export
             </button>
-            <button className="lg-btn-brand" onClick={() => navigate("/bills/new")}>
-              {I.bolt}
-              Create Payment
-            </button>
+            {canTransact && (
+              <button className="lg-btn-brand" onClick={() => navigate("/bills/new")}>
+                {I.bolt}
+                Create Payment
+              </button>
+            )}
           </div>
         </div>
 
@@ -549,6 +561,7 @@ export default function ApAgingPage() {
                       selected={selected.has(line.id)}
                       onToggleSelect={toggleSelect}
                       onClick={() => navigate(`/bills/${line.id}`)}
+                      canSelect={canTransact}
                     />
                   ))}
                 </>
@@ -576,6 +589,7 @@ export default function ApAgingPage() {
                       selected={selected.has(line.id)}
                       onToggleSelect={toggleSelect}
                       onClick={() => navigate(`/bills/${line.id}`)}
+                      canSelect={canTransact}
                     />
                   ))}
                 </>
@@ -638,7 +652,7 @@ export default function ApAgingPage() {
       </div>
 
       {/* ── Multi-select action bar ─────────────────────────────────── */}
-      {selected.size > 0 && (
+      {canTransact && selected.size > 0 && (
         <div className="apa-action-bar">
           <div className="apa-action-bar-info">
             <span className="apa-action-bar-count">{selected.size} selected</span>

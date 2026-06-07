@@ -961,16 +961,16 @@ export default function BankReconciliationPage() {
         <div className="lg-table-wrap">
           <div className="lg-card recon-card">
             {/* Status pills */}
-            <div className="lg-pills-row">
+            <div className="bp-tabs-row">
               {TABS.map((t) => (
                 <button
                   key={t.k}
                   type="button"
-                  className={`lg-pill${statusFilter === t.k ? " active" : ""}`}
+                  className={`bp-tab${statusFilter === t.k ? " active" : ""}`}
                   onClick={() => setStatusFilter(t.k)}
                 >
                   {t.lbl}
-                  <span className="lg-pill-count">
+                  <span className="bp-tab-count">
                     {t.k === "all" ? counts.all : (counts[t.k] || 0)}
                   </span>
                 </button>

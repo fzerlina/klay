@@ -2,11 +2,12 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { CUSTOMERS as customers } from "../data/seed/customers";
 import { useInvoices } from "../state/InvoicesContext";
+import { useCurrentUser } from "../state/CurrentUserContext";
 import { TODAY, daysSince } from "../lib/clock";
 import { formatRupiah, formatDate, initials } from "../lib/format";
 import AiChatDrawer from "./AiChatDrawer";
 import SummaryDrawer from "./SummaryDrawer";
-import { makeInvoicesAiContext } from "./ai-invoices-context";
+import { makeInvoicesAiContext, computeInvoiceTasks } from "./ai-invoices-context";
 import "./modules.css";
 import "./invoice-create.css";
 import "./invoices-ledger.css";
@@ -157,140 +158,6 @@ function toRow(inv) {
   };
 }
 
-// ─── AI insights — multiple rotating summaries ──────────────────────────────
-// Stand-in for a server-rendered AI summary endpoint. Each insight has
-//   - id      (stable key for React)
-//   - node    (rendered JSX shown in the AiSubtitle)
-//   - question (seed text used when user clicks through to chat)
-
-function computeInsights(invoices, todayDate) {
-  const overdue = invoices.filter((i) => i.payStatus === "overdue");
-  const totalOverdue = overdue.reduce((s, i) => s + i.total, 0);
-
-  // Top customers by overdue concentration
-  const byCustomer = new Map();
-  for (const inv of overdue) {
-    const prev = byCustomer.get(inv.customer) || { name: inv.customerName, amount: 0, count: 0 };
-    prev.amount += inv.total;
-    prev.count += 1;
-    byCustomer.set(inv.customer, prev);
-  }
-  const top3 = Array.from(byCustomer.values())
-    .sort((a, b) => b.amount - a.amount)
-    .slice(0, 3);
-  const top3Sum = top3.reduce((s, c) => s + c.amount, 0);
-  const top3Pct = totalOverdue ? Math.round((top3Sum / totalOverdue) * 100) : 0;
-
-  // Cashflow next 7 days — unpaid invoices due in the next week
-  const todayKey = todayDate.toISOString().slice(0, 10);
-  const in7 = new Date(todayDate);
-  in7.setDate(todayDate.getDate() + 7);
-  const in7Key = in7.toISOString().slice(0, 10);
-  const upcoming = invoices.filter(
-    (i) => i.payStatus !== "lunas" && i.due && i.due > todayKey && i.due <= in7Key,
-  );
-  const upcomingTotal = upcoming.reduce((s, i) => s + i.total, 0);
-
-  // Average days past due
-  const avgDpd = overdue.length
-    ? Math.round(overdue.reduce((s, i) => s + Math.max(0, daysSince(i.due)), 0) / overdue.length)
-    : 0;
-
-  // Overdue invoices that became overdue this month (due date in current month)
-  const monthPfx = `${todayDate.getFullYear()}-${String(todayDate.getMonth() + 1).padStart(2, "0")}`;
-  const overdueThisMonth = invoices.filter(
-    (i) => i.payStatus === "overdue" && i.due && i.due.startsWith(monthPfx),
-  );
-  const overdueThisMonthTotal = overdueThisMonth.reduce((s, i) => s + i.total, 0);
-
-  // Single largest overdue invoice
-  const largest = overdue.reduce((m, i) => (i.total > (m?.total || 0) ? i : m), null);
-
-  const insights = [];
-
-  if (top3.length > 0 && totalOverdue > 0) {
-    insights.push({
-      id: "concentration",
-      node: (
-        <>
-          <strong className="lg-ai-strong">{top3.length} customer</strong>{" "}
-          ({top3.map((c, i) => (
-            <span key={c.name}>{i > 0 ? ", " : ""}{shortName(c.name)}</span>
-          ))}) account for{" "}
-          <strong className="lg-ai-strong">{top3Pct}%</strong> of{" "}
-          <span className="lg-ai-danger">{fmtRpShort(totalOverdue)}</span> pipayables late.
-        </>
-      ),
-      question: "Which customers pay late most often?",
-    });
-  }
-
-  if (upcoming.length > 0) {
-    insights.push({
-      id: "cashflow",
-      node: (
-        <>
-          <strong className="lg-ai-strong">{upcoming.length} invoice</strong> worth{" "}
-          <strong className="lg-ai-strong">{fmtRpShort(upcomingTotal)}</strong> will be due in{" "}
-          <strong className="lg-ai-strong">7 days</strong> to depan.
-        </>
-      ),
-      question: "How proyeksi cashflow 7 days to depan?",
-    });
-  }
-
-  if (overdue.length > 0 && avgDpd > 0) {
-    insights.push({
-      id: "avgDpd",
-      node: (
-        <>
-          Average <strong className="lg-ai-strong">{avgDpd} days overdue</strong> for{" "}
-          <strong className="lg-ai-strong">{overdue.length} invoice</strong> that are overdue.
-        </>
-      ),
-      question: "What average days overdue customer kami?",
-    });
-  }
-
-  if (overdueThisMonth.length > 0) {
-    insights.push({
-      id: "monthOverdue",
-      node: (
-        <>
-          <strong className="lg-ai-strong">{overdueThisMonth.length} invoice</strong> recently became due this month,{" "}
-          total <span className="lg-ai-danger">{fmtRpShort(overdueThisMonthTotal)}</span>.
-        </>
-      ),
-      question: "Which invoices recently became due this month?",
-    });
-  }
-
-  if (largest && largest.total > 0) {
-    insights.push({
-      id: "largest",
-      node: (
-        <>
-          Invoice late largest:{" "}
-          <span className="lg-ai-danger">{fmtRpShort(largest.total)}</span> from{" "}
-          <strong className="lg-ai-strong">{shortName(largest.customerName)}</strong>{" "}
-          ({Math.max(0, daysSince(largest.due))} days overdue).
-        </>
-      ),
-      question: `Invoice detail ${largest.invNo} from ${shortName(largest.customerName)}`,
-    });
-  }
-
-  if (insights.length === 0) {
-    insights.push({
-      id: "empty",
-      node: <>Not yet there is pipayables late days ini. All invoice active masih in term.</>,
-      question: "What should I monitor this week?",
-    });
-  }
-
-  return insights;
-}
-
 // ─── Components ─────────────────────────────────────────────────────────────
 
 function SparkleIcon({ size = 11 }) {
@@ -302,38 +169,58 @@ function SparkleIcon({ size = 11 }) {
   );
 }
 
-function AiSummaryCard({ insights, onAsk }) {
+function InvoiceTasksCard({ tasks, onOpenSummary, onAction, summaryActive, eyebrow = "Your Tasks" }) {
+  // Manual pager (no auto-rotate) — match Bills: the user reads each task at
+  // their own pace and steps through with the numbered pager.
   const [idx, setIdx] = useState(0);
-  const [fading, setFading] = useState(false);
-  useEffect(() => {
-    if (insights.length <= 1) return;
-    const id = setInterval(() => {
-      setFading(true);
-      setTimeout(() => {
-        setIdx((i) => (i + 1) % insights.length);
-        setFading(false);
-      }, 220);
-    }, 7000);
-    return () => clearInterval(id);
-  }, [insights.length]);
-  useEffect(() => { if (idx >= insights.length) setIdx(0); }, [insights.length, idx]);
-  const current = insights[idx] || insights[0];
+  useEffect(() => { if (idx >= tasks.length) setIdx(0); }, [tasks.length, idx]);
+  const current = tasks[idx] || tasks[0];
+  const total = tasks.length;
+  const actionLabel = current?.cta || "View";
+  function prev() { setIdx((i) => (i - 1 + total) % total); }
+  function next() { setIdx((i) => (i + 1) % total); }
   return (
-    <button type="button" className="lg-kpi-cell lg-kpi-cell-summary" onClick={() => onAsk(current)} aria-label="Ask Klay about this insight">
-      <div className="lg-kpi-summary-eyebrow"><SparkleIcon /> Summary</div>
-      <div className={`lg-kpi-summary-body${fading ? " fading" : ""}`}>{current?.node}</div>
-      <div className="lg-kpi-summary-asof">as of {formatDate(TODAY.toISOString().slice(0, 10))}</div>
-      <div className="lg-kpi-summary-foot">
-        <span className="lg-kpi-summary-cta">Ask Klay →</span>
-        {insights.length > 1 && (
-          <span className="lg-kpi-summary-dots" aria-hidden>
-            {insights.map((_, i) => (
-              <span key={i} className={`lg-kpi-summary-dot${i === idx ? " on" : ""}`} />
-            ))}
-          </span>
-        )}
+    <div className="bp-kpi-card bp-kpi-summary">
+      <div className="bp-kpi-summary-top">
+        <div className="bp-kpi-summary-eyebrow"><SparkleIcon size={12} /> {eyebrow.toUpperCase()}</div>
+        <button
+          type="button"
+          className={`bp-kpi-summary-seeall${summaryActive ? " active" : ""}`}
+          onClick={onOpenSummary}
+        >
+          See all
+        </button>
       </div>
-    </button>
+      <div className="bp-kpi-summary-body">{current?.node}</div>
+      <div className="bp-kpi-summary-asof">as of {formatDate(TODAY.toISOString().slice(0, 10))}</div>
+      <div className="bp-kpi-summary-foot">
+        {total > 1 ? (
+          <div className="bp-kpi-summary-pager" aria-label="Task pager">
+            <button type="button" className="bp-kpi-summary-pager-chev" onClick={prev} aria-label="Previous task">
+              <svg viewBox="0 0 9 9" aria-hidden><path d="M6 2L3 4.5L6 7" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </button>
+            {tasks.map((_, i) => (
+              <button
+                key={i}
+                type="button"
+                className={`bp-kpi-summary-pager-num${i === idx ? " on" : ""}`}
+                onClick={() => setIdx(i)}
+                aria-label={`Task ${i + 1}`}
+                aria-current={i === idx ? "true" : undefined}
+              >
+                {i + 1}
+              </button>
+            ))}
+            <button type="button" className="bp-kpi-summary-pager-chev" onClick={next} aria-label="Next task">
+              <svg viewBox="0 0 9 9" aria-hidden><path d="M3 2L6 4.5L3 7" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </button>
+          </div>
+        ) : <span />}
+        <button type="button" className="bp-kpi-cta bp-kpi-cta-action" onClick={() => onAction(current)}>
+          {actionLabel} →
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -766,6 +653,13 @@ function FilterPopover({ values, onChange, customers: custList, onClose }) {
 export default function InvoicesPage() {
   const navigate = useNavigate();
   const { invoices, sendInvoice } = useInvoices();
+  const { hasLevel } = useCurrentUser();
+  const canTransact = hasLevel("ar", "transact");
+  const insightsRole = hasLevel("ar", "approve+post")
+    ? "operator"
+    : hasLevel("ar", "transact")
+    ? "preparer"
+    : "viewer";
 
   const [filter, setFilter] = useState({ kind: "tab", value: "semua" });
   // Sort + group choices override per-tab defaults when non-null
@@ -856,25 +750,50 @@ export default function InvoicesPage() {
 
   const monthPfx = useMemo(() => `${TODAY.getFullYear()}-${String(TODAY.getMonth() + 1).padStart(2, "0")}`, []);
 
-  // ── KPI strip — keep 3 standard cells; AI Summary + Processed-by-AI prepended in JSX ─
-  const kpis = useMemo(() => {
-    const totalPipayables  = allRows.filter(i => i.payStatus !== "lunas").reduce((s, i) => s + i.total, 0);
-    const overdue          = allRows.filter(i => i.payStatus === "overdue");
-    const overdueThisMonth = allRows.filter(i => i.payStatus === "overdue" && i.due && i.due.startsWith(monthPfx));
-    return [
-      { lbl: "Total AR",          card: "total",        val: "Rp " + fmtRp(totalPipayables),                       sub: allRows.filter(i => i.payStatus !== "lunas").length + " invoice active",         tone: "primary" },
-      { lbl: "Overdue",           card: "overdue",      val: "Rp " + fmtRp(overdue.reduce((s, i) => s + i.total, 0)), sub: overdue.length + " invoice late",                                              tone: "danger"  },
-      { lbl: "Overdue This Month", card: "overdueMonth", val: String(overdueThisMonth.length),                      sub: "Rp " + fmtRp(overdueThisMonth.reduce((s, i) => s + i.total, 0)),               tone: "warn"    },
-    ];
+  // ── KPI stats — action-framed cells (mirror Bills) ──────────────────────
+  const invStats = useMemo(() => {
+    const active        = allRows.filter(i => i.payStatus !== "lunas");
+    const overdue       = allRows.filter(i => i.payStatus === "overdue");
+    const overdueMonth  = overdue.filter(i => i.due && i.due.startsWith(monthPfx));
+    const drafts        = allRows.filter(i => i.approval === "draft");
+    return {
+      totalAR:           active.reduce((s, i) => s + i.total, 0),
+      activeCount:       active.length,
+      overdueCount:      overdue.length,
+      overdueSum:        overdue.reduce((s, i) => s + i.total, 0),
+      overdueMonthCount: overdueMonth.length,
+      overdueMonthSum:   overdueMonth.reduce((s, i) => s + i.total, 0),
+      draftCount:        drafts.length,
+      draftSum:          drafts.reduce((s, i) => s + i.total, 0),
+    };
   }, [allRows, monthPfx]);
 
-  const insights = useMemo(() => computeInsights(allRows, TODAY), [allRows]);
+  const tasks = useMemo(() => computeInvoiceTasks(allRows, insightsRole), [allRows, insightsRole]);
   const aiContext = useMemo(() => makeInvoicesAiContext(allRows), [allRows]);
 
   function askAi(question) {
     setSummaryOpen(false);
     setAiSeedQuestion(question);
     setAiOpen(true);
+  }
+
+  // ── Deep-link a task to the relevant filtered view (mirror Bills) ───────
+  function handleTaskAction(task) {
+    if (!task) return;
+    clearChecks();
+    setKlayFilters({});
+    setFilterValues(emptyFilters);
+    switch (task.id) {
+      case "anomaly":     selectTab("anomaly"); break;
+      case "auto":        selectTab("auto"); break;
+      case "drafts":      selectTab("draft"); break;
+      case "cashflowIn":  selectTab("sent"); break;
+      case "overdueChase":
+      case "concentration":
+      case "avgDpd":
+      case "largest":     selectTab("jatuhtempo"); break;
+      default:            askAi(task.question);
+    }
   }
 
   // ── Step 1: corpus (pill / card filter only) ────────────────────────────
@@ -1331,49 +1250,49 @@ export default function InvoicesPage() {
           </div>
         </div>
 
-        {/* KPI strip — Summary + Processed-by-AI prepended; standard cells follow */}
-        <div className="lg-kpi-strip kpi-5">
-          <AiSummaryCard insights={insights} onAsk={(insight) => askAi(insight?.question || "Tell me what stands out")} />
-          <button
-            type="button"
-            className={`lg-kpi-cell lg-kpi-cell-ai${isCardActive("auto") ? " active" : ""}`}
-            onClick={() => {
-              const target = tabCounts.anomaly > 0 ? "anomaly" : "auto";
-              selectCard(isCardActive(target) ? null : target);
-            }}
-            aria-pressed={isCardActive("auto")}
-          >
-            <div className="lg-kpi-ai-eyebrow"><SparkleIcon /> Processed by AI</div>
-            <div className="lg-kpi-ai-val">
-              {tabCounts.auto}
-              {tabCounts.anomaly > 0 && (
-                <span className="lg-kpi-ai-anomaly-pip" aria-label={`${tabCounts.anomaly} anomalies flagged`}>
-                  <svg viewBox="0 0 12 12"><path d="M6 1.5l5 8.5h-10z" fill="currentColor" stroke="none"/><line x1="6" y1="5" x2="6" y2="7.5" stroke="#fff" strokeWidth="1.4"/><circle cx="6" cy="8.8" r="0.6" fill="#fff" stroke="none"/></svg>
-                  {tabCounts.anomaly}
-                </span>
-              )}
+        {/* KPI strip — Your Tasks queue + action-framed cells (mirror Bills) */}
+        <div className="bp-kpi-wrap">
+          <div className="bp-kpi-row">
+            <InvoiceTasksCard
+              tasks={tasks}
+              onOpenSummary={() => setSummaryOpen(true)}
+              onAction={handleTaskAction}
+              summaryActive={summaryOpen}
+              eyebrow={insightsRole === "viewer" ? "AR Insights" : "Your Tasks"}
+            />
+
+            {canTransact && (
+              <div className="bp-kpi-card">
+                <div className="bp-kpi-lbl">Ready to Send</div>
+                <div className="bp-kpi-val">{invStats.draftCount} · {formatRupiah(invStats.draftSum)}</div>
+                <div className="bp-kpi-sub">Send to customer</div>
+                <button type="button" className="bp-kpi-cta" onClick={() => selectTab("draft")}>View →</button>
+              </div>
+            )}
+
+            {canTransact && (
+              <div className="bp-kpi-card">
+                <div className="bp-kpi-lbl">Overdue</div>
+                <div className="bp-kpi-val">{invStats.overdueCount} · {formatRupiah(invStats.overdueSum)}</div>
+                <div className="bp-kpi-sub">Chase for payment</div>
+                <button type="button" className="bp-kpi-cta" onClick={() => selectTab("jatuhtempo")}>View →</button>
+              </div>
+            )}
+
+            <div className="bp-kpi-card">
+              <div className="bp-kpi-lbl">Overdue This Month</div>
+              <div className="bp-kpi-val">{invStats.overdueMonthCount}</div>
+              <div className="bp-kpi-sub">{formatRupiah(invStats.overdueMonthSum)} newly late</div>
+              <button type="button" className="bp-kpi-cta" onClick={() => selectCard("overdueMonth")}>View →</button>
             </div>
-            <div className="lg-kpi-ai-sub">
-              Klay drafted {tabCounts.auto} from WhatsApp / email
-              {tabCounts.anomaly > 0 && (
-                <><br />Plus {tabCounts.anomaly} {tabCounts.anomaly === 1 ? "anomaly" : "anomalies"} needing review</>
-              )}
+
+            <div className="bp-kpi-card">
+              <div className="bp-kpi-lbl">AR Outstanding</div>
+              <div className="bp-kpi-val">{formatRupiah(invStats.totalAR)}</div>
+              <div className="bp-kpi-sub">{invStats.activeCount} invoice{invStats.activeCount === 1 ? "" : "s"} active</div>
+              <button type="button" className="bp-kpi-cta" onClick={() => selectCard("total")}>View →</button>
             </div>
-            <div className="lg-kpi-ai-cta">Review all →</div>
-          </button>
-          {kpis.map((k) => (
-            <button
-              type="button"
-              className={`lg-kpi-cell${k.card === "total" ? " lg-kpi-cell-neutral" : ""}${isCardActive(k.card) ? " active" : ""}`}
-              key={k.lbl}
-              onClick={() => selectCard(isCardActive(k.card) ? null : k.card)}
-              aria-pressed={isCardActive(k.card)}
-            >
-              <div className="lg-kpi-lbl">{k.lbl}</div>
-              <div className={`lg-kpi-val${k.tone === "danger" ? " danger" : k.tone === "warn" ? " warn" : ""}`}>{k.val}</div>
-              <div className="lg-kpi-sub">{k.sub}</div>
-            </button>
-          ))}
+          </div>
         </div>
       </div>
 
@@ -1382,15 +1301,15 @@ export default function InvoicesPage() {
         <div className="lg-card">
 
           {/* Pills row */}
-          <div className="lg-pills-row">
+          <div className="bp-tabs-row">
             {tabs.map((t) => (
               <button
                 key={t.k}
-                className={`lg-pill${isTabActive(t.k) ? " active" : ""}`}
+                className={`bp-tab${isTabActive(t.k) ? " active" : ""}`}
                 onClick={() => selectTab(t.k)}
               >
                 {t.lbl}
-                <span className="lg-pill-count">{t.count}</span>
+                <span className="bp-tab-count">{t.count}</span>
               </button>
             ))}
           </div>
@@ -1903,9 +1822,14 @@ export default function InvoicesPage() {
       />
       <SummaryDrawer
         open={summaryOpen}
-        insights={insights}
+        insights={tasks}
         onClose={() => setSummaryOpen(false)}
+        mode="tasks"
+        title={insightsRole === "viewer" ? "AR Insights" : "Your Tasks"}
+        ctaLabel="View"
+        contextLabel="Invoices"
         onAsk={askAi}
+        onPick={(t) => { handleTaskAction(t); setSummaryOpen(false); }}
       />
       <AiChatDrawer
         open={aiOpen}

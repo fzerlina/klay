@@ -21,6 +21,7 @@ import { workflowStatus } from "../lib/billStatus";
 import { buildAgingLines, buildSnapshot } from "../lib/apAging";
 import { useBills } from "../state/BillsContext";
 import { useClosePeriod } from "../state/ClosePeriodContext";
+import { useCurrentUser } from "../state/CurrentUserContext";
 import "./modules.css";
 import "./invoices-ledger.css";
 import "./close.css";
@@ -170,7 +171,7 @@ function Gate2SubIndicators({ subs, onDrill }) {
 // suggested amount, basis, PPh component (when applicable), GL entry
 // preview, reversal date. Actions: Book accrual / Adjust / Skip.
 // ════════════════════════════════════════════════════════════════════════
-function AccrualCard({ candidate, onBook, onAdjust, onSkip }) {
+function AccrualCard({ candidate, onBook, onAdjust, onSkip, readOnly = false }) {
   const isPph23 = candidate.pph_category === "pph23_2";
   return (
     <div className="accrual-card">
@@ -225,11 +226,18 @@ function AccrualCard({ candidate, onBook, onAdjust, onSkip }) {
         </div>
       </div>
 
-      <div className="accrual-card-actions">
-        <button type="button" className="accrual-action-primary" onClick={onBook}>Book accrual</button>
-        <button type="button" className="accrual-action-secondary" onClick={onAdjust}>Adjust amount</button>
-        <button type="button" className="accrual-action-tertiary" onClick={onSkip}>Skip this vendor</button>
-      </div>
+      {readOnly ? (
+        <div className="accrual-card-readonly-note">
+          <SparkleIcon size={13} />
+          <span>Klay suggested this accrual. Your Finance Manager books or skips it before close.</span>
+        </div>
+      ) : (
+        <div className="accrual-card-actions">
+          <button type="button" className="accrual-action-primary" onClick={onBook}>Book accrual</button>
+          <button type="button" className="accrual-action-secondary" onClick={onAdjust}>Adjust amount</button>
+          <button type="button" className="accrual-action-tertiary" onClick={onSkip}>Skip this vendor</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -399,7 +407,7 @@ function CombinedProgressBar({ modules, periodLabel, allClosed }) {
 // ════════════════════════════════════════════════════════════════════════
 // AP TAB — full PRD implementation: 5 gates + Accrual Intelligence
 // ════════════════════════════════════════════════════════════════════════
-function ApGates({ bills, navigate, onDeclareClose, periodLabel, locked, lockedAt, apState, bookedIds, dismissedIds, onBook, onDismiss }) {
+function ApGates({ bills, navigate, onDeclareClose, periodLabel, locked, lockedAt, apState, bookedIds, dismissedIds, onBook, onDismiss, canOperate = true }) {
   const [expanded, setExpanded] = useState(new Set(["g2", "g5"]));
   const [showSuppressed, setShowSuppressed] = useState(false);
   const [toast, setToast] = useState("");
@@ -603,6 +611,7 @@ function ApGates({ bills, navigate, onDeclareClose, periodLabel, locked, lockedA
               onBook={() => handleBook(c)}
               onAdjust={() => handleAdjust(c)}
               onSkip={() => handleDismiss(c)}
+              readOnly={!canOperate}
             />
           ))}
           {pendingCandidates.length === 0 && (
@@ -621,7 +630,7 @@ function ApGates({ bills, navigate, onDeclareClose, periodLabel, locked, lockedA
               <div key={c.id} className="accrual-suppressed-row">
                 <span className="accrual-suppressed-vendor">{c.vendor_name}</span>
                 <span className="accrual-suppressed-reason">Dismissed: "{c.dismiss_reason}"</span>
-                <button type="button" className="accrual-suppressed-restore" onClick={() => showToast(`${c.vendor_name} restored to candidate queue`)}>Restore</button>
+                {canOperate && <button type="button" className="accrual-suppressed-restore" onClick={() => showToast(`${c.vendor_name} restored to candidate queue`)}>Restore</button>}
               </div>
             ))}
           </div>
@@ -630,7 +639,13 @@ function ApGates({ bills, navigate, onDeclareClose, periodLabel, locked, lockedA
 
       {/* Declare close CTA bar */}
       <div className="declare-cta-wrap">
-        {allGreen ? (
+        {!canOperate ? (
+          <span className="declare-cta-hint">
+            {allGreen
+              ? `All five gates are green — AP is ready for your Finance Manager to declare ${periodLabel} closed.`
+              : `${gateSummary.filter((g) => g.status !== "GREEN").length} gate${gateSummary.filter((g) => g.status !== "GREEN").length === 1 ? "" : "s"} not yet green. Declaring close is your Finance Manager's call — your job is to clear what's assigned to you.`}
+          </span>
+        ) : allGreen ? (
           <>
             <button type="button" className="declare-cta" onClick={() => onDeclareClose(gateSummary)}>
               Declare AP closed for {periodLabel}
@@ -735,6 +750,11 @@ export default function CloseManagementPage() {
   const navigate = useNavigate();
   const { bills } = useBills();
   const { closedThrough, declareClose, history } = useClosePeriod();
+  const { hasLevel } = useCurrentUser();
+  // Only FM/Admin operate Close (declare, book/skip accruals). Everyone else
+  // sees the full board read-only — Close readiness depends on all roles' work,
+  // but the declaration and accrual decisions are FM/Admin's.
+  const canOperate = hasLevel("ap", "approve+post");
 
   // Module tab
   const [moduleTab, setModuleTab] = useState("ap");
@@ -881,6 +901,7 @@ export default function CloseManagementPage() {
               dismissedIds={dismissedIds}
               onBook={handleBook}
               onDismiss={handleDismiss}
+              canOperate={canOperate}
             />
           )}
           {moduleTab === "ar" && <ArGates navigate={navigate} gates={AR_GATE_SUMMARY} />}

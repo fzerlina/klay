@@ -1,12 +1,13 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useJournalEntries } from "../state/JournalEntriesContext";
+import { useCurrentUser } from "../state/CurrentUserContext";
 import { TODAY } from "../lib/clock";
 import { formatDate } from "../lib/format";
 import AiChatDrawer from "./AiChatDrawer";
 import SummaryDrawer from "./SummaryDrawer";
 import ReconReviewModal, { RECON_TOTAL, RECON_MATCHED, RECON_UNMATCHED } from "../components/ReconReviewModal";
-import { computeJournalInsights, makeJournalAiContext } from "./ai-journal-context";
+import { computeJournalTasks, makeJournalAiContext } from "./ai-journal-context";
 import "./modules.css";
 import "./invoices-ledger.css";
 
@@ -113,39 +114,58 @@ function klayChipLabel(key, val) {
   return String(val);
 }
 
-function AiSummaryCard({ insights, onAsk }) {
+function JournalTasksCard({ tasks, onOpenSummary, onAction, summaryActive, eyebrow = "Your Tasks" }) {
+  // Manual pager (no auto-rotate) — match Bills/Invoices: the user reads each
+  // task at their own pace and steps through with the numbered pager.
   const [idx, setIdx] = useState(0);
-  const [fading, setFading] = useState(false);
-  useEffect(() => {
-    if (insights.length <= 1) return;
-    const id = setInterval(() => {
-      setFading(true);
-      setTimeout(() => {
-        setIdx((i) => (i + 1) % insights.length);
-        setFading(false);
-      }, 220);
-    }, 7000);
-    return () => clearInterval(id);
-  }, [insights.length]);
-  useEffect(() => { if (idx >= insights.length) setIdx(0); }, [insights.length, idx]);
-
-  const current = insights[idx] || insights[0];
+  useEffect(() => { if (idx >= tasks.length) setIdx(0); }, [tasks.length, idx]);
+  const current = tasks[idx] || tasks[0];
+  const total = tasks.length;
+  const actionLabel = current?.cta || "View";
+  function prev() { setIdx((i) => (i - 1 + total) % total); }
+  function next() { setIdx((i) => (i + 1) % total); }
   return (
-    <button type="button" className="lg-kpi-cell lg-kpi-cell-summary" onClick={() => onAsk(current)} aria-label="Ask Klay about this insight">
-      <div className="lg-kpi-summary-eyebrow"><KlaySparkleIcon /> Summary</div>
-      <div className={`lg-kpi-summary-body${fading ? " fading" : ""}`}>{current?.node}</div>
-      <div className="lg-kpi-summary-asof">as of {formatDate(TODAY.toISOString().slice(0, 10))}</div>
-      <div className="lg-kpi-summary-foot">
-        <span className="lg-kpi-summary-cta">Ask Klay →</span>
-        {insights.length > 1 && (
-          <span className="lg-kpi-summary-dots" aria-hidden>
-            {insights.map((_, i) => (
-              <span key={i} className={`lg-kpi-summary-dot${i === idx ? " on" : ""}`} />
-            ))}
-          </span>
-        )}
+    <div className="bp-kpi-card bp-kpi-summary">
+      <div className="bp-kpi-summary-top">
+        <div className="bp-kpi-summary-eyebrow"><KlaySparkleIcon /> {eyebrow.toUpperCase()}</div>
+        <button
+          type="button"
+          className={`bp-kpi-summary-seeall${summaryActive ? " active" : ""}`}
+          onClick={onOpenSummary}
+        >
+          See all
+        </button>
       </div>
-    </button>
+      <div className="bp-kpi-summary-body">{current?.node}</div>
+      <div className="bp-kpi-summary-asof">as of {formatDate(TODAY.toISOString().slice(0, 10))}</div>
+      <div className="bp-kpi-summary-foot">
+        {total > 1 ? (
+          <div className="bp-kpi-summary-pager" aria-label="Task pager">
+            <button type="button" className="bp-kpi-summary-pager-chev" onClick={prev} aria-label="Previous task">
+              <svg viewBox="0 0 9 9" aria-hidden><path d="M6 2L3 4.5L6 7" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </button>
+            {tasks.map((_, i) => (
+              <button
+                key={i}
+                type="button"
+                className={`bp-kpi-summary-pager-num${i === idx ? " on" : ""}`}
+                onClick={() => setIdx(i)}
+                aria-label={`Task ${i + 1}`}
+                aria-current={i === idx ? "true" : undefined}
+              >
+                {i + 1}
+              </button>
+            ))}
+            <button type="button" className="bp-kpi-summary-pager-chev" onClick={next} aria-label="Next task">
+              <svg viewBox="0 0 9 9" aria-hidden><path d="M3 2L6 4.5L3 7" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </button>
+          </div>
+        ) : <span />}
+        <button type="button" className="bp-kpi-cta bp-kpi-cta-action" onClick={() => onAction(current)}>
+          {actionLabel} →
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -428,6 +448,10 @@ function KlayActionModal({ intent, onClose }) {
 
 export default function JournalEntryPage() {
   const { entries: JOURNAL_ENTRIES } = useJournalEntries();
+  const { hasLevel } = useCurrentUser();
+  const canApprove = hasLevel("gl", "approve+post");
+  const canTransact = hasLevel("gl", "transact");
+  const insightsRole = canApprove ? "operator" : canTransact ? "preparer" : "viewer";
   const allRows = useMemo(() => {
     // Mark the AUTO_PROCESSED_COUNT most-recent pending JEs as auto-processed by Klay AI
     const pendingByDateDesc = JOURNAL_ENTRIES
@@ -509,13 +533,33 @@ export default function JournalEntryPage() {
     toastTmr.current = setTimeout(() => setToast(""), 1800);
   }
 
-  const insights = useMemo(() => computeJournalInsights(allRows), [allRows]);
+  const tasks = useMemo(() => computeJournalTasks(allRows, insightsRole), [allRows, insightsRole]);
   const aiContext = useMemo(() => makeJournalAiContext(allRows), [allRows]);
 
   function askAi(question) {
     setSummaryOpen(false);
     setAiSeedQuestion(question);
     setAiOpen(true);
+  }
+
+  // ── Deep-link a task to the relevant filtered view (mirror Bills/Invoices) ─
+  function handleTaskAction(task) {
+    if (!task) return;
+    clearChecks();
+    setKlayFilters({});
+    setFilterValues(emptyFilters);
+    switch (task.id) {
+      case "anomaly":        selectTab("anomaly"); break;
+      case "auto":           selectTab("auto"); break;
+      case "drafts":         selectTab("draft"); break;
+      case "pending":
+      case "largestPending": selectTab("pending"); break;
+      case "balanced":
+      case "unbalanced":
+      case "largestPosted":  selectTab("posted"); break;
+      case "voids":          selectTab("void"); break;
+      default:               askAi(task.question);
+    }
   }
 
   // ── KPIs ───────────────────────────────────────────────────────────────
@@ -525,11 +569,11 @@ export default function JournalEntryPage() {
     return c;
   }, [allRows]);
 
-  const kpis = [
-    { lbl: "Total Journals",       card: "all",     val: String(allRows.length),  sub: `${counts.posted} posted`,    tone: "primary" },
-    { lbl: "Draft",              card: "draft",   val: String(counts.draft),    sub: "not yet posted to GL",                tone: "warn"    },
-    { lbl: "Pending Approval",   card: "pending", val: String(counts.pending),  sub: "awaiting decision",                 tone: "danger"  },
-  ];
+  const jeStats = useMemo(() => {
+    const draftSum   = allRows.filter((r) => r.status === "draft").reduce((s, r) => s + (r.debit || 0), 0);
+    const pendingSum = allRows.filter((r) => r.status === "pending").reduce((s, r) => s + (r.debit || 0), 0);
+    return { draftSum, pendingSum };
+  }, [allRows]);
 
   const tabCounts = useMemo(() => ({
     semua:   allRows.length,
@@ -906,59 +950,61 @@ export default function JournalEntryPage() {
             </div>
           </div>
 
-          <div className="lg-kpi-strip kpi-5">
-            <AiSummaryCard insights={insights} onAsk={(insight) => askAi(insight?.question || "Tell me what stands out")} />
-            <button
-              type="button"
-              className={`lg-kpi-cell lg-kpi-cell-ai${isCardActive("auto") ? " active" : ""}`}
-              onClick={() => {
-                const target = counts.anomaly > 0 ? "anomaly" : "auto";
-                selectCard(isCardActive(target) ? null : target);
-              }}
-              aria-pressed={isCardActive("auto")}
-            >
-              <div className="lg-kpi-ai-eyebrow"><KlaySparkleIcon /> Processed by AI</div>
-              <div className="lg-kpi-ai-val">
-                {counts.auto}
-                {counts.anomaly > 0 && (
-                  <span className="lg-kpi-ai-anomaly-pip" aria-label={`${counts.anomaly} anomalies flagged`}>
-                    <svg viewBox="0 0 12 12"><path d="M6 1.5l5 8.5h-10z" fill="currentColor" stroke="none"/><line x1="6" y1="5" x2="6" y2="7.5" stroke="#fff" strokeWidth="1.4"/><circle cx="6" cy="8.8" r="0.6" fill="#fff" stroke="none"/></svg>
-                    {counts.anomaly}
-                  </span>
-                )}
+          <div className="bp-kpi-wrap">
+            <div className="bp-kpi-row">
+              <JournalTasksCard
+                tasks={tasks}
+                onOpenSummary={() => setSummaryOpen(true)}
+                onAction={handleTaskAction}
+                summaryActive={summaryOpen}
+                eyebrow={insightsRole === "viewer" ? "GL Insights" : "Your Tasks"}
+              />
+
+              {canApprove && (
+                <div className="bp-kpi-card">
+                  <div className="bp-kpi-lbl">Pending Approval</div>
+                  <div className="bp-kpi-val">{counts.pending} · Rp {fmtRp(jeStats.pendingSum)}</div>
+                  <div className="bp-kpi-sub">Review and approve</div>
+                  <button type="button" className="bp-kpi-cta" onClick={() => selectTab("pending")}>View →</button>
+                </div>
+              )}
+
+              {canTransact && (
+                <div className="bp-kpi-card">
+                  <div className="bp-kpi-lbl">Ready to Post</div>
+                  <div className="bp-kpi-val">{counts.draft} · Rp {fmtRp(jeStats.draftSum)}</div>
+                  <div className="bp-kpi-sub">Post to GL</div>
+                  <button type="button" className="bp-kpi-cta" onClick={() => selectTab("draft")}>View →</button>
+                </div>
+              )}
+
+              {canTransact && (
+                <div className="bp-kpi-card">
+                  <div className="bp-kpi-lbl">Needs Confirm</div>
+                  <div className="bp-kpi-val">{counts.auto}</div>
+                  <div className="bp-kpi-sub">Klay auto-prepared</div>
+                  <button type="button" className="bp-kpi-cta" onClick={() => selectTab("auto")}>View →</button>
+                </div>
+              )}
+
+              <div className="bp-kpi-card">
+                <div className="bp-kpi-lbl">Total Journals</div>
+                <div className="bp-kpi-val">{allRows.length}</div>
+                <div className="bp-kpi-sub">{counts.posted} posted</div>
+                <button type="button" className="bp-kpi-cta" onClick={() => selectCard("all")}>View →</button>
               </div>
-              <div className="lg-kpi-ai-sub">
-                Klay drafted {counts.auto} awaiting your confirmation
-                {counts.anomaly > 0 && (
-                  <><br />Plus {counts.anomaly} {counts.anomaly === 1 ? "anomaly" : "anomalies"} needing review</>
-                )}
-              </div>
-              <div className="lg-kpi-ai-cta">Review all →</div>
-            </button>
-            {kpis.map((k) => (
-              <button
-                type="button"
-                className={`lg-kpi-cell${k.card === "all" ? " lg-kpi-cell-neutral" : ""}${isCardActive(k.card) ? " active" : ""}`}
-                key={k.lbl}
-                onClick={() => selectCard(isCardActive(k.card) ? null : k.card)}
-                aria-pressed={isCardActive(k.card)}
-              >
-                <div className="lg-kpi-lbl">{k.lbl}</div>
-                <div className={`lg-kpi-val${k.tone === "danger" ? " danger" : k.tone === "warn" ? " warn" : ""}`}>{k.val}</div>
-                <div className="lg-kpi-sub">{k.sub}</div>
-              </button>
-            ))}
+            </div>
           </div>
         </div>
 
         {/* ── Table card ─────────────────────────────────────────────── */}
         <div className="lg-table-wrap">
           <div className="lg-card lg-table-je">
-            <div className="lg-pills-row">
+            <div className="bp-tabs-row">
               {tabs.map((t) => (
-                <button key={t.k} className={`lg-pill${isTabActive(t.k) ? " active" : ""}`} onClick={() => selectTab(t.k)}>
+                <button key={t.k} className={`bp-tab${isTabActive(t.k) ? " active" : ""}`} onClick={() => selectTab(t.k)}>
                   {t.lbl}
-                  <span className="lg-pill-count">{t.count}</span>
+                  <span className="bp-tab-count">{t.count}</span>
                 </button>
               ))}
             </div>
@@ -1321,7 +1367,17 @@ export default function JournalEntryPage() {
         onClick={() => { setAiOpen(false); setSummaryOpen(false); }}
         aria-hidden={!(aiOpen || summaryOpen)}
       />
-      <SummaryDrawer open={summaryOpen} insights={insights} onClose={() => setSummaryOpen(false)} onAsk={askAi} />
+      <SummaryDrawer
+        open={summaryOpen}
+        insights={tasks}
+        onClose={() => setSummaryOpen(false)}
+        mode="tasks"
+        title={insightsRole === "viewer" ? "GL Insights" : "Your Tasks"}
+        ctaLabel="View"
+        contextLabel="Journal Entry"
+        onAsk={askAi}
+        onPick={(t) => { handleTaskAction(t); setSummaryOpen(false); }}
+      />
       <AiChatDrawer
         open={aiOpen}
         onClose={() => { setAiOpen(false); setAiSeedQuestion(null); }}

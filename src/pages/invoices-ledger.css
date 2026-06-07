@@ -41,6 +41,9 @@
 .lg-btn-ghost svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:1.5;stroke-linecap:round;flex-shrink:0}
 .lg-btn-brand{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-sans);font-size:12px;font-weight:600;padding:7px 14px;background:var(--color-brand);color:#fff;border:none;border-radius:var(--radius-sm);cursor:pointer;transition:background var(--transition-base);white-space:nowrap}
 .lg-btn-brand:hover{background:var(--color-brand-hover)}
+.lg-btn-brand:disabled{background:var(--color-surface-sunken);color:var(--color-text-tertiary);cursor:not-allowed}
+.lg-btn-brand:disabled:hover{background:var(--color-surface-sunken)}
+.lg-btn-brand:disabled svg{stroke:var(--color-text-tertiary)}
 .lg-btn-brand svg{width:11px;height:11px;stroke:#fff;fill:none;stroke-width:2.2;flex-shrink:0}
 
 /* KPI hairline strip — 4 cols, no boxes */

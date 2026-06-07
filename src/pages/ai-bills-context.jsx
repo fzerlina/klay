@@ -1,6 +1,7 @@
 import { VENDORS } from "../data/seed/vendors";
 import { TODAY, daysSince } from "../lib/clock";
 import { initials } from "../lib/format";
+import { workflowStatus } from "../lib/billStatus";
 import { ChatChip } from "./AiChatDrawer";
 
 function fmtRpShort(n) {
@@ -19,7 +20,11 @@ function shortName(name) {
 // ── Insights (cycle in the AiSubtitle) ────────────────────────────────────
 // Each insight has { id, node (JSX), question (string seed for chat) }
 
-export function computeBillsInsights(bills, closedThrough = "2025-02") {
+// `role` scopes which tasks surface in the "Your Tasks" rail:
+//   "operator"  — FM/Admin: supervisory queue (ready-to-post, cashflow, approvals)
+//   "preparer"  — AP Staff: their prep queue (returns to fix, exceptions, drafts)
+//   "viewer"    — View Only: read-only analytics, no action framing
+export function computeBillsInsights(bills, closedThrough = "2025-02", role = "operator") {
   const overdue = bills.filter((b) => b.pay === "overdue");
   const totalOverdue = overdue.reduce((s, b) => s + b.sisa, 0);
 
@@ -72,21 +77,140 @@ export function computeBillsInsights(bills, closedThrough = "2025-02") {
   });
   const periodLockedTotal = periodLocked.reduce((s, b) => s + (b.sisa || b.total), 0);
 
+  // Workflow-derived prep queue (AP Staff). These are the states a preparer
+  // owns: drafts they haven't submitted, bills the FM returned for fixes, and
+  // exceptions Klay couldn't auto-process.
+  const drafts = bills.filter((b) => workflowStatus(b) === "DRAFT");
+  const draftsTotal = drafts.reduce((s, b) => s + b.total, 0);
+  const returned = bills.filter((b) => workflowStatus(b) === "RETURNED");
+  const exceptions = bills.filter((b) => workflowStatus(b) === "EXCEPTION");
+
+  // ── Shared analytics insights (used by operator + viewer) ───────────────
+  const vendorConcentrationInsight = top3.length > 0 && totalOverdue > 0 ? {
+    id: "vendorConcentration",
+    node: (
+      <>
+        <strong className="lg-ai-strong">{top3.length} vendors</strong>{" "}
+        ({top3.map((v, i) => (
+          <span key={v.id}>{i > 0 ? ", " : ""}{shortName(v.name)}</span>
+        ))}) account for{" "}
+        <strong className="lg-ai-strong">{top3Pct}%</strong> of{" "}
+        <span className="lg-ai-danger">{fmtRpShort(totalOverdue)}</span> in overdue payables.
+      </>
+    ),
+    cta: "View",
+    question: "Which vendors do we most frequently pay late?",
+  } : null;
+
+  const avgDpdInsight = overdue.length > 0 && avgDpd > 0 ? {
+    id: "avgDpd",
+    node: (
+      <>
+        Average <strong className="lg-ai-strong">{avgDpd} days overdue</strong> across{" "}
+        <strong className="lg-ai-strong">{overdue.length} unpaid bills</strong>.
+      </>
+    ),
+    cta: "View",
+    question: "What is our average days-late on vendor payments?",
+  } : null;
+
+  const largestInsight = largest && largest.sisa > 0 ? {
+    id: "largest",
+    bill: largest,
+    node: (
+      <>
+        Largest overdue payable:{" "}
+        <span className="lg-ai-danger">{fmtRpShort(largest.sisa)}</span> to{" "}
+        <strong className="lg-ai-strong">{shortName(largest.vendorName)}</strong>{" "}
+        ({Math.max(0, daysSince(largest.due))} days overdue).
+      </>
+    ),
+    cta: "View",
+    question: `Show details for bill ${largest.invNo || largest.id} from ${shortName(largest.vendorName)}`,
+  } : null;
+
+  const periodLockedInsight = periodLocked.length > 0 ? {
+    id: "periodLocked",
+    node: (
+      <>
+        <strong className="lg-ai-strong">{periodLocked.length} bills</strong> worth{" "}
+        <strong className="lg-ai-strong">{fmtRpShort(periodLockedTotal)}</strong> are bound for closed periods — reassign to current open period to post.
+      </>
+    ),
+    cta: "View",
+    question: "Which bills are bound for closed periods?",
+  } : null;
+
+  // ── AP Staff (preparer): their prep queue, ordered by who's waiting ─────
+  if (role === "preparer") {
+    const prep = [];
+    if (returned.length > 0) {
+      prep.push({
+        id: "returned",
+        node: (
+          <>
+            <strong className="lg-ai-strong">{returned.length} bill{returned.length === 1 ? "" : "s"}</strong> returned by your Finance Manager — fix and resubmit.
+          </>
+        ),
+        cta: "View",
+        question: "Which bills did my Finance Manager return to me?",
+      });
+    }
+    if (exceptions.length > 0) {
+      prep.push({
+        id: "exceptions",
+        node: (
+          <>
+            <strong className="lg-ai-strong">{exceptions.length} bill{exceptions.length === 1 ? "" : "s"}</strong> need manual review — Klay couldn't auto-process them.
+          </>
+        ),
+        cta: "View",
+        question: "Which bills need manual review?",
+      });
+    }
+    if (periodLockedInsight) prep.push(periodLockedInsight);
+    if (drafts.length > 0) {
+      prep.push({
+        id: "drafts",
+        node: (
+          <>
+            <strong className="lg-ai-strong">{drafts.length} draft{drafts.length === 1 ? "" : "s"}</strong> worth{" "}
+            <strong className="lg-ai-strong">{fmtRpShort(draftsTotal)}</strong> not yet submitted for review.
+          </>
+        ),
+        cta: "View",
+        question: "Which of my drafts are ready to submit?",
+      });
+    }
+    if (prep.length === 0) {
+      prep.push({
+        id: "empty",
+        node: <>Your prep queue is clear — no drafts, returns, or exceptions waiting.</>,
+        cta: "View",
+        question: "What's in my AP queue right now?",
+      });
+    }
+    return prep;
+  }
+
+  // ── View Only (viewer): read-only analytics, no action framing ──────────
+  if (role === "viewer") {
+    const ro = [vendorConcentrationInsight, avgDpdInsight, largestInsight].filter(Boolean);
+    if (ro.length === 0) {
+      ro.push({
+        id: "empty",
+        node: <>All trade payables are within term today — nothing overdue.</>,
+        cta: "View",
+        question: "How is AP cash flow this week?",
+      });
+    }
+    return ro;
+  }
+
+  // ── FM/Admin (operator): supervisory queue (default) ────────────────────
   const insights = [];
 
-  if (periodLocked.length > 0) {
-    insights.push({
-      id: "periodLocked",
-      node: (
-        <>
-          <strong className="lg-ai-strong">{periodLocked.length} bills</strong> worth{" "}
-          <strong className="lg-ai-strong">{fmtRpShort(periodLockedTotal)}</strong> are bound for closed periods — reassign to current open period to post.
-        </>
-      ),
-      cta: "View",
-      question: "Which bills are bound for closed periods?",
-    });
-  }
+  if (periodLockedInsight) insights.push(periodLockedInsight);
 
   if (readyToPost.length > 0) {
     insights.push({
@@ -102,23 +226,7 @@ export function computeBillsInsights(bills, closedThrough = "2025-02") {
     });
   }
 
-  if (top3.length > 0 && totalOverdue > 0) {
-    insights.push({
-      id: "vendorConcentration",
-      node: (
-        <>
-          <strong className="lg-ai-strong">{top3.length} vendors</strong>{" "}
-          ({top3.map((v, i) => (
-            <span key={v.id}>{i > 0 ? ", " : ""}{shortName(v.name)}</span>
-          ))}) account for{" "}
-          <strong className="lg-ai-strong">{top3Pct}%</strong> of{" "}
-          <span className="lg-ai-danger">{fmtRpShort(totalOverdue)}</span> in overdue payables.
-        </>
-      ),
-      cta: "View",
-      question: "Which vendors do we most frequently pay late?",
-    });
-  }
+  if (vendorConcentrationInsight) insights.push(vendorConcentrationInsight);
 
   if (upcoming.length > 0) {
     insights.push({
@@ -149,36 +257,9 @@ export function computeBillsInsights(bills, closedThrough = "2025-02") {
     });
   }
 
-  if (overdue.length > 0 && avgDpd > 0) {
-    insights.push({
-      id: "avgDpd",
-      node: (
-        <>
-          Average <strong className="lg-ai-strong">{avgDpd} days overdue</strong> across{" "}
-          <strong className="lg-ai-strong">{overdue.length} unpaid bills</strong>.
-        </>
-      ),
-      cta: "View",
-      question: "What is our average days-late on vendor payments?",
-    });
-  }
+  if (avgDpdInsight) insights.push(avgDpdInsight);
 
-  if (largest && largest.sisa > 0) {
-    insights.push({
-      id: "largest",
-      bill: largest,
-      node: (
-        <>
-          Largest overdue payable:{" "}
-          <span className="lg-ai-danger">{fmtRpShort(largest.sisa)}</span> to{" "}
-          <strong className="lg-ai-strong">{shortName(largest.vendorName)}</strong>{" "}
-          ({Math.max(0, daysSince(largest.due))} days overdue).
-        </>
-      ),
-      cta: "View",
-      question: `Show details for bill ${largest.invNo || largest.id} from ${shortName(largest.vendorName)}`,
-    });
-  }
+  if (largestInsight) insights.push(largestInsight);
 
   if (insights.length === 0) {
     insights.push({
