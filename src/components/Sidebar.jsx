@@ -85,47 +85,68 @@ const CLOSE_MODULE_GATES = {
 
 // Close hero card pinned at the top of the sidebar (above the Overview section).
 // Reinforces Klay's 0-day-closing USP and gives a constant signal of where the
-// close stands without leaving any page. Scope is role-aware: close owners
-// (FM/Admin) supervise the whole period → global 8/13. A single-module operator
-// (e.g. AP Staff) sees only their module's gates — the part of the close they
-// actually move. View-only / multi-module non-owners fall back to global. The
-// Close Command Center page is the live source.
+// close stands without leaving any page. The framing is role-aware:
+//   • Close owners (FM/Admin, who can approve+post AP) supervise the whole
+//     period, so they see the gate scoreboard — "8 of 13 gates green".
+//   • Everyone else owns tasks, not gates. They see how many close tasks are
+//     still on their plate, derived from the open gates in the module(s) they
+//     operate (e.g. AP Staff: 3 of their 5 AP gates still open → "3 tasks left").
+//     Pure view-only personas have nothing assigned.
+// The Close Command Center page is the live source.
 function CloseHeroCard({ collapsed }) {
   const { hasLevel } = useCurrentUser();
   const isCloseOwner = hasLevel("ap", "approve+post");
-  const operated = isCloseOwner ? [] : ["ap", "ar", "gl"].filter((m) => hasLevel(m, "transact"));
-  const scope = operated.length === 1 ? CLOSE_MODULE_GATES[operated[0]] : null;
-  const { green, total } = scope || CLOSE_GLOBAL;
+  const operated = ["ap", "ar", "gl"].filter((m) => hasLevel(m, "transact"));
 
   const R = 13;
   const C = 2 * Math.PI * R;
-  const greenLen = total ? (green / total) * C : 0;
-  const pct = total ? Math.round((green / total) * 100) : 0;
-  const scopeLabel = scope ? `${scope.label} close` : "April Close";
-  const subText = scope ? `${scope.label}: ${green} of ${total} gates green` : `${green} of ${total} gates green`;
+
+  let centerNum, arcFrac, subText;
+  if (isCloseOwner) {
+    // Owner view: gate scoreboard for the whole period.
+    const { green, total } = CLOSE_GLOBAL;
+    centerNum = green;
+    arcFrac = total ? green / total : 0;
+    subText = `${green} of ${total} gates green`;
+  } else {
+    // Operator/viewer view: their outstanding close tasks.
+    const assigned = operated.reduce((s, m) => s + CLOSE_MODULE_GATES[m].total, 0);
+    const done = operated.reduce((s, m) => s + CLOSE_MODULE_GATES[m].green, 0);
+    const remaining = assigned - done;
+    centerNum = remaining;
+    arcFrac = assigned ? done / assigned : 0;
+    subText = assigned === 0
+      ? "No close tasks for you"
+      : remaining === 0
+        ? "You're all caught up"
+        : `${remaining} task${remaining === 1 ? "" : "s"} left for you`;
+  }
+
+  const arcLen = arcFrac * C;
+  const pct = Math.round(arcFrac * 100);
   return (
     <NavLink
       to="/close"
-      title={collapsed ? `${scopeLabel} · ${subText}` : undefined}
+      title={collapsed ? `April Close · ${subText}` : undefined}
       className={({ isActive }) => `sb-close-hero${isActive ? " active" : ""}${collapsed ? " collapsed" : ""}`}
     >
-      <span className="sb-close-hero-ring" aria-label={`${green} of ${total} gates green (${pct}%)`}>
+      <span className="sb-close-hero-ring" aria-label={`April Close — ${subText} (${pct}%)`}>
         <svg viewBox="0 0 32 32">
           <circle cx="16" cy="16" r={R} fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth="3"/>
-          {green > 0 && (
+          {arcFrac > 0 && (
             <circle
               cx="16" cy="16" r={R} fill="none"
               stroke="#3ec47a" strokeWidth="3" strokeLinecap="round"
-              strokeDasharray={`${greenLen} ${C - greenLen}`}
+              strokeDasharray={`${arcLen} ${C - arcLen}`}
               transform="rotate(-90 16 16)"
             />
           )}
-          <text x="16" y="20" textAnchor="middle" fontSize="10" fontWeight="700" fill="#fff" fontFamily="var(--font-display)">{green}</text>
+          <text x="16" y="20" textAnchor="middle" fontSize="10" fontWeight="700" fill="#fff" fontFamily="var(--font-display)">{centerNum}</text>
         </svg>
       </span>
       {!collapsed && (
         <span className="sb-close-hero-body">
-          <span className="sb-close-hero-title">{scopeLabel}</span>
+          <span className="sb-close-hero-title">April Close</span>
           <span className="sb-close-hero-sub">{subText}</span>
         </span>
       )}
