@@ -17,7 +17,17 @@ import {
   RELATIONSHIP_LABEL,
   CONFIDENCE_THRESHOLD_PAYMENT_TERMS_MIN,
 } from "../lib/apAging";
+import "./modules.css";
 import "./ap-aging.css";
+
+// Age-bucket bar colours — green (current) → amber (1–90) → red (90+).
+const AGE_COLOR = { current: "#2E7D44", b1_30: "#C99A2E", b31_60: "#B8770F", b61_90: "#A8620C", b91_120: "#A32D2D", b_gt120: "#8C2420" };
+const Sparkle = (
+  <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M6 1.5l1.1 2.7L9.8 5l-2.7 0.8L6 8.5l-1.1-2.7L2.2 5l2.7-0.8L6 1.5z" />
+    <path d="M10 8.5l0.4 1L11.5 10l-1.1 0.4L10 11.5l-0.4-1.1L8.5 10l1.1-0.5L10 8.5z" />
+  </svg>
+);
 
 // ── Icons ──────────────────────────────────────────────────────────────────
 const I = {
@@ -348,9 +358,65 @@ export default function ApAgingPage() {
         const dueDays = -daysSince(l.dueDate);  // positive = future
         return dueDays >= 0 && dueDays <= 7;
       });
+    } else if (cardFilter === "overdue") {
+      rows = rows.filter((l) => l.daysOverdue > 0);
+    } else if (cardFilter === "returned") {
+      rows = rows.filter((l) => l.workflow_status === "RETURNED");
+    } else if (cardFilter && cardFilter.startsWith("age:")) {
+      const bk = cardFilter.slice(4);
+      rows = rows.filter((l) => l.ageBucket === bk);
     }
     return rows;
   }, [allLines, cardFilter]);
+
+  // ── Command-center figures — tasks, payment run, insights ────────────────
+  const cc = useMemo(() => {
+    const base = allLines.filter(isDecisionQueueRow);
+    const isDue7 = (l) => { const d = -daysSince(l.dueDate); return d >= 0 && d <= 7; };
+    const isDisc7 = (l) => {
+      const p = discountPillState(l);
+      return p && p.tone !== "muted" && p.tone !== "captured" && l.days_to_discount != null && l.days_to_discount <= 7;
+    };
+    const sum = (arr) => arr.reduce((s, l) => s + l.remaining, 0);
+
+    const discRows = base.filter(isDisc7);
+    const discHot = discRows.filter((l) => discountPillState(l)?.tone === "danger").length;
+    const discSavings = discRows.reduce((s, l) => s + (l.discount_amount_idr || 0), 0);
+
+    const overdueRows = base.filter((l) => l.daysOverdue > 0);
+    const over60Sum = sum(overdueRows.filter((l) => l.daysOverdue > 60));
+
+    const dueRows = base.filter(isDue7);
+    const returnedRows = base.filter((l) => l.workflow_status === "RETURNED");
+
+    // Overdue concentration (60+ days), top vendors
+    const sixtyPlus = allLines.filter((l) => !l.is_accrual && l.workflow_status !== "DRAFT" && l.remaining > 0 && l.daysOverdue > 60);
+    const byVendor = new Map();
+    for (const l of sixtyPlus) {
+      const prev = byVendor.get(l.vendorId) || { name: l.vendorName, sum: 0 };
+      prev.sum += l.remaining;
+      byVendor.set(l.vendorId, prev);
+    }
+    const sixtyTotal = sum(sixtyPlus);
+    const topV = [...byVendor.values()].sort((a, b) => b.sum - a.sum).slice(0, 3);
+    const concentrationPct = sixtyTotal > 0 ? Math.round(topV.reduce((s, v) => s + v.sum, 0) / sixtyTotal * 100) : 0;
+
+    // Early-pay discounts available across all outstanding (confidence-gated by pill)
+    const discAvailable = allLines.reduce((s, l) => {
+      if (l.is_accrual || l.remaining <= 0) return s;
+      const p = discountPillState(l);
+      return p && p.tone !== "muted" && p.tone !== "captured" ? s + (l.discount_amount_idr || 0) : s;
+    }, 0);
+
+    return {
+      discCount: discRows.length, discHot, discSavings,
+      overdueCount: overdueRows.length, overdueSum: sum(overdueRows), over60Sum,
+      dueCount: dueRows.length, dueSum: sum(dueRows),
+      returnedCount: returnedRows.length, returnedSum: sum(returnedRows),
+      topV, concentrationPct, sixtyTotal,
+      discAvailable, discAtRisk: snapshot.discountsThisWeekIdr,
+    };
+  }, [allLines, snapshot]);
 
   // Aging Table — vendor pivot
   const pivot = useMemo(() => {
@@ -395,7 +461,6 @@ export default function ApAgingPage() {
   });
   const showBanner = !bannerDismissed && urgentDiscounts.length > 0;
 
-  const recon = reconBadgeContent(snapshot.reconciliation);
 
   // Grand totals for Aging Table footer
   const grandTotals = useMemo(() => {
@@ -415,11 +480,6 @@ export default function ApAgingPage() {
         <div className="lg-head-top">
           <div style={{ flex: 1, minWidth: 0 }}>
             <h1 className="lg-title">AP Aging</h1>
-            <div className={`apa-recon-badge ${recon.cls}`} title="GL reconciliation — Gate 3a (AP Control) and Gate 3b (Accrued Liabilities)">
-              {recon.icon}
-              <span>{recon.text}</span>
-              {recon.delta && <span className="apa-recon-delta">· {recon.delta}</span>}
-            </div>
           </div>
           <div className="lg-head-actions">
             <button className="lg-btn-ghost" disabled title="Coming in PR2">
@@ -435,48 +495,100 @@ export default function ApAgingPage() {
           </div>
         </div>
 
-        {/* KPI strip — divided cells, no rounded boxes, matches Bills List.
-            3 of 5 cards have a "View →" CTA that filters the table:
-            - Discounts Expiring 7d → narrow Decision Queue to capturable discounts
-            - Due in Next 7d → narrow Decision Queue to bills coming due
-            - Accrued Liabilities → switch to Aging Table view (accruals don't appear in DQ)
-            AP Outstanding is the default view (no CTA needed); DPO is an aggregate
-            stat (not row-filterable). */}
-        <div className="bp-kpi-wrap">
-          <div className="bp-kpi-row">
-            <div className="bp-kpi-card">
-              <div className="bp-kpi-lbl">AP Outstanding</div>
-              <div className="bp-kpi-val">{formatRupiah(snapshot.apOutstanding)}</div>
-              <div className="bp-kpi-sub">Across {allLines.filter((l) => !l.is_accrual && l.workflow_status !== "DRAFT" && l.remaining > 0).length} bills</div>
-            </div>
-            <div className={`bp-kpi-card${cardFilter === "accruals" ? " active" : ""}`}>
-              <div className="bp-kpi-lbl">Accrued Liabilities</div>
-              <div className="bp-kpi-val">{formatRupiah(snapshot.accruedLiabilities)}</div>
-              <div className="bp-kpi-sub">{allLines.filter((l) => l.is_accrual).length} accruals · Auto-reverse 1 May</div>
-              <button type="button" className="bp-kpi-cta" onClick={() => selectCard("accruals")}>
-                {cardFilter === "accruals" ? "Clear filter ✕" : "View in Aging Table →"}
+        {/* ── Command center: payment tasks + AP-by-age + insights ─────── */}
+        <div className="bp-cc">
+          <div className="bp-cc-band-head">
+            <span className="bp-cc-eyebrow">{Sparkle} Your Tasks</span>
+            <span className="bp-cc-asof">as of {formatDateEn(TODAY.toISOString().slice(0, 10))}</span>
+          </div>
+          <div className="bp-cc-taskband">
+            {cc.discCount > 0 && (
+              <button type="button" className="bp-t2" onClick={() => selectCard("discounts")}>
+                <span className="bp-t2-lbl">Capture discounts</span>
+                <span className="bp-t2-amt">{formatRupiah(cc.discSavings)}</span>
+                <span className="bp-t2-sub">{cc.discCount} bill{cc.discCount === 1 ? "" : "s"} · savings</span>
+                <span className={`bp-t2-tag${cc.discHot > 0 ? " hot" : ""}`}>{cc.discHot > 0 ? `${cc.discHot} expire ≤48h` : "this week"}</span>
+                <span className="bp-t2-cta">Pay now →</span>
               </button>
-            </div>
-            <div className="bp-kpi-card">
-              <div className="bp-kpi-lbl">DPO This Month</div>
-              <div className="bp-kpi-val">{snapshot.dpoDays} days</div>
-              <div className="bp-kpi-sub">Days payables outstanding</div>
-            </div>
-            <div className={`bp-kpi-card${cardFilter === "discounts" ? " active" : ""}`}>
-              <div className="bp-kpi-lbl">Discounts Expiring 7d</div>
-              <div className={`bp-kpi-val${snapshot.discountsThisWeekIdr > 0 ? " warn" : ""}`}>{formatRupiah(snapshot.discountsThisWeekIdr)}</div>
-              <div className="bp-kpi-sub">{urgentDiscounts.length > 0 ? `${urgentDiscounts.length} expire in <48h` : "No urgent discounts"}</div>
-              <button type="button" className="bp-kpi-cta" onClick={() => selectCard("discounts")} disabled={snapshot.discountsThisWeekIdr === 0}>
-                {cardFilter === "discounts" ? "Clear filter ✕" : "View bills →"}
+            )}
+            {cc.overdueCount > 0 && (
+              <button type="button" className="bp-t2" onClick={() => selectCard("overdue")}>
+                <span className="bp-t2-lbl">Settle overdue</span>
+                <span className="bp-t2-amt">{formatRupiah(cc.overdueSum)}</span>
+                <span className="bp-t2-sub">{cc.overdueCount} bill{cc.overdueCount === 1 ? "" : "s"}</span>
+                {cc.over60Sum > 0 && <span className="bp-t2-tag hot">{formatRupiah(cc.over60Sum)} past 60d</span>}
+                <span className="bp-t2-cta">Prioritize →</span>
               </button>
-            </div>
-            <div className={`bp-kpi-card${cardFilter === "due7d" ? " active" : ""}`}>
-              <div className="bp-kpi-lbl">Due in Next 7d</div>
-              <div className="bp-kpi-val">{formatRupiah(snapshot.dueIn7Days)}</div>
-              <div className="bp-kpi-sub">Approved bills coming due</div>
-              <button type="button" className="bp-kpi-cta" onClick={() => selectCard("due7d")} disabled={snapshot.dueIn7Days === 0}>
-                {cardFilter === "due7d" ? "Clear filter ✕" : "View bills →"}
+            )}
+            {cc.dueCount > 0 && (
+              <button type="button" className="bp-t2" onClick={() => selectCard("due7d")}>
+                <span className="bp-t2-lbl">Fund due · 7 days</span>
+                <span className="bp-t2-amt">{formatRupiah(cc.dueSum)}</span>
+                <span className="bp-t2-sub">{cc.dueCount} bill{cc.dueCount === 1 ? "" : "s"}</span>
+                <span className="bp-t2-tag neu">for this run</span>
+                <span className="bp-t2-cta">Schedule →</span>
               </button>
+            )}
+            {cc.returnedCount > 0 && (
+              <button type="button" className="bp-t2" onClick={() => selectCard("returned")}>
+                <span className="bp-t2-lbl">Returned to fix</span>
+                <span className="bp-t2-amt">{formatRupiah(cc.returnedSum)}</span>
+                <span className="bp-t2-sub">{cc.returnedCount} bill{cc.returnedCount === 1 ? "" : "s"}</span>
+                <span className="bp-t2-tag neu">FM returned</span>
+                <span className="bp-t2-cta">Resolve →</span>
+              </button>
+            )}
+          </div>
+
+          <div className="bp-cc-split">
+            <div className="bp-cc-apo">
+              <div className="bp-cc-apo-head">
+                <div className="bp-cc-sec-lbl">AP Outstanding · by age</div>
+                <div className="bp-cc-apo-total">{formatRupiah(snapshot.apOutstanding)}</div>
+              </div>
+              <div className="bp-cc-bar">
+                {AGE_BUCKETS.map((b) => (
+                  <span key={b.key} style={{ flexGrow: snapshot.bucketTotals[b.key] || 0, minWidth: snapshot.bucketTotals[b.key] > 0 ? 4 : 0, background: AGE_COLOR[b.key] }} title={b.lbl} />
+                ))}
+              </div>
+              <div className="apa-age-grid">
+                {AGE_BUCKETS.map((b) => (
+                  <button key={b.key} type="button" className={`apa-age${cardFilter === "age:" + b.key ? " active" : ""}`} onClick={() => selectCard("age:" + b.key)}>
+                    <span className="apa-age-top"><i style={{ background: AGE_COLOR[b.key] }} />{b.lbl}</span>
+                    <span className="apa-age-amt">{formatRupiah(snapshot.bucketTotals[b.key])}</span>
+                  </button>
+                ))}
+              </div>
+              <div className="apa-cc-foot">
+                <span>Cash due this week <b>{formatRupiah(snapshot.dueIn7Days)}</b></span>
+                <span>DPO <b>{snapshot.dpoDays}d</b></span>
+                <span>Accrued <b>{formatRupiah(snapshot.accruedLiabilities)}</b></span>
+              </div>
+            </div>
+
+            <div className="bp-cc-insights">
+              <div className="bp-cc-sec-lbl">{Sparkle} Insights</div>
+              {cc.topV.length > 0 && (
+                <div className="bp-cc-ins-row">
+                  <div className="bp-cc-ins-text">
+                    <strong className="lg-ai-strong">{cc.topV.length} vendor{cc.topV.length === 1 ? "" : "s"}</strong> hold{" "}
+                    <strong className="lg-ai-strong">{cc.concentrationPct}%</strong> of{" "}
+                    <strong className="lg-ai-strong">{formatRupiah(cc.sixtyTotal)}</strong> in 60+ day overdue.
+                  </div>
+                  <div className="bp-cc-ins-actions">
+                    <button type="button" className="bp-cc-ins-view" onClick={() => { setCardFilter(null); setView("table"); }}>View →</button>
+                  </div>
+                </div>
+              )}
+              <div className="bp-cc-ins-row">
+                <div className="bp-cc-ins-text">
+                  Early-pay discounts: <strong className="lg-ai-strong">{formatRupiah(cc.discAvailable)}</strong> available ·{" "}
+                  <strong className="lg-ai-danger">{formatRupiah(cc.discAtRisk)}</strong> expiring this week.
+                </div>
+                <div className="bp-cc-ins-actions">
+                  <button type="button" className="bp-cc-ins-view" onClick={() => selectCard("discounts")}>View →</button>
+                </div>
+              </div>
             </div>
           </div>
         </div>

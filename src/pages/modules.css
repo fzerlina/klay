@@ -455,11 +455,81 @@
 /* AP Outstanding card — draft sub-line (excluded from the headline). */
 .bp-kpi-sub-draft{color:var(--color-text-tertiary);font-style:italic}
 
+/* ── Command center (Bills) — Layout: task band + (AP Outstanding | Insights) ──
+   "Your Tasks" are raised, actionable boxes; the AP Outstanding breakdown is a
+   reconciling 4-bucket panel (each a table filter); Insights holds the patterns. */
+/* Command-center cream band — full-bleed within the (white) Bills header so the tasks + panels read as one tinted section. Title row stays white above it. */
+.bp-cc{margin:16px -32px 14px;padding:16px 32px 20px;background:#FAEEDA}
+.bp-cc-band-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+.bp-cc-eyebrow{display:flex;align-items:center;gap:7px;font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#BA5A0E}
+.bp-cc-eyebrow svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linejoin:round;stroke-linecap:round}
+.bp-cc-asof{font-size:10px;color:var(--color-text-tertiary);font-style:italic;white-space:nowrap}
+
+/* Task band — exactly the old KPI strip: top rule, flat transparent cells
+   separated by vertical dividers, no outer box, each stacks title → numbers → CTA. */
+.bp-cc-taskband{display:flex;align-items:stretch;border-top:1px solid #E4D2AC;margin-bottom:18px}
+.bp-t2{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:5px;background:transparent;border:none;border-left:1px solid #E4D2AC;border-radius:0;padding:14px 18px;cursor:pointer;text-align:left;font-family:var(--font-sans);transition:background var(--transition-fast)}
+.bp-t2:first-child{border-left:none;padding-left:0}
+.bp-t2:hover{background:rgba(255,255,255,.55)}
+.bp-t2-lbl{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--color-text-tertiary)}
+.bp-t2-amt{font-family:var(--font-mono);font-size:22px;font-weight:700;color:var(--color-text-primary);letter-spacing:-.02em;line-height:1.1}
+.bp-t2-sub{font-size:11px;color:var(--color-text-tertiary);line-height:1.4}
+.bp-t2-tag{align-self:flex-start;display:inline-flex;align-items:center;font-size:9.5px;font-weight:700;letter-spacing:.02em;color:#7A4E0A;background:#F4DCA6;border-radius:4px;padding:2px 7px;line-height:1.35}
+.bp-t2-tag.sep{color:#857C6B;background:#EFE7D6}
+.bp-t2-cta{align-self:flex-start;font-size:11px;font-weight:700;color:#BA5A0E;white-space:nowrap;margin-top:1px}
+@media (max-width:760px){.bp-cc-taskband{flex-direction:column}.bp-t2{border-left:none;border-top:1px solid #E4D2AC;padding-left:0}.bp-t2:first-child{border-top:none}}
+
+/* Split row: AP Outstanding (left) | Insights (right) */
+.bp-cc-split{display:grid;grid-template-columns:1.35fr 1fr;gap:14px;align-items:stretch}
+@media (max-width:1080px){.bp-cc-split{grid-template-columns:1fr}}
+.bp-cc-sec-lbl{display:flex;align-items:center;gap:7px;font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--color-text-secondary);margin-bottom:9px}
+.bp-cc-sec-lbl svg{width:12px;height:12px;stroke:#BA5A0E;color:#BA5A0E;fill:none;stroke-width:1.8;stroke-linejoin:round;stroke-linecap:round}
+
+/* AP Outstanding panel */
+.bp-cc-apo{background:var(--color-surface-raised);border:1px solid var(--color-border-default);border-radius:var(--radius-md);padding:13px 14px}
+.bp-cc-apo-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:11px}
+.bp-cc-apo .bp-cc-sec-lbl{margin-bottom:2px}
+.bp-cc-apo-cap{font-size:10.5px;color:var(--color-text-tertiary);font-style:italic}
+.bp-cc-apo-total{font-family:var(--font-mono);font-size:18px;font-weight:700;color:var(--color-text-primary);letter-spacing:-.01em;white-space:nowrap}
+.bp-cc-bar{display:flex;height:10px;border-radius:9999px;overflow:hidden;gap:2px;margin-bottom:12px;background:var(--color-surface-sunken)}
+.bp-cc-bar span{height:100%;border-radius:2px}
+.bp-cc-buckets{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+@media (max-width:560px){.bp-cc-buckets{grid-template-columns:repeat(2,1fr)}}
+.bp-bk{display:flex;flex-direction:column;gap:3px;background:var(--color-surface-sunken);border:1px solid transparent;border-radius:var(--radius-sm);padding:9px 10px;cursor:pointer;text-align:left;font-family:var(--font-sans);transition:border-color var(--transition-fast),background var(--transition-fast)}
+.bp-bk:hover{border-color:var(--color-border-default);background:var(--color-surface-raised)}
+.bp-bk-top{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--color-text-secondary)}
+.bp-bk-dot{width:8px;height:8px;border-radius:2px;flex-shrink:0}
+.bp-bk-dot.ok{background:#2E7D44}
+.bp-bk-dot.warn{background:#B8770F}
+.bp-bk-dot.danger{background:#A32D2D}
+.bp-bk-lock{width:13px;height:13px;flex-shrink:0;color:#8C8275;display:inline-flex}
+.bp-bk-lock svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linejoin:round;stroke-linecap:round}
+.bp-bk-info{display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;border-radius:50%;border:1px solid var(--color-border-default);color:var(--color-text-tertiary);font-family:var(--font-serif,Georgia,serif);font-style:italic;font-weight:700;font-size:9px;line-height:1;cursor:help;flex-shrink:0;transition:color var(--transition-fast),border-color var(--transition-fast)}
+.bp-bk-info:hover,.bp-bk-info:focus-visible{color:#5C3408;border-color:#D9AE6A;outline:none}
+.bp-bk-amt{font-family:var(--font-mono);font-size:13px;font-weight:700;color:var(--color-text-primary);line-height:1.15}
+.bp-bk-sub{font-size:10.5px;color:var(--color-text-tertiary)}
+.bp-bk-cta{font-size:10.5px;font-weight:700;color:#BA5A0E;margin-top:2px}
+
+/* Insights panel */
+.bp-cc-insights{background:var(--color-surface-raised);border:1px solid var(--color-border-default);border-radius:var(--radius-md);padding:13px 14px}
+.bp-cc-ins-row{padding:9px 0}
+.bp-cc-ins-row:first-of-type{padding-top:0}
+.bp-cc-ins-row:not(:last-child){border-bottom:1px solid var(--color-border-default)}
+.bp-cc-ins-text{font-size:12px;line-height:1.45;color:var(--color-text-secondary);margin-bottom:7px}
+.bp-cc-ins-text .lg-ai-strong{font-weight:700;color:var(--color-text-primary)}
+.bp-cc-ins-text .lg-ai-danger{font-weight:700;color:var(--color-danger-text,#A32D2D)}
+.bp-cc-ins-actions{display:flex;align-items:center;gap:8px}
+.bp-cc-ins-ask{display:inline-flex;align-items:center;gap:3px;background:transparent;border:1px solid var(--color-border-default);border-radius:6px;padding:3px 8px;font-family:var(--font-sans);font-size:10.5px;font-weight:600;color:var(--color-text-secondary);cursor:pointer;transition:border-color var(--transition-fast),color var(--transition-fast)}
+.bp-cc-ins-ask:hover{border-color:#D8C39E;color:#BA5A0E}
+.bp-cc-ins-ask svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linejoin:round;stroke-linecap:round}
+.bp-cc-ins-view{background:transparent;border:none;padding:3px 2px;font-family:var(--font-sans);font-size:11px;font-weight:700;color:#BA5A0E;cursor:pointer}
+.bp-cc-ins-empty{font-size:12px;color:var(--color-text-tertiary);font-style:italic;padding:6px 0}
+
 /* AP Close pill — sits in the page header next to Create Bill */
 .bp-close-wrap{position:relative;display:inline-flex}
 .bp-close-pill{display:inline-flex;align-items:center;gap:7px;padding:7px 10px;background:#FCEFD7;border:1px solid #E9C58B;border-radius:var(--radius-md);cursor:pointer;font-family:var(--font-sans);transition:background var(--transition-fast),border-color var(--transition-fast)}
 .bp-close-pill:hover,
-.bp-close-pill.open{background:#FAE2B5;border-color:#D9AE6A}
+.bp-close-pill.active{background:#FAE2B5;border-color:#D9AE6A}
 .bp-close-pill-dot{width:8px;height:8px;border-radius:50%;background:#BA7517;flex-shrink:0}
 .bp-close-pill-lbl{font-size:11px;font-weight:700;letter-spacing:.06em;color:#5C3408;white-space:nowrap}
 .bp-close-pill-badge{display:inline-flex;align-items:center;padding:2px 7px;border-radius:9999px;background:#BA7517;color:#fff;font-family:var(--font-mono);font-size:10px;font-weight:700;letter-spacing:.02em;white-space:nowrap;line-height:1.1}

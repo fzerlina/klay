@@ -16,7 +16,6 @@ import { useBills } from "../state/BillsContext";
 import { useClosePeriod } from "../state/ClosePeriodContext";
 import { useCurrentUser } from "../state/CurrentUserContext";
 import AiChatDrawer, { SparkleIcon as DrawerSparkle } from "./AiChatDrawer";
-import SummaryDrawer from "./SummaryDrawer";
 import { computeBillsInsights, makeBillsAiContext } from "./ai-bills-context";
 import "./modules.css";
 import "./invoices-ledger.css";
@@ -444,83 +443,6 @@ function FilterPopover({ values, onChange, vendors: vendorList, anomalyOnly, onA
   );
 }
 
-function BillsSummaryCard({ insights, onOpenSummary, onAskAboutInsight, summaryActive, eyebrow = "Your Tasks" }) {
-  // No auto-rotation — SME feedback. The FM wants to read each task at their
-  // own pace and explicitly step between them. Numbered pager + prev/next.
-  const [idx, setIdx] = useState(0);
-  useEffect(() => { if (idx >= insights.length) setIdx(0); }, [insights.length, idx]);
-
-  const current = insights[idx] || insights[0];
-  const todayLbl = formatDate(TODAY.toISOString().slice(0, 10));
-  const actionLabel = current?.cta || "Ask Klay AI";
-  const total = insights.length;
-
-  function prev() { setIdx((i) => (i - 1 + total) % total); }
-  function next() { setIdx((i) => (i + 1) % total); }
-
-  return (
-    <div className="bp-kpi-card bp-kpi-summary">
-      <div className="bp-kpi-summary-top">
-        <div className="bp-kpi-summary-eyebrow">
-          <SparkleIcon size={12} /> {eyebrow.toUpperCase()}
-        </div>
-        <button
-          type="button"
-          className={`bp-kpi-summary-seeall${summaryActive ? " active" : ""}`}
-          onClick={onOpenSummary}
-        >
-          See all
-        </button>
-      </div>
-      <div className="bp-kpi-summary-body">
-        {current?.node}
-      </div>
-      <div className="bp-kpi-summary-asof">as of {todayLbl}</div>
-      <div className="bp-kpi-summary-foot">
-        {total > 1 ? (
-          <div className="bp-kpi-summary-pager" aria-label="Task pager">
-            <button
-              type="button"
-              className="bp-kpi-summary-pager-chev"
-              onClick={prev}
-              aria-label="Previous task"
-            >
-              <svg viewBox="0 0 9 9" aria-hidden><path d="M6 2L3 4.5L6 7" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
-            </button>
-            {insights.map((_, i) => (
-              <button
-                key={i}
-                type="button"
-                className={`bp-kpi-summary-pager-num${i === idx ? " on" : ""}`}
-                onClick={() => setIdx(i)}
-                aria-label={`Task ${i + 1}`}
-                aria-current={i === idx ? "true" : undefined}
-              >
-                {i + 1}
-              </button>
-            ))}
-            <button
-              type="button"
-              className="bp-kpi-summary-pager-chev"
-              onClick={next}
-              aria-label="Next task"
-            >
-              <svg viewBox="0 0 9 9" aria-hidden><path d="M3 2L6 4.5L3 7" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
-            </button>
-          </div>
-        ) : <span />}
-        <button
-          type="button"
-          className="bp-kpi-cta bp-kpi-cta-action"
-          onClick={() => onAskAboutInsight(current)}
-        >
-          {actionLabel} →
-        </button>
-      </div>
-    </div>
-  );
-}
-
 function BillsAiSearchPanel({ search, rows }) {
   const q = (search || "").trim();
   if (!q) return null;
@@ -590,14 +512,6 @@ export default function BillsPage() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState({ kind: "tab", value: "semua" });
   const [anomalyFilter, setAnomalyFilter] = useState(false);
-  const [closePopoverOpen, setClosePopoverOpen] = useState(false);
-  const closePopoverRef = useRef(null);
-  useEffect(() => {
-    if (!closePopoverOpen) return;
-    const onDoc = (e) => { if (closePopoverRef.current && !closePopoverRef.current.contains(e.target)) setClosePopoverOpen(false); };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, [closePopoverOpen]);
   const [sortChoice, setSortChoice] = useState(null);
   const [groupChoice, setGroupChoice] = useState(null);
   const emptyFilters = { vendors: new Set(), minAmount: "", maxAmount: "", dateFrom: "", dateTo: "", dateField: "date", grn: "all" };
@@ -613,7 +527,6 @@ export default function BillsPage() {
 
   const [aiOpen, setAiOpen] = useState(false);
   const [aiSeedQuestion, setAiSeedQuestion] = useState(null);
-  const [summaryOpen, setSummaryOpen] = useState(false);
 
   const [toast, setToast] = useState("");
   const toastTmr = useRef(null);
@@ -724,20 +637,51 @@ export default function BillsPage() {
     };
   }, [bills, closedThrough]);
 
+  // ── AP Outstanding breakdown ────────────────────────────────────────────
+  // Partitions the outstanding set (unpaid, non-draft) into four MUTUALLY
+  // EXCLUSIVE buckets that sum exactly to the headline balance. Period-locked
+  // takes precedence over the due-date timeline: a locked bill can't be paid
+  // until it's reassigned, so it sits in `locked` even when its due date has
+  // passed — that's what keeps the four numbers reconciling to the total.
+  const apo = useMemo(() => {
+    const todayKey = TODAY.toISOString().slice(0, 10);
+    const in7 = new Date(TODAY); in7.setDate(TODAY.getDate() + 7);
+    const in7Key = in7.toISOString().slice(0, 10);
+    const mk = () => ({ count: 0, sum: 0 });
+    const b = { notYetDue: mk(), due7: mk(), overdue: mk(), locked: mk() };
+    for (const bill of bills) {
+      if (bill.pay === "paid" || bill.approval === "draft") continue;
+      const amt = bill.sisa ?? bill.total ?? 0;
+      if (isApPeriodLocked(bill.date, closedThrough)) { b.locked.count++; b.locked.sum += amt; continue; }
+      const due = bill.due || "";
+      if (due && due < todayKey)       { b.overdue.count++;   b.overdue.sum += amt; }
+      else if (due && due <= in7Key)   { b.due7.count++;      b.due7.sum += amt; }
+      else                             { b.notYetDue.count++; b.notYetDue.sum += amt; }
+    }
+    const total = b.notYetDue.sum + b.due7.sum + b.overdue.sum + b.locked.sum;
+    return { ...b, total };
+  }, [bills, closedThrough]);
+
+  // Analytical insights for the Insights panel — vendor concentration + largest
+  // exposure. Action items live in the task band, not here.
+  const insightItems = useMemo(() => insights.filter((it) => ["vendorConcentration", "largest"].includes(it.id)), [insights]);
+
+  // Close is a pure STATUS gate: a current-period bill blocks close until it
+  // reaches "posted" (approved + paid). Exceptions/anomalies don't form their
+  // own gate — they just keep a bill short of posted (the post step enforces a
+  // clean bill). So the blockers surface through the existing pipeline boxes
+  // (awaiting approval → ready to post); the counter is their sum.
+  const closeBlocking = useMemo(() => {
+    const inApr = (b) => b.date && b.date.startsWith(monthPfx);
+    const review = bills.filter((b) => inApr(b) && b.approval === "review").length;
+    const ready = bills.filter((b) => inApr(b) && b.approval === "approved" && b.pay === "unpaid").length;
+    return { review, ready, total: review + ready };
+  }, [bills, monthPfx]);
+
   const todayLabel = useMemo(() => formatDate(TODAY.toISOString().slice(0, 10)), []);
   const monthLabel = useMemo(() => formatMonthLabel(monthPfx), [monthPfx]);
 
-  // Bills in the current AP period that still block close (not yet paid+approved).
-  const apClosePending = useMemo(() => (
-    bills.filter((b) => b.date && b.date.startsWith(monthPfx) && (b.approval !== "approved" || b.pay !== "paid")).length
-  ), [bills, monthPfx]);
-
-  // Number of distinct blocker categories that have non-zero items (drives the CLOSE pill badge).
-  const exceptionCount = useMemo(() => bills.filter((b) => workflowStatus(b) === "EXCEPTION").length, [bills]);
-  const closeBlockerCount = (exceptionCount > 0 ? 1 : 0) + (apClosePending > 0 ? 1 : 0);
-
   function askAi(question) {
-    setSummaryOpen(false);
     setAiSeedQuestion(question);
     setAiOpen(true);
   }
@@ -769,6 +713,9 @@ export default function BillsPage() {
 
   // ── Corpus ─────────────────────────────────────────────────────────────
   const corpus = useMemo(() => {
+    const todayKey = TODAY.toISOString().slice(0, 10);
+    const in7 = new Date(TODAY); in7.setDate(TODAY.getDate() + 7);
+    const in7Key = in7.toISOString().slice(0, 10);
     let list = bills;
     if (filter.kind === "tab") {
       if (filter.value === "approved")       list = list.filter((b) => workflowStatus(b) === "APPROVED");
@@ -781,21 +728,22 @@ export default function BillsPage() {
       if (filter.value === "total")              list = list.filter((b) => b.pay !== "paid");
       else if (filter.value === "overdueMonth")  list = list.filter((b) => b.pay === "overdue" && b.due && b.due.startsWith(monthPfx));
       else if (filter.value === "thisMonth")     list = list.filter((b) => b.date && b.date.startsWith(monthPfx));
-      else if (filter.value === "readyToPost")   list = list.filter((b) => b.approval === "approved" && b.pay === "unpaid");
+      else if (filter.value === "readyToPost")   list = list.filter((b) => b.approval === "approved" && b.pay === "unpaid" && !isApPeriodLocked(b.date, closedThrough));
       else if (filter.value === "perluDibayar")  list = list.filter((b) => b.approval === "approved" && b.pay !== "paid");
-      else if (filter.value === "dueIn7") {
-        const todayKey = TODAY.toISOString().slice(0, 10);
-        const in7 = new Date(TODAY);
-        in7.setDate(TODAY.getDate() + 7);
-        const in7Key = in7.toISOString().slice(0, 10);
-        list = list.filter((b) => b.pay !== "paid" && b.approval === "approved" && b.due && b.due > todayKey && b.due <= in7Key);
-      }
+      else if (filter.value === "dueIn7")        list = list.filter((b) => b.pay !== "paid" && b.approval === "approved" && b.due && b.due > todayKey && b.due <= in7Key);
       // AP Outstanding card filter — exclude drafts so it matches the KPI's
       // headline number (drafts aren't real obligations yet). The Draft tab
       // is the place to see drafts.
       else if (filter.value === "allUnpaid")     list = list.filter((b) => b.pay !== "paid" && b.approval !== "draft");
       else if (filter.value === "apClose")       list = list.filter((b) => b.date && b.date.startsWith(monthPfx) && (b.approval !== "approved" || b.pay !== "paid"));
+      // Close gate (status): current-period bills not yet posted — in review or approved-unpaid. Matches the CLOSE counter.
+      else if (filter.value === "closeBlocking")  list = list.filter((b) => b.date && b.date.startsWith(monthPfx) && (b.approval === "review" || (b.approval === "approved" && b.pay === "unpaid")));
       else if (filter.value === "periodLocked")  list = list.filter((b) => isApPeriodLocked(b.date, closedThrough) && (b.approval === "review" || (b.approval === "approved" && b.pay !== "paid")));
+      // AP Outstanding breakdown buckets — partition the outstanding set; period-locked takes precedence over the due-date timeline.
+      else if (filter.value === "apoLocked")     list = list.filter((b) => b.pay !== "paid" && b.approval !== "draft" && isApPeriodLocked(b.date, closedThrough));
+      else if (filter.value === "apoOverdue")    list = list.filter((b) => b.pay !== "paid" && b.approval !== "draft" && !isApPeriodLocked(b.date, closedThrough) && b.due && b.due < todayKey);
+      else if (filter.value === "apoDue7")       list = list.filter((b) => b.pay !== "paid" && b.approval !== "draft" && !isApPeriodLocked(b.date, closedThrough) && b.due && b.due >= todayKey && b.due <= in7Key);
+      else if (filter.value === "apoNotYetDue")  list = list.filter((b) => b.pay !== "paid" && b.approval !== "draft" && !isApPeriodLocked(b.date, closedThrough) && (!b.due || b.due > in7Key));
     }
     return list;
   }, [filter, monthPfx, bills, closedThrough]);
@@ -989,7 +937,16 @@ export default function BillsPage() {
         setSearch("");
         break;
       case "inReview":
+      case "returned":
         setFilter({ kind: "tab", value: "review" });
+        setSearch("");
+        break;
+      case "exceptions":
+        setFilter({ kind: "tab", value: "exception" });
+        setSearch("");
+        break;
+      case "drafts":
+        setFilter({ kind: "tab", value: "draft" });
         setSearch("");
         break;
       case "largest":
@@ -1058,58 +1015,18 @@ export default function BillsPage() {
               <h1 className="lg-title">Bills</h1>
             </div>
             <div className="lg-head-actions">
-              <div className="bp-close-wrap" ref={closePopoverRef}>
-                <button
-                  type="button"
-                  className={`bp-close-pill${closePopoverOpen ? " open" : ""}`}
-                  onClick={() => setClosePopoverOpen((o) => !o)}
-                  aria-haspopup="true"
-                  aria-expanded={closePopoverOpen}
-                  title={`AP Close health — ${monthLabel} · ${closeBlockerCount} blocker${closeBlockerCount === 1 ? "" : "s"}`}
-                >
-                  <span className="bp-close-pill-dot" />
-                  <span className="bp-close-pill-lbl">CLOSE · {monthLabel.toUpperCase()}</span>
-                  {closeBlockerCount > 0 && (
-                    <span className="bp-close-pill-badge">{closeBlockerCount} blocker{closeBlockerCount === 1 ? "" : "s"}</span>
-                  )}
-                  <svg viewBox="0 0 9 9" className="bp-close-pill-chev" aria-hidden><path d="M2 3.5l2.5 3L7 3.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                </button>
-                {closePopoverOpen && (
-                  <div className="bp-close-popover" role="menu">
-                    <div className="bp-close-popover-head">
-                      <span className="bp-close-popover-dot" />
-                      <div>
-                        <div className="bp-close-popover-title">Close blockers · {monthLabel}</div>
-                        <div className="bp-close-popover-sub">Items keeping this period open</div>
-                      </div>
-                    </div>
-                    <div className="bp-close-popover-list">
-                      <button
-                        type="button"
-                        className="bp-close-blocker"
-                        onClick={() => { selectTab("exception"); setClosePopoverOpen(false); }}
-                      >
-                        <div className="bp-close-blocker-text">
-                          <div className="bp-close-blocker-lbl">Exception bills unresolved</div>
-                          <div className="bp-close-blocker-sub">{tabCounts.exception} bill{tabCounts.exception === 1 ? "" : "s"} need manual fix</div>
-                        </div>
-                        <span className="bp-close-blocker-cta">View →</span>
-                      </button>
-                      <button
-                        type="button"
-                        className="bp-close-blocker"
-                        onClick={() => { selectCard("apClose"); setClosePopoverOpen(false); }}
-                      >
-                        <div className="bp-close-blocker-text">
-                          <div className="bp-close-blocker-lbl">Bills in current period not posted</div>
-                          <div className="bp-close-blocker-sub">{apClosePending} bill{apClosePending === 1 ? "" : "s"} still in review / awaiting approval</div>
-                        </div>
-                        <span className="bp-close-blocker-cta">View →</span>
-                      </button>
-                    </div>
-                  </div>
+              <button
+                type="button"
+                className={`bp-close-pill${isCardActive("closeBlocking") ? " active" : ""}`}
+                onClick={() => selectCard("closeBlocking")}
+                title={`AP Close — ${monthLabel} · ${closeBlocking.total} bill${closeBlocking.total === 1 ? "" : "s"} blocking. Click to filter the list.`}
+              >
+                <span className="bp-close-pill-dot" />
+                <span className="bp-close-pill-lbl">CLOSE · {monthLabel.toUpperCase()}</span>
+                {closeBlocking.total > 0 && (
+                  <span className="bp-close-pill-badge">{closeBlocking.total} blocking</span>
                 )}
-              </div>
+              </button>
               <button
                 className="lg-btn-brand"
                 disabled={!canCreate}
@@ -1122,52 +1039,121 @@ export default function BillsPage() {
             </div>
           </div>
 
-          <div className="bp-kpi-wrap">
-            <div className="bp-kpi-row">
-              <BillsSummaryCard
-                insights={insights}
-                onOpenSummary={() => setSummaryOpen(true)}
-                onAskAboutInsight={handleSummaryAction}
-                summaryActive={summaryOpen}
-                eyebrow={insightsRole === "viewer" ? "AP Insights" : "Your Tasks"}
-              />
-
-              {canApprove && (
-                <div className="bp-kpi-card">
-                  <div className="bp-kpi-lbl">Due for Payment</div>
-                  <div className="bp-kpi-val">{billStats.perluDibayarCount} · {formatRupiah(billStats.perluDibayarSum)}</div>
-                  <div className="bp-kpi-sub">Make payment now</div>
-                  <button type="button" className="bp-kpi-cta" onClick={() => selectCard("perluDibayar")}>View →</button>
-                </div>
+          <div className="bp-cc">
+            {/* ── Your tasks — actionable boxes ─────────────────────────── */}
+            <div className="bp-cc-band-head">
+              <span className="bp-cc-eyebrow"><SparkleIcon size={12} /> Your Tasks</span>
+              <span className="bp-cc-asof">as of {todayLabel}</span>
+            </div>
+            <div className="bp-cc-taskband">
+              {canApprove && billStats.reviewCount > 0 && (
+                <button type="button" className="bp-t2" onClick={() => selectTab("review")}>
+                  <span className="bp-t2-lbl">Awaiting approval</span>
+                  <span className="bp-t2-amt">{formatRupiah(billStats.reviewSum)}</span>
+                  <span className="bp-t2-sub">{billStats.reviewCount} bill{billStats.reviewCount === 1 ? "" : "s"}</span>
+                  {closeBlocking.review > 0 && <span className="bp-t2-tag">{closeBlocking.review} blocking close</span>}
+                  <span className="bp-t2-cta">Review →</span>
+                </button>
               )}
-
-              {canApprove && (
-                <div className="bp-kpi-card">
-                  <div className="bp-kpi-lbl">Pending Review</div>
-                  <div className="bp-kpi-val">{billStats.reviewCount} · {formatRupiah(billStats.reviewSum)}</div>
-                  <div className="bp-kpi-sub">Review and approve</div>
-                  <button type="button" className="bp-kpi-cta" onClick={() => selectTab("review")}>View →</button>
-                </div>
+              {canApprove && billStats.verifiedReadyCount > 0 && (
+                <button type="button" className="bp-t2" onClick={() => selectCard("readyToPost")}>
+                  <span className="bp-t2-lbl">Ready to post</span>
+                  <span className="bp-t2-amt">{formatRupiah(billStats.verifiedReadySum)}</span>
+                  <span className="bp-t2-sub">{billStats.verifiedReadyCount} bill{billStats.verifiedReadyCount === 1 ? "" : "s"}</span>
+                  {closeBlocking.ready > 0 && <span className="bp-t2-tag">{closeBlocking.ready} blocking close</span>}
+                  <span className="bp-t2-cta">Post →</span>
+                </button>
               )}
+              {!canApprove && canCreate && billStats.draftCount > 0 && (
+                <button type="button" className="bp-t2" onClick={() => selectTab("draft")}>
+                  <span className="bp-t2-lbl">Submit drafts</span>
+                  <span className="bp-t2-amt">{formatRupiah(billStats.draftSum)}</span>
+                  <span className="bp-t2-sub">{billStats.draftCount} draft{billStats.draftCount === 1 ? "" : "s"}</span>
+                  <span className="bp-t2-cta">Submit →</span>
+                </button>
+              )}
+              {apo.locked.count > 0 && (
+                <button type="button" className="bp-t2" onClick={() => selectCard("apoLocked")}>
+                  <span className="bp-t2-lbl">Reassign to period</span>
+                  <span className="bp-t2-amt">{formatRupiah(apo.locked.sum)}</span>
+                  <span className="bp-t2-sub">{apo.locked.count} bill{apo.locked.count === 1 ? "" : "s"}</span>
+                  <span className="bp-t2-tag sep">other periods</span>
+                  <span className="bp-t2-cta">Reassign →</span>
+                </button>
+              )}
+            </div>
 
-              <div className="bp-kpi-card">
-                <div className="bp-kpi-lbl">Draft</div>
-                <div className="bp-kpi-val">{billStats.draftCount} · {formatRupiah(billStats.draftSum)}</div>
-                <div className="bp-kpi-sub">Submit for review</div>
-                <button type="button" className="bp-kpi-cta" onClick={() => selectTab("draft")}>View →</button>
+            {/* ── AP Outstanding breakdown | Insights ───────────────────── */}
+            <div className="bp-cc-split">
+              <div className="bp-cc-apo">
+                <div className="bp-cc-apo-head">
+                  <div className="bp-cc-sec-lbl">AP Outstanding</div>
+                  <div className="bp-cc-apo-total">{formatRupiah(apo.total)}</div>
+                </div>
+                <div className="bp-cc-bar">
+                  <span style={{ flexGrow: apo.notYetDue.sum, minWidth: apo.notYetDue.sum > 0 ? 4 : 0, background: "#2E7D44" }} title="Not yet due" />
+                  <span style={{ flexGrow: apo.due7.sum, minWidth: apo.due7.sum > 0 ? 4 : 0, background: "#B8770F" }} title="Due in 7 days" />
+                  <span style={{ flexGrow: apo.overdue.sum, minWidth: apo.overdue.sum > 0 ? 4 : 0, background: "#A32D2D" }} title="Overdue" />
+                  <span style={{ flexGrow: apo.locked.sum, minWidth: apo.locked.sum > 0 ? 4 : 0, background: "#8C8275" }} title="Period-locked" />
+                </div>
+                <div className="bp-cc-buckets">
+                  <button type="button" className="bp-bk" onClick={() => selectCard("apoNotYetDue")}>
+                    <span className="bp-bk-top"><span className="bp-bk-dot ok" /> Not yet due</span>
+                    <span className="bp-bk-amt">{formatRupiah(apo.notYetDue.sum)}</span>
+                    <span className="bp-bk-sub">{apo.notYetDue.count} bill{apo.notYetDue.count === 1 ? "" : "s"}</span>
+                    <span className="bp-bk-cta">View →</span>
+                  </button>
+                  <button type="button" className="bp-bk" onClick={() => selectCard("apoDue7")}>
+                    <span className="bp-bk-top"><span className="bp-bk-dot warn" /> Due in 7 days</span>
+                    <span className="bp-bk-amt">{formatRupiah(apo.due7.sum)}</span>
+                    <span className="bp-bk-sub">{apo.due7.count} bill{apo.due7.count === 1 ? "" : "s"}</span>
+                    <span className="bp-bk-cta">View →</span>
+                  </button>
+                  <button type="button" className="bp-bk" onClick={() => selectCard("apoOverdue")}>
+                    <span className="bp-bk-top"><span className="bp-bk-dot danger" /> Overdue</span>
+                    <span className="bp-bk-amt">{formatRupiah(apo.overdue.sum)}</span>
+                    <span className="bp-bk-sub">{apo.overdue.count} bill{apo.overdue.count === 1 ? "" : "s"} · payable</span>
+                    <span className="bp-bk-cta">View →</span>
+                  </button>
+                  <button type="button" className="bp-bk" onClick={() => selectCard("apoLocked")}>
+                    <span className="bp-bk-top">
+                      <span className="bp-bk-lock"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span>
+                      Period-locked
+                      <span
+                        className="bp-bk-info"
+                        role="img"
+                        tabIndex={0}
+                        aria-label="Period-locked bills are counted here, not under Overdue — reassign them to an open period first. Payment is recorded on AP Aging."
+                        title="Counted here, not under Overdue — reassign these to an open period before they can be paid. Payment is recorded on AP Aging."
+                        onClick={(e) => e.stopPropagation()}
+                      >i</span>
+                    </span>
+                    <span className="bp-bk-amt">{formatRupiah(apo.locked.sum)}</span>
+                    <span className="bp-bk-sub">{apo.locked.count} bill{apo.locked.count === 1 ? "" : "s"} · reassign</span>
+                    <span className="bp-bk-cta">View →</span>
+                  </button>
+                </div>
               </div>
 
-              <div className="bp-kpi-card">
-                <div className="bp-kpi-lbl">AP Outstanding</div>
-                <div className="bp-kpi-val">{formatRupiah(billStats.outstandingActive)}</div>
-                {billStats.outstandingDraftCount > 0 ? (
-                  <div className="bp-kpi-sub bp-kpi-sub-draft">
-                    + {formatRupiah(billStats.outstandingDraft)} in {billStats.outstandingDraftCount} draft{billStats.outstandingDraftCount === 1 ? "" : "s"}
-                  </div>
+              <div className="bp-cc-insights">
+                <div className="bp-cc-sec-lbl"><SparkleIcon size={12} /> Insights</div>
+                {insightItems.length === 0 ? (
+                  <div className="bp-cc-ins-empty">No notable patterns right now.</div>
                 ) : (
-                  <div className="bp-kpi-sub">Plan upcoming payments</div>
+                  insightItems.map((it) => (
+                    <div key={it.id} className="bp-cc-ins-row">
+                      <div className="bp-cc-ins-text">{it.node}</div>
+                      <div className="bp-cc-ins-actions">
+                        {it.question && (
+                          <button type="button" className="bp-cc-ins-ask" onClick={() => askAi(it.question)} title="Ask Klay AI">
+                            <SparkleIcon size={11} /> Ask
+                          </button>
+                        )}
+                        <button type="button" className="bp-cc-ins-view" onClick={() => handleSummaryAction(it)}>View →</button>
+                      </div>
+                    </div>
+                  ))
                 )}
-                <button type="button" className="bp-kpi-cta" onClick={() => selectCard("allUnpaid")}>View →</button>
               </div>
             </div>
           </div>
@@ -1404,19 +1390,9 @@ export default function BillsPage() {
 
       {/* ── Klay AI drawers ────────────────────────────────────────── */}
       <div
-        className={`ai-backdrop${aiOpen || summaryOpen ? " open" : ""}`}
-        onClick={() => { setAiOpen(false); setSummaryOpen(false); }}
-        aria-hidden={!(aiOpen || summaryOpen)}
-      />
-      <SummaryDrawer
-        open={summaryOpen}
-        insights={insights}
-        onClose={() => setSummaryOpen(false)}
-        mode="tasks"
-        title="Your Tasks"
-        ctaLabel="View"
-        contextLabel="Bills"
-        onPick={(insight) => { handleSummaryAction(insight); setSummaryOpen(false); }}
+        className={`ai-backdrop${aiOpen ? " open" : ""}`}
+        onClick={() => setAiOpen(false)}
+        aria-hidden={!aiOpen}
       />
       <AiChatDrawer
         open={aiOpen}

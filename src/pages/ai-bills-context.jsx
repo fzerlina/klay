@@ -1,7 +1,7 @@
 import { VENDORS } from "../data/seed/vendors";
 import { TODAY, daysSince } from "../lib/clock";
 import { initials } from "../lib/format";
-import { workflowStatus } from "../lib/billStatus";
+import { workflowStatus, isApPeriodLocked } from "../lib/billStatus";
 import { ChatChip } from "./AiChatDrawer";
 
 function fmtRpShort(n) {
@@ -54,23 +54,20 @@ export function computeBillsInsights(bills, closedThrough = "2025-02", role = "o
   const inReview = bills.filter((b) => b.approval === "review");
   const inReviewTotal = inReview.reduce((s, b) => s + b.total, 0);
 
-  // Average days past due
-  const avgDpd = overdue.length
-    ? Math.round(overdue.reduce((s, b) => s + Math.max(0, daysSince(b.due)), 0) / overdue.length)
-    : 0;
-
   // Largest single overdue bill
   const largest = overdue.reduce((m, b) => (b.sisa > (m?.sisa || 0) ? b : m), null);
 
   // Bills approved + unpaid — verified by Klay, ready to be posted to payment batch.
-  const readyToPost = bills.filter((b) => b.approval === "approved" && b.pay === "unpaid");
+  // Period-locked bills are EXCLUDED: they can't be posted in their current state,
+  // so they live solely under the "bound for closed periods" task (no double-listing).
+  const readyToPost = bills.filter((b) => b.approval === "approved" && b.pay === "unpaid" && !isApPeriodLocked(b.date, closedThrough));
   const readyToPostTotal = readyToPost.reduce((s, b) => s + b.total, 0);
 
   // Period-locked: bills in PENDING_REVIEW / APPROVED-unpaid whose `date` falls in a closed AP period.
   // Demo rule: months ≤ closedThrough are closed (advances when FM declares a new close
   // via the Close Command Center). Production would call is_ap_period_locked(entity_id, bill.period).
   const periodLocked = bills.filter((b) => {
-    if (!b.date || b.date.slice(0, 7) > closedThrough) return false;
+    if (!isApPeriodLocked(b.date, closedThrough)) return false;
     if (b.approval === "review") return true;
     if (b.approval === "approved" && b.pay !== "paid") return true;
     return false;
@@ -100,18 +97,6 @@ export function computeBillsInsights(bills, closedThrough = "2025-02", role = "o
     ),
     cta: "View",
     question: "Which vendors do we most frequently pay late?",
-  } : null;
-
-  const avgDpdInsight = overdue.length > 0 && avgDpd > 0 ? {
-    id: "avgDpd",
-    node: (
-      <>
-        Average <strong className="lg-ai-strong">{avgDpd} days overdue</strong> across{" "}
-        <strong className="lg-ai-strong">{overdue.length} unpaid bills</strong>.
-      </>
-    ),
-    cta: "View",
-    question: "What is our average days-late on vendor payments?",
   } : null;
 
   const largestInsight = largest && largest.sisa > 0 ? {
@@ -195,7 +180,7 @@ export function computeBillsInsights(bills, closedThrough = "2025-02", role = "o
 
   // ── View Only (viewer): read-only analytics, no action framing ──────────
   if (role === "viewer") {
-    const ro = [vendorConcentrationInsight, avgDpdInsight, largestInsight].filter(Boolean);
+    const ro = [vendorConcentrationInsight, largestInsight].filter(Boolean);
     if (ro.length === 0) {
       ro.push({
         id: "empty",
@@ -256,8 +241,6 @@ export function computeBillsInsights(bills, closedThrough = "2025-02", role = "o
       question: "Which bills are awaiting approval?",
     });
   }
-
-  if (avgDpdInsight) insights.push(avgDpdInsight);
 
   if (largestInsight) insights.push(largestInsight);
 

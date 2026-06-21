@@ -176,6 +176,25 @@
 .apa-empty-title{font-family:var(--font-display);font-size:15px;font-weight:700;color:var(--color-text-secondary)}
 .apa-empty-sub{font-size:12px;max-width:360px;line-height:1.5}
 
+/* ── Command center — additions on top of the reused bp-cc* classes ───────
+   (bp-cc cream band, bp-cc-taskband, bp-t2, bp-cc-apo, bp-cc-insights all come
+   from modules.css; these only add AP-Aging specifics.) */
+.bp-t2-tag.hot{color:#8C2C1C;background:#F6D2C8}
+.bp-t2-tag.neu{color:#857C6B;background:rgba(255,255,255,.55)}
+
+/* AP Outstanding by age — 6 compact bucket cells (clickable filters) */
+.apa-age-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px 12px;margin-bottom:11px}
+.apa-age{display:flex;flex-direction:column;gap:1px;background:transparent;border:none;padding:0;cursor:pointer;text-align:left;font-family:var(--font-sans);transition:opacity var(--transition-fast)}
+.apa-age:hover{opacity:.65}
+.apa-age.active .apa-age-amt{color:#BA5A0E}
+.apa-age-top{display:flex;align-items:center;gap:5px;font-size:10.5px;color:var(--color-text-secondary)}
+.apa-age-top i{width:7px;height:7px;border-radius:2px;flex-shrink:0;display:inline-block}
+.apa-age-amt{font-family:var(--font-mono);font-size:12.5px;font-weight:700;color:var(--color-text-primary);line-height:1.2}
+
+/* breakdown footer — cash due / DPO / accrued */
+.apa-cc-foot{display:flex;gap:18px;flex-wrap:wrap;padding-top:10px;border-top:1px solid var(--color-border-default);font-size:11px;color:var(--color-text-secondary)}
+.apa-cc-foot b{font-weight:700;color:var(--color-text-primary);font-family:var(--font-mono)}
+
 /* ── Responsive ───────────────────────────────────────────────────────── */
 @media (max-width: 900px){
   .apa-dq-row,.apa-dq-header{grid-template-columns:28px 1.2fr 90px 100px 110px 90px 28px;gap:8px}
