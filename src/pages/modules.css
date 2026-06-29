@@ -633,6 +633,11 @@
 /* Date cell — folds Days Overdue into the date */
 .bp-cell-date{display:flex;flex-direction:column;gap:1px;line-height:1.2}
 .bp-cell-date-late{font-size:10.5px;font-weight:600;color:var(--color-danger-text,#A32D2D);font-family:var(--font-mono)}
+/* Per-row "Period locked" badge — accounting period is closed, bill must be
+   reassigned to an open period before it can post. Amber, matching the
+   pinned locked-section palette. */
+.bp-period-lock-badge{display:inline-flex;align-items:center;gap:4px;margin:2px 0 1px;padding:1px 6px 1px 5px;font-size:10px;font-weight:600;line-height:1.5;color:#854F0B;background:#FCEFD7;border:1px solid #E9C58B;border-radius:999px;width:fit-content}
+.bp-period-lock-badge svg{width:9px;height:9px;flex-shrink:0}
 
 /* Status + Cause column */
 .bp-status-cell{display:flex;align-items:flex-start;gap:6px}

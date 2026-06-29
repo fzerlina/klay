@@ -1,9 +1,9 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCurrentUser } from "../state/CurrentUserContext";
 import { TODAY, daysSince } from "../lib/clock";
 import { formatRupiah, formatDateEn } from "../lib/format";
-import { workflowStatus, DEMO_OVERRIDES } from "../lib/billStatus";
+import { workflowStatus, DEMO_OVERRIDES, STATUS_LABEL } from "../lib/billStatus";
 import {
   buildAgingLines,
   buildSnapshot,
@@ -314,6 +314,75 @@ function EmptyState({ title, sub, icon }) {
   );
 }
 
+// ── Table filter popover ────────────────────────────────────────────────────
+// Multi-select chips grouped by dimension. Dimensions shown adapt to the active
+// view: the Decision Queue can filter by Status / Discount (per-bill signals);
+// the Aging Table by Accrual (vendor-aggregated). Relationship + Aging apply to
+// both. Toggling is live — no Apply step.
+const STATUS_FILTER_OPTS = [
+  ["PENDING_REVIEW", "Pending Review"],
+  ["APPROVED", "Ready to post"],
+  ["POSTED", "Posted"],
+  ["RETURNED", "Returned"],
+];
+function ApAgingFilterPopover({ view, filters, onToggle, onClear, onClose }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [onClose]);
+
+  const Chip = ({ dim, val, label }) => (
+    <button
+      type="button"
+      className={`apa-fchip${filters[dim].has(val) ? " active" : ""}`}
+      onClick={() => onToggle(dim, val)}
+    >
+      {label}
+    </button>
+  );
+
+  return (
+    <div className="lg-popover lg-filter-pop apa-filter-pop" ref={ref}>
+      <div className="lg-filter-body">
+        {view === "queue" && (
+          <div className="lg-filter-fld">
+            <div className="lg-filter-fld-lbl">Status</div>
+            <div className="apa-fchips">
+              {STATUS_FILTER_OPTS.map(([v, l]) => <Chip key={v} dim="status" val={v} label={l} />)}
+            </div>
+          </div>
+        )}
+        <div className="lg-filter-fld">
+          <div className="lg-filter-fld-lbl">Relationship</div>
+          <div className="apa-fchips">
+            {Object.entries(RELATIONSHIP_LABEL).map(([v, l]) => <Chip key={v} dim="tier" val={v} label={l} />)}
+          </div>
+        </div>
+        <div className="lg-filter-fld">
+          <div className="lg-filter-fld-lbl">Aging bucket</div>
+          <div className="apa-fchips">
+            {AGE_BUCKETS.map((b) => <Chip key={b.key} dim="bucket" val={b.key} label={b.lbl} />)}
+          </div>
+        </div>
+        <div className="lg-filter-fld">
+          <div className="lg-filter-fld-lbl">Other</div>
+          <div className="apa-fchips">
+            {view === "queue"
+              ? <Chip dim="special" val="discount" label="Has early-pay discount" />
+              : <Chip dim="special" val="accrual" label="Has accrual" />}
+          </div>
+        </div>
+      </div>
+      <div className="apa-filter-foot">
+        <button type="button" className="lg-filter-reset" onClick={onClear}>Clear all</button>
+        <button type="button" className="lg-filter-apply" onClick={onClose}>Done</button>
+      </div>
+    </div>
+  );
+}
+
 // ── Page ───────────────────────────────────────────────────────────────────
 export default function ApAgingPage() {
   const navigate = useNavigate();
@@ -327,6 +396,19 @@ export default function ApAgingPage() {
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [expandedVendor, setExpandedVendor] = useState(null);
   const [cardFilter, setCardFilter] = useState(null);  // null | "discounts" | "due7d" | "accruals"
+
+  // Explicit table filters (separate from KPI-card quick filters). Multi-select
+  // within a dimension = OR; across dimensions = AND. Dimensions shown depend on
+  // the active view (queue vs table).
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [filters, setFilters] = useState({ status: new Set(), tier: new Set(), bucket: new Set(), special: new Set() });
+  const filterCount = filters.status.size + filters.tier.size + filters.bucket.size + filters.special.size;
+  const toggleFilter = (dim, val) => setFilters((f) => {
+    const next = new Set(f[dim]);
+    next.has(val) ? next.delete(val) : next.add(val);
+    return { ...f, [dim]: next };
+  });
+  const clearFilters = () => setFilters({ status: new Set(), tier: new Set(), bucket: new Set(), special: new Set() });
 
   // Selecting a KPI card filters the table. Re-selecting the same card clears.
   // Accruals filter additionally switches the view to Aging Table since accruals
@@ -366,8 +448,13 @@ export default function ApAgingPage() {
       const bk = cardFilter.slice(4);
       rows = rows.filter((l) => l.ageBucket === bk);
     }
+    // Explicit filters
+    if (filters.status.size) rows = rows.filter((l) => filters.status.has(l.workflow_status));
+    if (filters.tier.size)   rows = rows.filter((l) => filters.tier.has(l.relationship_tier));
+    if (filters.bucket.size) rows = rows.filter((l) => filters.bucket.has(l.ageBucket));
+    if (filters.special.has("discount")) rows = rows.filter((l) => l.has_terms);
     return rows;
-  }, [allLines, cardFilter]);
+  }, [allLines, cardFilter, filters]);
 
   // ── Command-center figures — tasks, payment run, insights ────────────────
   const cc = useMemo(() => {
@@ -420,8 +507,12 @@ export default function ApAgingPage() {
 
   // Aging Table — vendor pivot
   const pivot = useMemo(() => {
-    return buildVendorPivot(allLines.filter(isAgingTableRow));
-  }, [allLines]);
+    let rows = buildVendorPivot(allLines.filter(isAgingTableRow));
+    if (filters.tier.size)   rows = rows.filter((r) => filters.tier.has(r.relationship_tier));
+    if (filters.bucket.size) rows = rows.filter((r) => [...filters.bucket].some((bk) => (r.buckets[bk] || 0) > 0));
+    if (filters.special.has("accrual")) rows = rows.filter((r) => r.accrual > 0);
+    return rows;
+  }, [allLines, filters]);
 
   // RETURNED pinned section
   const returnedRows = dqRows.filter((r) => r.workflow_status === "RETURNED");
@@ -475,6 +566,7 @@ export default function ApAgingPage() {
 
   return (
     <div className="lg-page apa-page">
+      <div className="lg-scroll-container">
       {/* ── Header (Bills-List canonical structure) ──────────────────── */}
       <div className="lg-head">
         <div className="lg-head-top">
@@ -645,6 +737,27 @@ export default function ApAgingPage() {
                 <button type="button" className="apa-active-filter-clear" onClick={() => setCardFilter(null)}>Clear</button>
               </div>
             )}
+            <div className="lg-filter-meta">
+              {filterCount > 0 && (
+                <button type="button" className="lg-filter-reset" onClick={clearFilters}>Clear filters</button>
+              )}
+              <div className="lg-meta-btn-wrap">
+                <button type="button" className={`lg-meta-btn${filterCount > 0 ? " active" : ""}`} onClick={() => setFilterOpen((o) => !o)}>
+                  <svg viewBox="0 0 12 12"><path d="M1 2.5h10l-4 4.5V11L5 9.5V7L1 2.5z" /></svg>
+                  Filter
+                  {filterCount > 0 && <span className="lg-filter-badge">{filterCount}</span>}
+                </button>
+                {filterOpen && (
+                  <ApAgingFilterPopover
+                    view={view}
+                    filters={filters}
+                    onToggle={toggleFilter}
+                    onClear={clearFilters}
+                    onClose={() => setFilterOpen(false)}
+                  />
+                )}
+              </div>
+            </div>
           </div>
 
           {view === "queue" ? (
@@ -762,6 +875,7 @@ export default function ApAgingPage() {
           )}
         </div>
       </div>
+      </div>{/* /lg-scroll-container */}
 
       {/* ── Multi-select action bar ─────────────────────────────────── */}
       {canTransact && selected.size > 0 && (

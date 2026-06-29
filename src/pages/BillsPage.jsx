@@ -9,6 +9,7 @@ import {
   workflowStatus,
   statusCause,
   isApPeriodLocked,
+  billPeriod,
   sourceChannelFor,
   urgencyScore,
 } from "../lib/billStatus";
@@ -155,7 +156,7 @@ function BpAnomalyDot({ anomalies }) {
   return <span className={`bp-anom-dot sev-${top.severity}`} title={title} aria-label={title} />;
 }
 
-function LedgerRow({ r, bucket, isChecked, onCheck, onClick, onKebab, isSelected, isAlt, onIdHover, onIdLeave, onVendorHover, onVendorLeave, showAgingBar, showKebab = true }) {
+function LedgerRow({ r, bucket, isChecked, onCheck, onClick, onKebab, isSelected, isAlt, onIdHover, onIdLeave, onVendorHover, onVendorLeave, showAgingBar, showKebab = true, periodLocked = false }) {
   const isOverdue = r.pay === "overdue" && r.daysOverdue > 0;
   const isPaid = r.pay === "paid";
   const ws = workflowStatus(r.raw);
@@ -189,7 +190,6 @@ function LedgerRow({ r, bucket, isChecked, onCheck, onClick, onKebab, isSelected
       </div>
       <div className="lg-cell-date bp-cell-date">
         <div>{r.tgl}</div>
-        {isOverdue && <div className="bp-cell-date-late">{r.daysOverdue}d late</div>}
       </div>
       <div className="lg-cell-customer">
         <span
@@ -200,11 +200,20 @@ function LedgerRow({ r, bucket, isChecked, onCheck, onClick, onKebab, isSelected
           {r.co}
         </span>
       </div>
-      <div className="lg-cell-due">{r.due}</div>
+      <div className="lg-cell-due bp-cell-date">
+        <div>{r.due}</div>
+        {isOverdue && <div className="bp-cell-date-late">{r.daysOverdue}d late</div>}
+      </div>
       <div className="bp-status-cell">
         <BpAnomalyDot anomalies={r.raw?.anomalies} />
         <div className="bp-status-cell-body">
           <div className={`bp-status-label${statusToneClass ? " " + statusToneClass : ""}`}>{statusLabel}</div>
+          {periodLocked && (
+            <div className="bp-period-lock-badge" title="This bill's accounting period is closed — reassign it to the current open period before it can be posted.">
+              <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden><rect x="2.5" y="5.5" width="7" height="5" rx="0.8"/><path d="M4.2 5.5V3.8a1.8 1.8 0 0 1 3.6 0v1.7"/></svg>
+              Period locked
+            </div>
+          )}
           {causeText && <div className="bp-status-cause">{causeText}</div>}
           {showAgingBar && isOverdue && bucket && (
             <div className="bp-status-aging">
@@ -248,8 +257,8 @@ function RowMenu({ inv, onClose, onAction, canTransact = true, canApprove = true
     return () => document.removeEventListener("mousedown", onDoc);
   }, [onClose]);
   // State allows the action AND the role is permitted to perform it.
+  // Payment initiation lives on AP Aging, not here — Bills ends at Posted.
   const showApprove = (inv.approval === "review" || inv.approval === "draft") && canApprove;
-  const showPay = inv.approval === "approved" && inv.pay !== "paid" && canApprove;
   return (
     <div className="row-menu" ref={ref} onClick={(e) => e.stopPropagation()}>
       {canTransact && (
@@ -262,12 +271,6 @@ function RowMenu({ inv, onClose, onAction, canTransact = true, canApprove = true
         <div className="row-menu-item" onClick={() => onAction("approve", inv)}>
           <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
           Approve
-        </div>
-      )}
-      {showPay && (
-        <div className="row-menu-item" onClick={() => onAction("pay", inv)}>
-          <svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
-          Record Payment
         </div>
       )}
       {canTransact && (
@@ -603,12 +606,14 @@ export default function BillsPage() {
   // ── New Bills summary stats (for SUMMARY + Perlu Dibayar / Pending Review / Draft / AP Outstanding cards)
   // Period-locked bills are excluded from "Due for Payment" per PRD — they can't be posted in their current state.
   const billStats = useMemo(() => {
-    const verifiedReady = bills.filter((b) => b.approval === "approved" && b.pay === "unpaid" && !isApPeriodLocked(b.date, closedThrough));
+    const verifiedReady = bills.filter((b) => workflowStatus(b) === "APPROVED" && !isApPeriodLocked(billPeriod(b), closedThrough));
     const verifiedReadySum = verifiedReady.reduce((s, b) => s + b.total, 0);
-    const perluDibayar = bills.filter((b) => b.approval === "approved" && b.pay !== "paid" && !isApPeriodLocked(b.date, closedThrough));
+    const perluDibayar = bills.filter((b) => b.approval === "approved" && b.pay !== "paid" && !isApPeriodLocked(billPeriod(b), closedThrough));
     const perluDibayarSum = perluDibayar.reduce((s, b) => s + b.sisa, 0);
-    const reviewList = bills.filter((b) => b.approval === "review");
+    const reviewList = bills.filter((b) => workflowStatus(b) === "PENDING_REVIEW");
     const reviewSum = reviewList.reduce((s, b) => s + b.total, 0);
+    const returnedList = bills.filter((b) => workflowStatus(b) === "RETURNED");
+    const returnedSum = returnedList.reduce((s, b) => s + b.total, 0);
     const draftList = bills.filter((b) => b.approval === "draft");
     const draftSum = draftList.reduce((s, b) => s + b.total, 0);
     // AP Outstanding — SME feedback: drafts aren't real obligations to vendors,
@@ -629,6 +634,8 @@ export default function BillsPage() {
       perluDibayarSum,
       reviewCount: reviewList.length,
       reviewSum,
+      returnedCount: returnedList.length,
+      returnedSum,
       draftCount: draftList.length,
       draftSum,
       outstandingActive,
@@ -652,7 +659,10 @@ export default function BillsPage() {
     for (const bill of bills) {
       if (bill.pay === "paid" || bill.approval === "draft") continue;
       const amt = bill.sisa ?? bill.total ?? 0;
-      if (isApPeriodLocked(bill.date, closedThrough)) { b.locked.count++; b.locked.sum += amt; continue; }
+      // Only UN-POSTED bills need reassignment. A posted bill in a now-closed
+      // period was posted when the period was open — it ages by due date, it
+      // doesn't reassign. (Matches the per-row "Period locked" badge gate.)
+      if (!bill.je_number && isApPeriodLocked(billPeriod(bill), closedThrough)) { b.locked.count++; b.locked.sum += amt; continue; }
       const due = bill.due || "";
       if (due && due < todayKey)       { b.overdue.count++;   b.overdue.sum += amt; }
       else if (due && due <= in7Key)   { b.due7.count++;      b.due7.sum += amt; }
@@ -673,8 +683,9 @@ export default function BillsPage() {
   // (awaiting approval → ready to post); the counter is their sum.
   const closeBlocking = useMemo(() => {
     const inApr = (b) => b.date && b.date.startsWith(monthPfx);
-    const review = bills.filter((b) => inApr(b) && b.approval === "review").length;
-    const ready = bills.filter((b) => inApr(b) && b.approval === "approved" && b.pay === "unpaid").length;
+    // Only UN-POSTED bills block the close — once posted they're in the GL.
+    const review = bills.filter((b) => inApr(b) && workflowStatus(b) === "PENDING_REVIEW").length;
+    const ready = bills.filter((b) => inApr(b) && workflowStatus(b) === "APPROVED").length;
     return { review, ready, total: review + ready };
   }, [bills, monthPfx]);
 
@@ -694,6 +705,7 @@ export default function BillsPage() {
       // Review tab includes PENDING_REVIEW + RETURNED (per PRD; pinned section disambiguates)
       review:     byStatus("PENDING_REVIEW") + byStatus("RETURNED"),
       approved:   byStatus("APPROVED"),
+      posted:     byStatus("POSTED"),
       draft:      byStatus("DRAFT"),
       jatuhtempo: bills.filter((b) => b.pay === "overdue" && workflowStatus(b) !== "EXCEPTION").length,
       lunas:      byStatus("PAID"),
@@ -705,9 +717,8 @@ export default function BillsPage() {
     { k: "semua",      lbl: "All",        count: tabCounts.semua },
     { k: "review",     lbl: "Review",     count: tabCounts.review },
     { k: "approved",   lbl: "Approved",   count: tabCounts.approved },
+    { k: "posted",     lbl: "Posted",     count: tabCounts.posted },
     { k: "draft",      lbl: "Draft",      count: tabCounts.draft },
-    { k: "jatuhtempo", lbl: "Overdue",    count: tabCounts.jatuhtempo },
-    { k: "lunas",      lbl: "Paid",       count: tabCounts.lunas },
     { k: "exception",  lbl: "Exceptions", count: tabCounts.exception },
   ];
 
@@ -719,6 +730,7 @@ export default function BillsPage() {
     let list = bills;
     if (filter.kind === "tab") {
       if (filter.value === "approved")       list = list.filter((b) => workflowStatus(b) === "APPROVED");
+      else if (filter.value === "posted")    list = list.filter((b) => workflowStatus(b) === "POSTED");
       else if (filter.value === "review")    list = list.filter((b) => ["PENDING_REVIEW", "RETURNED"].includes(workflowStatus(b)));
       else if (filter.value === "draft")     list = list.filter((b) => workflowStatus(b) === "DRAFT");
       else if (filter.value === "jatuhtempo")list = list.filter((b) => b.pay === "overdue" && workflowStatus(b) !== "EXCEPTION");
@@ -728,7 +740,7 @@ export default function BillsPage() {
       if (filter.value === "total")              list = list.filter((b) => b.pay !== "paid");
       else if (filter.value === "overdueMonth")  list = list.filter((b) => b.pay === "overdue" && b.due && b.due.startsWith(monthPfx));
       else if (filter.value === "thisMonth")     list = list.filter((b) => b.date && b.date.startsWith(monthPfx));
-      else if (filter.value === "readyToPost")   list = list.filter((b) => b.approval === "approved" && b.pay === "unpaid" && !isApPeriodLocked(b.date, closedThrough));
+      else if (filter.value === "readyToPost")   list = list.filter((b) => workflowStatus(b) === "APPROVED" && !isApPeriodLocked(billPeriod(b), closedThrough));
       else if (filter.value === "perluDibayar")  list = list.filter((b) => b.approval === "approved" && b.pay !== "paid");
       else if (filter.value === "dueIn7")        list = list.filter((b) => b.pay !== "paid" && b.approval === "approved" && b.due && b.due > todayKey && b.due <= in7Key);
       // AP Outstanding card filter — exclude drafts so it matches the KPI's
@@ -738,12 +750,12 @@ export default function BillsPage() {
       else if (filter.value === "apClose")       list = list.filter((b) => b.date && b.date.startsWith(monthPfx) && (b.approval !== "approved" || b.pay !== "paid"));
       // Close gate (status): current-period bills not yet posted — in review or approved-unpaid. Matches the CLOSE counter.
       else if (filter.value === "closeBlocking")  list = list.filter((b) => b.date && b.date.startsWith(monthPfx) && (b.approval === "review" || (b.approval === "approved" && b.pay === "unpaid")));
-      else if (filter.value === "periodLocked")  list = list.filter((b) => isApPeriodLocked(b.date, closedThrough) && (b.approval === "review" || (b.approval === "approved" && b.pay !== "paid")));
-      // AP Outstanding breakdown buckets — partition the outstanding set; period-locked takes precedence over the due-date timeline.
-      else if (filter.value === "apoLocked")     list = list.filter((b) => b.pay !== "paid" && b.approval !== "draft" && isApPeriodLocked(b.date, closedThrough));
-      else if (filter.value === "apoOverdue")    list = list.filter((b) => b.pay !== "paid" && b.approval !== "draft" && !isApPeriodLocked(b.date, closedThrough) && b.due && b.due < todayKey);
-      else if (filter.value === "apoDue7")       list = list.filter((b) => b.pay !== "paid" && b.approval !== "draft" && !isApPeriodLocked(b.date, closedThrough) && b.due && b.due >= todayKey && b.due <= in7Key);
-      else if (filter.value === "apoNotYetDue")  list = list.filter((b) => b.pay !== "paid" && b.approval !== "draft" && !isApPeriodLocked(b.date, closedThrough) && (!b.due || b.due > in7Key));
+      else if (filter.value === "periodLocked")  list = list.filter((b) => !b.je_number && isApPeriodLocked(billPeriod(b), closedThrough) && (b.approval === "review" || (b.approval === "approved" && b.pay !== "paid")));
+      // Reassign bucket — UN-POSTED bills in a closed period (posted bills age by due date, they don't reassign).
+      else if (filter.value === "apoLocked")     list = list.filter((b) => !b.je_number && b.pay !== "paid" && b.approval !== "draft" && isApPeriodLocked(billPeriod(b), closedThrough));
+      else if (filter.value === "apoOverdue")    list = list.filter((b) => b.pay !== "paid" && b.approval !== "draft" && !isApPeriodLocked(billPeriod(b), closedThrough) && b.due && b.due < todayKey);
+      else if (filter.value === "apoDue7")       list = list.filter((b) => b.pay !== "paid" && b.approval !== "draft" && !isApPeriodLocked(billPeriod(b), closedThrough) && b.due && b.due >= todayKey && b.due <= in7Key);
+      else if (filter.value === "apoNotYetDue")  list = list.filter((b) => b.pay !== "paid" && b.approval !== "draft" && !isApPeriodLocked(billPeriod(b), closedThrough) && (!b.due || b.due > in7Key));
     }
     return list;
   }, [filter, monthPfx, bills, closedThrough]);
@@ -1055,6 +1067,14 @@ export default function BillsPage() {
                   <span className="bp-t2-cta">Review →</span>
                 </button>
               )}
+              {(canApprove || canCreate) && billStats.returnedCount > 0 && (
+                <button type="button" className="bp-t2" onClick={() => selectTab("review")}>
+                  <span className="bp-t2-lbl">Returned — needs rework</span>
+                  <span className="bp-t2-amt">{formatRupiah(billStats.returnedSum)}</span>
+                  <span className="bp-t2-sub">{billStats.returnedCount} bill{billStats.returnedCount === 1 ? "" : "s"}</span>
+                  <span className="bp-t2-cta">Fix →</span>
+                </button>
+              )}
               {canApprove && billStats.verifiedReadyCount > 0 && (
                 <button type="button" className="bp-t2" onClick={() => selectCard("readyToPost")}>
                   <span className="bp-t2-lbl">Ready to post</span>
@@ -1083,79 +1103,9 @@ export default function BillsPage() {
               )}
             </div>
 
-            {/* ── AP Outstanding breakdown | Insights ───────────────────── */}
-            <div className="bp-cc-split">
-              <div className="bp-cc-apo">
-                <div className="bp-cc-apo-head">
-                  <div className="bp-cc-sec-lbl">AP Outstanding</div>
-                  <div className="bp-cc-apo-total">{formatRupiah(apo.total)}</div>
-                </div>
-                <div className="bp-cc-bar">
-                  <span style={{ flexGrow: apo.notYetDue.sum, minWidth: apo.notYetDue.sum > 0 ? 4 : 0, background: "#2E7D44" }} title="Not yet due" />
-                  <span style={{ flexGrow: apo.due7.sum, minWidth: apo.due7.sum > 0 ? 4 : 0, background: "#B8770F" }} title="Due in 7 days" />
-                  <span style={{ flexGrow: apo.overdue.sum, minWidth: apo.overdue.sum > 0 ? 4 : 0, background: "#A32D2D" }} title="Overdue" />
-                  <span style={{ flexGrow: apo.locked.sum, minWidth: apo.locked.sum > 0 ? 4 : 0, background: "#8C8275" }} title="Period-locked" />
-                </div>
-                <div className="bp-cc-buckets">
-                  <button type="button" className="bp-bk" onClick={() => selectCard("apoNotYetDue")}>
-                    <span className="bp-bk-top"><span className="bp-bk-dot ok" /> Not yet due</span>
-                    <span className="bp-bk-amt">{formatRupiah(apo.notYetDue.sum)}</span>
-                    <span className="bp-bk-sub">{apo.notYetDue.count} bill{apo.notYetDue.count === 1 ? "" : "s"}</span>
-                    <span className="bp-bk-cta">View →</span>
-                  </button>
-                  <button type="button" className="bp-bk" onClick={() => selectCard("apoDue7")}>
-                    <span className="bp-bk-top"><span className="bp-bk-dot warn" /> Due in 7 days</span>
-                    <span className="bp-bk-amt">{formatRupiah(apo.due7.sum)}</span>
-                    <span className="bp-bk-sub">{apo.due7.count} bill{apo.due7.count === 1 ? "" : "s"}</span>
-                    <span className="bp-bk-cta">View →</span>
-                  </button>
-                  <button type="button" className="bp-bk" onClick={() => selectCard("apoOverdue")}>
-                    <span className="bp-bk-top"><span className="bp-bk-dot danger" /> Overdue</span>
-                    <span className="bp-bk-amt">{formatRupiah(apo.overdue.sum)}</span>
-                    <span className="bp-bk-sub">{apo.overdue.count} bill{apo.overdue.count === 1 ? "" : "s"} · payable</span>
-                    <span className="bp-bk-cta">View →</span>
-                  </button>
-                  <button type="button" className="bp-bk" onClick={() => selectCard("apoLocked")}>
-                    <span className="bp-bk-top">
-                      <span className="bp-bk-lock"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span>
-                      Period-locked
-                      <span
-                        className="bp-bk-info"
-                        role="img"
-                        tabIndex={0}
-                        aria-label="Period-locked bills are counted here, not under Overdue — reassign them to an open period first. Payment is recorded on AP Aging."
-                        title="Counted here, not under Overdue — reassign these to an open period before they can be paid. Payment is recorded on AP Aging."
-                        onClick={(e) => e.stopPropagation()}
-                      >i</span>
-                    </span>
-                    <span className="bp-bk-amt">{formatRupiah(apo.locked.sum)}</span>
-                    <span className="bp-bk-sub">{apo.locked.count} bill{apo.locked.count === 1 ? "" : "s"} · reassign</span>
-                    <span className="bp-bk-cta">View →</span>
-                  </button>
-                </div>
-              </div>
-
-              <div className="bp-cc-insights">
-                <div className="bp-cc-sec-lbl"><SparkleIcon size={12} /> Insights</div>
-                {insightItems.length === 0 ? (
-                  <div className="bp-cc-ins-empty">No notable patterns right now.</div>
-                ) : (
-                  insightItems.map((it) => (
-                    <div key={it.id} className="bp-cc-ins-row">
-                      <div className="bp-cc-ins-text">{it.node}</div>
-                      <div className="bp-cc-ins-actions">
-                        {it.question && (
-                          <button type="button" className="bp-cc-ins-ask" onClick={() => askAi(it.question)} title="Ask Klay AI">
-                            <SparkleIcon size={11} /> Ask
-                          </button>
-                        )}
-                        <button type="button" className="bp-cc-ins-view" onClick={() => handleSummaryAction(it)}>View →</button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
+            {/* AP Outstanding aging breakdown, Overdue/Paid views and the
+                overdue-payables Insights moved to AP Aging — the Bills page
+                focuses on getting bills to Posted; payment lives in AP Aging. */}
           </div>
         </div>
 
@@ -1239,7 +1189,7 @@ export default function BillsPage() {
             <div className="lg-col-header bp-col-header">
               <div><input type="checkbox" className="lg-row-check" disabled /></div>
               <div>Bill / Invoice</div>
-              <div>Date</div>
+              <div>Invoice Date</div>
               <div>Vendor</div>
               <div>Due Date</div>
               <div>Status</div>
@@ -1300,6 +1250,7 @@ export default function BillsPage() {
                               onVendorLeave={onVendorLeave}
                               showAgingBar={onJatuhTempo}
                               showKebab={canCreate}
+                              periodLocked={isApPeriodLocked(billPeriod(r.raw), closedThrough) && ["PENDING_REVIEW", "RETURNED", "APPROVED"].includes(workflowStatus(r.raw))}
                             />
                             {menuOpenFor === r.id && (
                               <div style={{ position: "absolute", right: 32, top: 32, zIndex: 5 }}>
@@ -1338,6 +1289,7 @@ export default function BillsPage() {
                           onVendorLeave={onVendorLeave}
                           showAgingBar={onJatuhTempo}
                           showKebab={canCreate}
+                          periodLocked={isApPeriodLocked(billPeriod(r.raw), closedThrough) && ["PENDING_REVIEW", "RETURNED", "APPROVED"].includes(workflowStatus(r.raw))}
                         />
                         {menuOpenFor === r.id && (
                           <div style={{ position: "absolute", right: 32, top: 32, zIndex: 5 }}>

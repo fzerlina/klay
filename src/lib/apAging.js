@@ -277,22 +277,27 @@ export function discountPillState(line) {
 }
 
 // ── Decision Queue filter ─────────────────────────────────────────────────
-// PRD: workflow_status IN (PENDING_REVIEW, APPROVED, RETURNED) AND on_hold=false.
-// Accruals never enter the Decision Queue (they're managed in AP Close).
+// PRD baseline: workflow_status IN (PENDING_REVIEW, APPROVED, RETURNED). We
+// also include POSTED: this is a payment-intelligence surface, and a posted-
+// but-unpaid bill is a live payment decision (discount window / overdue) — so
+// it belongs in the queue. Accruals never enter (managed in AP Close).
 export function isDecisionQueueRow(line) {
   if (line.is_accrual) return false;
   if (line.on_hold) return false;
   if (line.remaining <= 0) return false;
-  return ["PENDING_REVIEW", "APPROVED", "RETURNED"].includes(line.workflow_status);
+  return ["PENDING_REVIEW", "APPROVED", "RETURNED", "POSTED"].includes(line.workflow_status);
 }
 
 // ── Aging Table filter ────────────────────────────────────────────────────
-// Includes accruals (tagged separately) and all outstanding balances. Excludes
-// PAID and DRAFT — DRAFT isn't a liability until posted.
+// POSTED liabilities only (+ posted accruals, tagged separately). The aging
+// table is the financial report that reconciles to the GL AP Control account
+// (Gate 3a), so its grand total must equal the posted-only "AP Outstanding"
+// KPI — pre-posting bills (PENDING_REVIEW / RETURNED / APPROVED) are NOT
+// liabilities yet and are excluded here. They still surface for chasing in the
+// Decision Queue (isDecisionQueueRow), which is a work-list, not a GL total.
 export function isAgingTableRow(line) {
-  if (line.workflow_status === "DRAFT") return false;
   if (line.remaining <= 0) return false;
-  return true;
+  return line.workflow_status === "POSTED" || line.is_accrual;
 }
 
 // ── Urgency for Decision Queue ────────────────────────────────────────────
@@ -354,7 +359,11 @@ export function buildSnapshot(lines, asOfDate = TODAY) {
       bucketTotals.current += 0;  // accruals do NOT contribute to per-bucket total per PRD
       continue;
     }
-    if (l.workflow_status === "DRAFT") continue;
+    // KPI / reconciliation scope = POSTED liabilities only (Gate 3a). Pre-
+    // posting bills (PENDING_REVIEW / RETURNED / APPROVED) are subledger-only
+    // and excluded from the GL-reconciled total by design — they still SHOW in
+    // the Decision Queue / Aging Table, they just don't count toward this number.
+    if (l.workflow_status !== "POSTED") continue;
     if (l.remaining <= 0) continue;
 
     apOutstanding += l.remaining;
@@ -381,7 +390,7 @@ export function buildSnapshot(lines, asOfDate = TODAY) {
   let weightedAge = 0;
   let weightTotal = 0;
   for (const l of lines) {
-    if (l.is_accrual || l.workflow_status === "DRAFT" || l.remaining <= 0) continue;
+    if (l.is_accrual || l.workflow_status !== "POSTED" || l.remaining <= 0) continue;
     weightedAge += l.ageDays * l.remaining;
     weightTotal += l.remaining;
   }

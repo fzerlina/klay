@@ -215,14 +215,21 @@ export function computeFieldConfidence(bill, vendor) {
   // and the indicator flips to GREEN. Non-PKP vendors get BLUE "not
   // applicable" regardless.
   if (vendor?.pkp === "PKP") {
-    if (bill.faktur_pajak) {
+    // Presence is read from the faktur number actually on the bill — manually
+    // confirmed (faktur_pajak) OR the number carried/extracted on the record
+    // (fakturNo). Only a genuinely-missing faktur on a PKP vendor is RED.
+    const fakturVal = bill.faktur_pajak || bill.fakturNo;
+    if (fakturVal && fakturVal !== "—") {
+      const manual = !!bill.faktur_pajak || !isAI;
       fields.faktur = {
         field_name:   "faktur",
-        source:       "MANUAL",
-        source_label: SOURCE_LABEL.MANUAL,
-        score:        null,
+        source:       manual ? "MANUAL" : "OCR",
+        source_label: manual ? SOURCE_LABEL.MANUAL : SOURCE_LABEL.OCR,
+        score:        manual ? null : 0.9,
         visual_state: "GREEN",
-        explanation:  `Faktur Pajak entered manually · ${bill.faktur_pajak}`,
+        explanation:  manual
+          ? `Faktur Pajak on file · ${fakturVal}`
+          : `Faktur Pajak extracted from the invoice · ${fakturVal}`,
       };
     } else {
       fields.faktur = {
@@ -231,7 +238,7 @@ export function computeFieldConfidence(bill, vendor) {
         source_label: SOURCE_LABEL.OCR,
         score:        0.0,
         visual_state: "RED",
-        explanation:  `Faktur Pajak required: ${vendor.name} is PKP, but no faktur number was extracted from the invoice`,
+        explanation:  `Faktur Pajak required: ${vendor.name} is PKP, but no faktur number is on the bill — enter it to post`,
       };
     }
   } else if (vendor) {
@@ -254,6 +261,23 @@ export function computeFieldConfidence(bill, vendor) {
     visual_state: "BLUE",
     explanation:  ruleExplanation("net_payable", vendor),
   };
+
+  // Manual overrides — once the FM edits a field, its source reads "manual"
+  // (the hover tooltip updates accordingly), unless it still carries an active
+  // YELLOW/RED flag. `manual_fields` is recorded by Bill Detail's editField.
+  const manualSet = new Set(bill.manual_fields || []);
+  if (manualSet.size > 0) {
+    for (const f of Object.values(fields)) {
+      const edited = manualSet.has(f.field_name) || (f.field_name === "faktur" && manualSet.has("fakturNo"));
+      if (edited && f.visual_state !== "YELLOW" && f.visual_state !== "RED") {
+        f.source       = "MANUAL";
+        f.source_label = SOURCE_LABEL.MANUAL;
+        f.score        = null;
+        f.visual_state = null;
+        f.explanation  = "Entered manually by you";
+      }
+    }
+  }
 
   return fields;
 }

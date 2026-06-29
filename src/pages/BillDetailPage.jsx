@@ -10,6 +10,7 @@ import {
   STATUS_LABEL,
   DEMO_OVERRIDES,
   isApPeriodLocked,
+  billPeriod,
 } from "../lib/billStatus";
 import { useClosePeriod } from "../state/ClosePeriodContext";
 import { useCurrentUser } from "../state/CurrentUserContext";
@@ -40,6 +41,7 @@ const PAY_LABEL      = { paid: "Paid", unpaid: "Unpaid", overdue: "Overdue" };
 // receipts, comments) and need just the module's view level. Used by ActionBar.
 const AP_ACTION_LEVEL = {
   "Approve":           "approve+post",
+  "Post":              "approve+post",
   "Record payment":    "approve+post",
   "Put on hold":       "approve+post",
   "Return to AP":      "approve+post",
@@ -128,9 +130,8 @@ function FieldRow({
   const [draft, setDraft] = useState("");
 
   const vs = confidence?.visual_state;
-  const cls = vs ? ` bd-field-${vs.toLowerCase()}` : "";
+  const cls = (vs === "YELLOW" || vs === "RED") ? ` bd-field-${vs.toLowerCase()}` : "";
   const editable = canEdit && !!onSave && (vs === "YELLOW" || vs === "RED");
-  const showConfirm = canEdit && !!onConfirm && vs === "YELLOW";
 
   function startEdit() {
     setDraft(rawValue == null ? "" : String(rawValue));
@@ -174,47 +175,107 @@ function FieldRow({
 
   // Display mode — show the value, inline rule note for RULE_ENGINE /
   // YELLOW / RED, then Edit and (optionally) Confirm action chips below.
-  const inline = confidence && (
-    confidence.source === "RULE_ENGINE" || vs === "YELLOW" || vs === "RED"
-  );
+  const inline = vs === "YELLOW" || vs === "RED";
   return (
     <div className={`drawer-row bd-field-row${cls}`}>
       <div className="drawer-label">{label}</div>
       <div className={`drawer-value${mono ? " mono" : ""}`}>
         {value}
         {inline && <div className="bd-rule-note">{confidence.explanation}</div>}
-        {(editable || showConfirm) && (
+        {editable && (
           <div className="bd-field-actions">
-            {editable && (
-              <button type="button" className="bd-field-action edit" onClick={startEdit}>
-                <svg viewBox="0 0 12 12" aria-hidden><path d="M2 10h2l5.5-5.5-2-2L2 8v2zM8.5 2L10 3.5" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                {vs === "RED" ? "Enter value" : "Edit"}
-              </button>
-            )}
-            {showConfirm && (
-              <button type="button" className="bd-field-action confirm" onClick={onConfirm}>
-                <svg viewBox="0 0 12 12" aria-hidden><polyline points="2 6 5 9 10 3" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                Confirm anyway
-              </button>
-            )}
+            <button type="button" className="bd-field-action edit" onClick={startEdit}>
+              <svg viewBox="0 0 12 12" aria-hidden><path d="M2 10h2l5.5-5.5-2-2L2 8v2zM8.5 2L10 3.5" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              Review
+            </button>
           </div>
         )}
       </div>
-      {vs && (
+      <ConfidenceIndicator confidence={confidence} />
+    </div>
+  );
+}
+
+// Shared confidence/exception indicator — the colored dot (or check) pinned to
+// the right edge of a row, plus the hover tooltip. Extracted so FieldRow,
+// PlainRow, RefRow and RateRow all surface a field's exception inline, not just
+// in the top review brief. Dot shows when there's a visual_state; tooltip shows
+// whenever a confidence record is present. Caller adds `bd-field-row
+// bd-field-<state>` to the row so it gets the positioning context + tint.
+function ConfidenceIndicator({ confidence }) {
+  if (!confidence) return null;
+  const vs = confidence.visual_state;
+  // Only exceptions (YELLOW/RED) get a visible dot. GREEN/BLUE/manual carry no
+  // indicator — their source still surfaces on hover via the tooltip below.
+  const flagged = vs === "YELLOW" || vs === "RED";
+  return (
+    <>
+      {flagged && (
         <div className={`bd-field-indicator bd-field-ind-${vs.toLowerCase()}`} aria-hidden>
-          {vs === "GREEN" || vs === "BLUE" ? (
-            <svg viewBox="0 0 10 10"><polyline points="2 5 4 7 8 3" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
-          ) : (
-            <span className="bd-field-dot" />
-          )}
+          <span className="bd-field-dot" />
         </div>
       )}
-      {confidence && (
-        <div className="bd-field-tooltip" role="tooltip">
-          <div className="bd-field-tt-summary">{summarizeConfidence(confidence)}</div>
-          <div className="bd-field-tt-explanation">{confidence.explanation}</div>
+      <div className="bd-field-tooltip" role="tooltip">
+        <div className="bd-field-tt-summary">{summarizeConfidence(confidence)}</div>
+        <div className="bd-field-tt-explanation">{confidence.explanation}</div>
+      </div>
+    </>
+  );
+}
+
+// Row-class helper: opts a non-FieldRow into the same positioning + tint as a
+// flagged FieldRow when it carries a confidence state.
+function confidenceRowClass(confidence) {
+  if (!confidence) return "";
+  const vs = confidence.visual_state;
+  // Any field carrying confidence becomes a hoverable field-row (so its source
+  // tooltip works); only exceptions (YELLOW/RED) also get the colored tint.
+  const tint = (vs === "YELLOW" || vs === "RED") ? ` bd-field-${vs.toLowerCase()}` : "";
+  return ` bd-field-row${tint}`;
+}
+
+// Visible exception note for a flagged (YELLOW/RED) field: states what's wrong
+// AND offers the CTA to settle it — "Review", which opens an inline editor on
+// that field (same as FieldRow's edit). Saving corrects the value and clears
+// the field's anomalies, flipping it back to GREEN. Non-flagged fields render
+// nothing.
+function FlaggedNote({ confidence, rawValue, inputType, parser, onSave }) {
+  const vs = confidence?.visual_state;
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  if (vs !== "YELLOW" && vs !== "RED") return null;
+  const startReview = () => { setDraft(rawValue == null ? "" : String(rawValue)); setEditing(true); };
+  const commit = () => {
+    if (!onSave) { setEditing(false); return; }
+    const parsed = parser ? parser(draft) : draft;
+    if (parsed === "" || parsed == null) { setEditing(false); return; }
+    onSave(parsed);
+    setEditing(false);
+  };
+  return (
+    <div className="bd-field-flag">
+      <div className="bd-rule-note">{confidence.explanation}</div>
+      {onSave && (editing ? (
+        <div className="bd-field-edit">
+          <input
+            type={inputType || "text"}
+            className="bd-field-input"
+            value={draft}
+            autoFocus
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") commit(); if (e.key === "Escape") setEditing(false); }}
+          />
+          <button type="button" className="bd-field-edit-btn save" onClick={commit}>Save</button>
+          <button type="button" className="bd-field-edit-btn cancel" onClick={() => setEditing(false)}>Cancel</button>
         </div>
-      )}
+      ) : (
+        <div className="bd-field-actions">
+          <button type="button" className="bd-field-action edit" onClick={startReview}>
+            <svg viewBox="0 0 12 12" aria-hidden><path d="M2 10h2l5.5-5.5-2-2L2 8v2zM8.5 2L10 3.5" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            Review
+          </button>
+        </div>
+      ))}
     </div>
   );
 }
@@ -249,7 +310,7 @@ function JournalEntryPreview({ bill, vendor, onViewPostedJe }) {
                 )}
               </>
             ) : (
-              "What will write to the General Ledger when this bill is approved. Read-only — edit the bill fields to change."
+              "What will write to the General Ledger when this bill is posted. Read-only — edit the bill fields to change."
             )}
           </div>
         </div>
@@ -441,10 +502,10 @@ function StatusStepper({ bill, brief }) {
     );
   }
 
-  // Two lifecycles. We flip to the payment stepper once the bill has been
-  // approved (the demo's proxy for POSTED — there's no separate POSTED state
-  // until the workflow_status enum is materialized in the seed).
-  const isPostApproval = bill.approval === "approved";
+  // Two lifecycles. The pre-posting stepper (Draft → Pending Review → Approved
+  // → Posted) stays in view through APPROVED ("ready to post") and only flips
+  // to the payment stepper once the bill is actually posted to the GL.
+  const isPostApproval = ws === "POSTED" || ws === "PAID";
 
   let steps;
   let activeKey;
@@ -970,7 +1031,9 @@ function ActionBar({ bill, onAction, onSecondary, gateReason, periodLocked, lock
   // resubmit) when there are unresolved YELLOW/RED fields. Per PRD: "Post is
   // active when all RED filled and all YELLOW confirmed/corrected." Other
   // primaries (Record payment, Release hold, etc.) are not gated.
-  const gateableStates = ws === "DRAFT" || ws === "PENDING_REVIEW" || ws === "RETURNED";
+  // APPROVED is included because Post (the GL commit) lives there now — per
+  // PRD "Post is active when all RED filled and all YELLOW confirmed/corrected."
+  const gateableStates = ws === "DRAFT" || ws === "PENDING_REVIEW" || ws === "RETURNED" || ws === "APPROVED";
   const gated = !!gateReason && gateableStates;
   // Period-lock gate: when the bill's accounting period is closed, all client
   // users (FM included) are blocked from posting via normal flow. Per PRD,
@@ -981,7 +1044,7 @@ function ActionBar({ bill, onAction, onSecondary, gateReason, periodLocked, lock
   // The banner appears whenever the period is locked (any workflow state) so
   // the FM always sees the reason. The primary-action disable only kicks in
   // for workflow states where posting is the next step.
-  const periodActionGated = !!periodLocked && (gateableStates || ws === "APPROVED");
+  const periodActionGated = !!periodLocked && gateableStates;
   const periodGateReason = periodActionGated
     ? `${lockedPeriodLabel || "Period"} is closed — reassign to current open period to post`
     : null;
@@ -1001,13 +1064,13 @@ function ActionBar({ bill, onAction, onSecondary, gateReason, periodLocked, lock
   let secondaries = [];
   switch (ws) {
     case "DRAFT":          primary = "Submit for review"; secondaries = ["Edit", "Delete"]; break;
-    case "PENDING_REVIEW": primary = "Approve";            secondaries = ["Return to AP", "Put on hold", "Edit"]; break;
-    case "RETURNED":       primary = "Edit & resubmit";    secondaries = ["View FM comments"]; break;
+    case "PENDING_REVIEW": primary = "Approve";            secondaries = ["Put on hold", "Edit"]; break;
+    case "RETURNED":       primary = "Edit & resubmit";    secondaries = []; break;
     case "ON_HOLD":        primary = "Release hold";       secondaries = ["Edit", "Cancel bill"]; break;
-    case "APPROVED":       primary = "Record payment";     secondaries = ["Revert to review", "Edit"]; break;
+    case "APPROVED":       primary = "Post";               secondaries = ["Revert to review", "Edit"]; break;
     case "POSTED":         primary = "Record payment";     secondaries = ["View GL entry"]; break;
     case "PAID":           primary = null;                 secondaries = ["View receipt", "Revert to unpaid"]; break;
-    case "EXCEPTION":      primary = exceptionPrimaryLabel; secondaries = ["Open source document", "Skip — mark for later"]; break;
+    case "EXCEPTION":      primary = exceptionPrimaryLabel; secondaries = ["Skip — mark for later"]; break;
     default:               primary = "Edit";               secondaries = [];
   }
 
@@ -1077,11 +1140,15 @@ function ActionBar({ bill, onAction, onSecondary, gateReason, periodLocked, lock
 // ─── Detail-tab row helpers ─────────────────────────────────────────────────
 
 // A plain read-only label/value row (no confidence indicator).
-function PlainRow({ label, value, mono }) {
+function PlainRow({ label, value, mono, confidence, rawValue, inputType, parser, onSave }) {
   return (
-    <div className="drawer-row">
+    <div className={`drawer-row${confidenceRowClass(confidence)}`}>
       <div className="drawer-label">{label}</div>
-      <div className={`drawer-value${mono ? " mono" : ""}`}>{value}</div>
+      <div className={`drawer-value${mono ? " mono" : ""}`}>
+        {value}
+        <FlaggedNote confidence={confidence} rawValue={rawValue} inputType={inputType} parser={parser} onSave={onSave} />
+      </div>
+      <ConfidenceIndicator confidence={confidence} />
     </div>
   );
 }
@@ -1098,10 +1165,10 @@ function SubRow({ label, value }) {
 
 // A reference row whose value, when present, is a link that switches the
 // source document shown on the left.
-function RefRow({ label, value, onClick }) {
+function RefRow({ label, value, onClick, confidence, rawValue, inputType, parser, onSave }) {
   const has = value && value !== "—";
   return (
-    <div className="drawer-row bd-ref-row">
+    <div className={`drawer-row bd-ref-row${confidenceRowClass(confidence)}`}>
       <div className="drawer-label">{label}</div>
       <div className="drawer-value mono">
         {has ? (
@@ -1109,14 +1176,16 @@ function RefRow({ label, value, onClick }) {
         ) : (
           <span className="bd-ref-empty">—</span>
         )}
+        <FlaggedNote confidence={confidence} rawValue={rawValue} inputType={inputType} parser={parser} onSave={onSave} />
       </div>
+      <ConfidenceIndicator confidence={confidence} />
     </div>
   );
 }
 
 // A tax-rate row: the rate is an editable chip (click → inline % input); the
 // computed amount sits beside it. Saving recomputes the downstream totals.
-function RateRow({ label, rate, amount, onSaveRate, canEdit = true }) {
+function RateRow({ label, rate, amount, onSaveRate, canEdit = true, confidence }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const pct = +((rate || 0) * 100).toFixed(2);
@@ -1128,7 +1197,7 @@ function RateRow({ label, rate, amount, onSaveRate, canEdit = true }) {
     setEditing(false);
   }
   return (
-    <div className="drawer-row bd-rate-row">
+    <div className={`drawer-row bd-rate-row${confidenceRowClass(confidence)}`}>
       <div className="drawer-label">{label}</div>
       <div className="drawer-value bd-rate-value">
         {editing ? (
@@ -1156,7 +1225,9 @@ function RateRow({ label, rate, amount, onSaveRate, canEdit = true }) {
             <span className="bd-rate-amt mono">{formatRupiah(amount)}</span>
           </>
         )}
+        <FlaggedNote confidence={confidence} />
       </div>
+      <ConfidenceIndicator confidence={confidence} />
     </div>
   );
 }
@@ -1235,13 +1306,12 @@ export default function BillDetailPage() {
     };
   };
 
-  // Gate the Post button on YELLOW/RED fields — but exclude the Faktur Pajak
-  // RED that fires on every PKP-vendor bill in the demo (the seed doesn't
-  // carry a faktur number column). Without this exclusion the posting demo
-  // would be blocked on nearly every bill. Phase J will make faktur editable
-  // so the FM can fill it in and the gate becomes meaningful.
+  // Gate the Post button on any YELLOW/RED field. Faktur Pajak is now accurate
+  // (reads the faktur number actually on the bill), so a genuinely-missing
+  // faktur on a PKP vendor correctly blocks posting until the FM enters it
+  // inline — no longer a blanket exclusion.
   const realBlockers = Object.values(fields).filter(
-    (f) => (f.visual_state === "YELLOW" || f.visual_state === "RED") && f.field_name !== "faktur",
+    (f) => f.visual_state === "YELLOW" || f.visual_state === "RED",
   );
   const gateReason = realBlockers.length > 0
     ? `${realBlockers.length} flagged field${realBlockers.length === 1 ? "" : "s"} need attention before posting`
@@ -1251,19 +1321,20 @@ export default function BillDetailPage() {
   // When the bill's accounting period is locked, the Post action is disabled
   // and a Reassign affordance lets the FM move the bill to the current open
   // period (the path of least resistance per the AP Close PRD).
-  const billPeriodLocked = isApPeriodLocked(bill.date, closedThrough);
-  const lockedPeriodLabel = billPeriodLocked ? periodLabel(bill.date?.slice(0, 7)) : null;
+  const billPeriodLocked = isApPeriodLocked(billPeriod(bill), closedThrough);
+  const lockedPeriodLabel = billPeriodLocked ? periodLabel(billPeriod(bill)) : null;
   function onReassignToCurrentPeriod() {
-    // Demo behavior: advance the bill's date to the first day of the next
-    // open period (closedThrough + 1 month). In production this would be a
-    // user-confirmed period change via the bill's period field.
+    // Reassign moves only the accounting `period` to the first day of the next
+    // open period (closedThrough + 1 month). The vendor's invoice_date (b.date)
+    // is left untouched — it's a historical fact about the document, and
+    // rewriting it to dodge a closed period is exactly what auditors object to.
     const [y, m] = closedThrough.split("-").map((n) => parseInt(n, 10));
     const nextY = m === 12 ? y + 1 : y;
     const nextM = m === 12 ? 1 : m + 1;
-    const newDate = `${nextY}-${String(nextM).padStart(2, "0")}-01`;
-    updateBill(bill.id, { date: newDate }, {
+    const newPeriod = `${nextY}-${String(nextM).padStart(2, "0")}-01`;
+    updateBill(bill.id, { period: newPeriod }, {
       type:   "reassigned",
-      action: `Reassigned to ${periodLabel(`${nextY}-${String(nextM).padStart(2, "0")}`)} (was ${lockedPeriodLabel})`,
+      action: `Accounting period reassigned to ${periodLabel(`${nextY}-${String(nextM).padStart(2, "0")}`)} (was ${lockedPeriodLabel}) — invoice date unchanged`,
       by:     FM_USER,
       ...nowAuditStamp(),
     });
@@ -1283,26 +1354,40 @@ export default function BillDetailPage() {
         });
         showToast(`${bill.id} submitted for review`);
         break;
-      case "Approve": {
-        // Approving the bill is the moment it posts to the GL. Build a full
-        // journal entry from the bill + vendor (same shape as seed JEs) and
-        // push it onto the JournalEntriesContext list. Switch the user to
-        // the Posting tab so the new JE header is immediately visible.
+      case "Approve":
+        // FM approval clears review — the bill is now "ready to post" but is
+        // NOT yet in the GL. Posting is a separate, explicit FM action.
+        updateBill(bill.id, { approval: "approved" }, {
+          type:   "approved",
+          action: "Approved — ready to post",
+          by:     FM_USER,
+          ...stamp,
+        });
+        showToast(`${bill.id} approved — ready to post`);
+        break;
+      case "Post": {
+        // Posting is the moment the bill writes to the GL. Build a full journal
+        // entry from the bill + vendor (same shape as seed JEs), push it onto
+        // JournalEntriesContext, and stamp the bill with its je_number so it
+        // advances to POSTED. Switch to the Posting tab to show the new JE.
         const jeNumber = peekNextJeNumber();
         const je = buildJournalEntry(bill, vendor, jeNumber, FM_USER);
         addJournalEntry(je);
         updateBill(bill.id, {
-          approval:       "approved",
           je_number:      jeNumber,
           je_posted_date: stamp.date,
         }, {
-          type:   "approved",
-          action: `Approved & posted to GL · ${jeNumber}`,
+          type:   "posted",
+          action: `Posted to GL · ${jeNumber}`,
           by:     FM_USER,
           ...stamp,
         });
         showToast(`Posted to GL · ${jeNumber}`);
-        setTab("posting");
+        // Posting is the FM's terminal action on this bill for the review
+        // lifecycle — return to the queue to clear the next one rather than
+        // lingering on a now-posted detail. Payment is recorded later from the
+        // list / AP Aging, not here.
+        navigate("/bills");
         break;
       }
       case "Record payment":
@@ -1357,9 +1442,12 @@ export default function BillDetailPage() {
     const stamp = nowAuditStamp();
     const resolved = new Set(bill.anomalies_resolved || []);
     for (const idx of anomalyIndexesForField(bill, fieldName)) resolved.add(idx);
+    const manual = new Set(bill.manual_fields || []);
+    manual.add(fieldName);
     updateBill(bill.id, {
       [fieldName]:         newValue,
       anomalies_resolved:  [...resolved],
+      manual_fields:       [...manual],
     }, {
       type:   "edited",
       action: `${FIELD_LABELS[fieldName] || fieldName} corrected: ${fieldAuditValue(fieldName, before)} → ${fieldAuditValue(fieldName, newValue)}`,
@@ -1552,6 +1640,19 @@ export default function BillDetailPage() {
                     onConfirm={() => confirmField("date")}
                     canEdit={canEditAp}
                   />
+                  <PlainRow
+                    label="Accounting Period"
+                    value={
+                      billPeriod(bill) === (bill.date || "").slice(0, 7)
+                        ? periodLabel(billPeriod(bill))
+                        : (
+                          <>
+                            {periodLabel(billPeriod(bill))}
+                            <span className="bd-period-reassigned"> · reassigned from {periodLabel((bill.date || "").slice(0, 7))}</span>
+                          </>
+                        )
+                    }
+                  />
                   <FieldRow label="Due Date" value={formatDateEn(bill.due)} confidence={fields.due} />
                   <PlainRow label="Discount Due Date" value={bill.discountDueDate ? formatDateEn(bill.discountDueDate) : "—"} />
                   <PlainRow label="GRN Status" value={GRN_LABEL[bill.grn] || "—"} />
@@ -1590,10 +1691,20 @@ export default function BillDetailPage() {
 
                 <div className="drawer-section">
                   <div className="drawer-section-title">References</div>
-                  <RefRow label="PO #"           value={bill.poNo}       onClick={() => setDocView("po")} />
+                  <RefRow label="PO #"           value={bill.poNo}       onClick={() => setDocView("po")} confidence={fields.poNo} rawValue={bill.poNo === "—" ? "" : bill.poNo} parser={parseText} onSave={(v) => editField("poNo", v)} />
                   <RefRow label="GRN #"          value={bill.grnNo}      onClick={() => setDocView("grn")} />
                   <RefRow label="Contract #"     value={bill.contractNo} onClick={() => setDocView("contract")} />
-                  <RefRow label="Faktur Pajak"   value={bill.fakturNo}   onClick={() => setDocView("faktur")} />
+                  <FieldRow
+                    label="Faktur Pajak"
+                    value={bill.fakturNo && bill.fakturNo !== "—" ? bill.fakturNo : "—"}
+                    confidence={fields.faktur}
+                    fieldName="fakturNo"
+                    rawValue={bill.fakturNo === "—" ? "" : bill.fakturNo}
+                    inputType="text"
+                    parser={parseText}
+                    onSave={(v) => editField("fakturNo", v)}
+                    canEdit={canEditAp}
+                  />
                 </div>
 
                 <div className="drawer-section">
@@ -1624,12 +1735,16 @@ export default function BillDetailPage() {
                     </tbody>
                   </table>
                   <div className="bd-amounts">
-                    <PlainRow label="DPP" value={formatRupiah(bill.dpp)} mono />
-                    <RateRow label="PPN" rate={ppnRate} amount={bill.ppn} onSaveRate={setPpnRate} canEdit={canEditAp} />
-                    <RateRow label="PPh" rate={pphRate} amount={bill.pph23} onSaveRate={setPphRate} canEdit={canEditAp} />
-                    <div className="drawer-row bd-amt-strong">
+                    <PlainRow label="DPP" value={formatRupiah(bill.dpp)} mono confidence={fields.dpp} rawValue={String(bill.dpp)} inputType="number" parser={parseInt0} onSave={(v) => editField("dpp", v)} />
+                    <RateRow label="PPN" rate={ppnRate} amount={bill.ppn} onSaveRate={setPpnRate} canEdit={canEditAp} confidence={fields.ppn} />
+                    <RateRow label="PPh" rate={pphRate} amount={bill.pph23} onSaveRate={setPphRate} canEdit={canEditAp} confidence={fields.pph23} />
+                    <div className={`drawer-row bd-amt-strong${confidenceRowClass(fields.total)}`}>
                       <div className="drawer-label">Total</div>
-                      <div className="drawer-value mono">{formatRupiah(bill.total)}</div>
+                      <div className="drawer-value mono">
+                        {formatRupiah(bill.total)}
+                        <FlaggedNote confidence={fields.total} rawValue={String(bill.total)} inputType="number" parser={parseInt0} onSave={(v) => editField("total", v)} />
+                      </div>
+                      <ConfidenceIndicator confidence={fields.total} />
                     </div>
                     <PlainRow label="Net Payable" value={formatRupiah(netPayable)} mono />
                   </div>

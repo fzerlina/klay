@@ -51,6 +51,17 @@ export function isApPeriodLocked(billDate, closedThrough = AP_CLOSED_THROUGH) {
   return billDate.slice(0, 7) <= closedThrough;
 }
 
+// The accounting period a bill posts into — the field the period-lock check
+// consults. Per the Bills List / Bill Detail PRDs this is SEPARATE from the
+// vendor's invoice_date (b.date): it defaults to the invoice month but can be
+// reassigned to an open period (e.g. when an invoice arrives after its period
+// closed) WITHOUT rewriting the historical document date. Returns YYYY-MM.
+// Falls back to invoice_date for seed bills that predate the field.
+export function billPeriod(b) {
+  if (b?.period) return b.period.slice(0, 7);
+  return b?.date ? b.date.slice(0, 7) : "";
+}
+
 // Single workflow_status derived from the existing (approval × pay) seed plus
 // the DEMO_OVERRIDES table. Bills List + Bill Detail both render from this.
 export function workflowStatus(b) {
@@ -59,6 +70,10 @@ export function workflowStatus(b) {
   if (b.approval === "draft") return "DRAFT";
   if (b.approval === "review") return "PENDING_REVIEW";
   if (b.approval === "approved" && b.pay === "paid") return "PAID";
+  // Approved but not yet committed to the GL = "ready to post". Once the FM
+  // posts (a je_number is stamped) it advances to POSTED. These are distinct
+  // FM actions: Approve clears review, Post writes the journal entry.
+  if (b.approval === "approved" && b.je_number) return "POSTED";
   if (b.approval === "approved") return "APPROVED";
   return "PENDING_REVIEW";
 }
@@ -91,9 +106,9 @@ export function statusCause(b) {
       return `${ov.onHold?.reason || "awaiting info"} · ${sinceDays}d`;
     }
     case "APPROVED":
-      return dpd > 0 ? `overdue ${dpd}d` : "ready for payment";
+      return "ready to post";
     case "POSTED":
-      return "payment scheduled";
+      return dpd > 0 ? `posted · overdue ${dpd}d` : "posted · awaiting payment";
     case "PAID": {
       const paidAudit = (b.audit || []).find((a) => a.type === "paid") || (b.audit || [])[(b.audit?.length || 1) - 1];
       return paidAudit?.date ? formatDateEn(paidAudit.date) : "settled";

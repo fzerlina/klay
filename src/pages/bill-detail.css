@@ -1154,6 +1154,13 @@
   position: relative;
   color: var(--color-text-tertiary);
 }
+/* "reassigned from <month>" note on the Accounting Period row — shown only when
+   the accounting period differs from the invoice month. */
+.bd-period-reassigned {
+  color: #854F0B;
+  font-style: italic;
+  font-size: 11px;
+}
 .bd-subrow .drawer-label::before {
   content: "";
   position: absolute;
