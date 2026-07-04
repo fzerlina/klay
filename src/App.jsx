@@ -17,6 +17,7 @@ import CustomerCreatePage from "./pages/CustomerCreatePage";
 import GeneralLedgerPage from "./pages/GeneralLedgerPage";
 import TrialBalancePage from "./pages/TrialBalancePage";
 import CloseManagementPage from "./pages/CloseManagementPage";
+import ApCloseCommandCenterPage from "./pages/ApCloseCommandCenterPage";
 import BankReconciliationPage from "./pages/BankReconciliationPage";
 import BankAccountsSettingsPage from "./pages/BankAccountsSettingsPage";
 import UsersPage from "./pages/UsersPage";
@@ -100,6 +101,7 @@ export default function App() {
                 <Route path="/bills/new" element={<RequireLevel module="ap" level="transact" action="create bills"><BillCreatePage /></RequireLevel>} />
                 <Route path="/bills/:id" element={<BillDetailPage />} />
                 <Route path="/ap-aging" element={<ApAgingPage />} />
+                <Route path="/ap/close" element={<ApCloseCommandCenterPage />} />
                 <Route path="/invoices" element={<InvoicesPage />} />
                 <Route path="/invoices/new" element={<InvoiceCreatePage />} />
                 <Route path="/vendors" element={<VendorsPage />} />

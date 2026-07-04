@@ -104,6 +104,21 @@ body{font-family:var(--font-sans);background:var(--color-surface-base);color:var
 .sb-close-hero.collapsed{padding:0;width:42px;height:42px;justify-content:center;margin:6px auto 12px;gap:0;background:linear-gradient(135deg, rgba(184,61,8,0.42) 0%, rgba(184,61,8,0.18) 100%)}
 .sb-close-hero.collapsed .sb-close-hero-ring svg{width:30px;height:30px}
 
+/* AP "Close" nav item — warm terracotta-tinted label to set it apart from the
+   regular menu rows (it's the period-close surface, tied to the close hero). */
+.sb-item.sb-item-close{color:#E3A375}
+.sb-item.sb-item-close svg{color:#E3A375}
+.sb-item.sb-item-close:hover,.sb-item.sb-item-close.active{color:#fff}
+.sb-item.sb-item-close:hover svg,.sb-item.sb-item-close.active svg{color:#fff}
+
+/* AP "Close" nav item blocker badge — dot + count, pushed to the right edge of
+   the menu row. No box; the row is a normal sb-item. */
+.sb-close-badge{margin-left:auto;display:inline-flex;align-items:center;gap:5px;font-family:var(--font-mono);font-size:11px;font-weight:700;color:rgba(255,255,255,0.75)}
+.sb-close-badge-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.sb-close-badge-dot.sev-green{background:#3ec47a}
+.sb-close-badge-dot.sev-amber{background:#E0A34E}
+.sb-close-badge-dot.sev-red{background:#E5705F}
+
 /* Settings (sn-*) — same treatment as sb-item */
 .sn-item{display:flex;align-items:center;gap:11px;padding:8px 10px;margin:1px 0;border-radius:8px;cursor:pointer;font-size:13px;color:var(--sidebar-text);transition:background var(--transition-fast),color var(--transition-fast);user-select:none}
 .sn-item svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.6;flex-shrink:0;color:var(--sidebar-text-muted)}

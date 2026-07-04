@@ -36,6 +36,7 @@ const DEFAULT_USER_ID = "U001"; // Admin — full access on first load
 // (always reachable). Order matters: first matching prefix wins.
 const ROUTE_MODULE = [
   ["/bills", "ap"],
+  ["/ap/close", "ap"],
   ["/ap-aging", "ap"],
   ["/vendors", "ap"],
   ["/invoices", "ar"],

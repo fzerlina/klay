@@ -101,6 +101,39 @@ export const ACCRUAL_CANDIDATES = [
     periodEnd: "2025-04-30",
     reversalDate: "2025-05-01",
   }),
+  // Utility accrual — electricity consumed in April, PLN invoices in arrears
+  // (bill arrives in May, after close). PKP vendor but electricity carries no
+  // PPh; PPN is excluded from the accrual until the Faktur Pajak arrives.
+  // MANUAL_FLAG = the "always accrue this vendor every month" signal (Signal 3).
+  // Hand-built (PLN isn't in the generic vendor seed).
+  {
+    id: "AC-2025-04-004",
+    vendor_id: null,
+    vendor_code: "PLN",
+    vendor_name: "PLN (Persero)",
+    vendor_initials: "PL",
+    pkp_status: "PKP",
+    pph_category: "none",
+    pph_rate: 0,
+    period: "2025-04-01",
+    detection_signal: "MANUAL_FLAG",
+    suggested_basis: "ROLLING_AVERAGE",
+    basis_label: "3-month average (Rp 27M, Rp 28M, Rp 29M)",
+    basis_history: [
+      { date: "2025-01-31", amount: 27000000 },
+      { date: "2025-02-28", amount: 28000000 },
+      { date: "2025-03-31", amount: 29000000 },
+    ],
+    gross_amount: 28000000,
+    pph_amount: 0,
+    net_to_vendor: 28000000,
+    expense_account: "6-2400",
+    expense_account_label: "Utilities — Electricity",
+    accrual_reversal_date: "2025-05-01",
+    no_faktur_pajak_flag: true,
+    status: "PENDING_REVIEW",
+    dismiss_reason: null,
+  },
 ];
 
 // Suppressed candidates — surfaced behind "Show suppressed" toggle per PRD.

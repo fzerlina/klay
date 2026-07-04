@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { NavLink } from "react-router-dom";
 import { useCurrentUser, PERSONAS } from "../state/CurrentUserContext";
 import { ROLES } from "../data/seed/roles";
+import { computeApCloseSummary } from "../data/seed/apClose";
 
 function initials(name) {
   if (!name) return "?";
@@ -154,6 +155,20 @@ function CloseHeroCard({ collapsed }) {
   );
 }
 
+// Blocker indicator shown next to the "Close" nav item — a coloured dot + the
+// blocker count, derived from the same gate state as the /ap/close page
+// (computeApCloseSummary), so it's one source of truth.
+function ApCloseBadge() {
+  const s = computeApCloseSummary();
+  if (!s.blockerCount) return null;
+  return (
+    <span className="sb-close-badge" title={`${s.blockerCount} blocker${s.blockerCount === 1 ? "" : "s"} before ${s.periodLabel} can close`}>
+      <span className={`sb-close-badge-dot sev-${s.dot}`} />
+      {s.blockerCount}
+    </span>
+  );
+}
+
 const navSections = [
   {
     section: "Overview",
@@ -185,6 +200,14 @@ const navSections = [
         to: "/vendors",
         module: "ap",
         icon: <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
+      },
+      {
+        label: "Close",
+        to: "/ap/close",
+        module: "ap",
+        accent: "close",
+        icon: <svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 14l2 2 4-4"/></svg>,
+        indicator: <ApCloseBadge />,
       },
     ],
   },
@@ -401,12 +424,12 @@ export default function Sidebar() {
           <div key={section}>
             <div className="sb-section">{section}</div>
             {sIdx > 0 && <div className="sb-rail-divider" />}
-            {items.map(({ label, to, icon, indicator }) => (
+            {items.map(({ label, to, icon, indicator, accent }) => (
               <NavLink
                 key={to}
                 to={to}
                 title={collapsed ? `${section} · ${label}` : undefined}
-                className={({ isActive }) => `sb-item${isActive ? " active" : ""}`}
+                className={({ isActive }) => `sb-item${isActive ? " active" : ""}${accent ? ` sb-item-${accent}` : ""}`}
               >
                 {icon}
                 {!collapsed && label}
