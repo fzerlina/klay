@@ -43,6 +43,7 @@ coverage/
 # Claude Code local-only settings (project-shared config in .claude/launch.json
 # stays tracked; per-user permissions / drift do not)
 .claude/settings.local.json
+.claude/worktrees/
 
 # Design handoff bundles — local-only references, not source
 .handoff/
