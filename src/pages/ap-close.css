@@ -25,7 +25,18 @@
 .apc-pill-red{background:#FCEBEB;color:#A52A2A;border-color:#F2BFBF}
 .apc-pill-closed{background:var(--color-surface-overlay);color:#fff;border-color:var(--color-surface-overlay)}
 
-.apc-head-controls{display:flex;align-items:center;gap:12px;flex-shrink:0}
+.apc-head-controls{display:flex;align-items:center;gap:16px;flex-shrink:0}
+
+/* Header status cluster — Status / Target close / Days to close */
+.apc-status-cluster{display:flex;align-items:center;gap:22px}
+.apc-status-item{display:flex;flex-direction:column;gap:3px}
+.apc-status-lbl{font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--color-text-tertiary)}
+.apc-status-val{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:var(--color-text-primary);white-space:nowrap}
+.apc-status-val svg{stroke:currentColor;fill:none}
+.apc-status-dot{width:8px;height:8px;border-radius:50%;background:var(--sev);flex-shrink:0}
+.apc-status-green{color:var(--color-success-text)}
+.apc-status-amber{color:var(--color-warning-text)}
+.apc-status-closed{color:var(--color-text-primary)}
 
 /* Period (month) switcher */
 .apc-period-wrap{display:inline-flex;align-items:center}
@@ -297,3 +308,67 @@
 
 /* Closed page treatment — gate cards dim */
 .apc-closed .apc-gatecard{opacity:.62}
+
+/* ── Top row — reconciliation cards (left) + insight cards (right) ──────────── */
+.apc-toprow{display:flex;align-items:flex-start;gap:20px;padding:20px 32px 6px}
+.apc-top-col{display:flex;flex-direction:column;min-width:0}
+.apc-top-balance{flex:1 1 0}
+.apc-top-insights{flex:2 1 0}
+.apc-top-insights .apc-insights{grid-template-columns:repeat(2,1fr)}
+.apc-top-col .apc-section-title{margin-bottom:10px}
+.apc-section-title-stacked{margin-top:16px}
+
+/* ── Outstanding tasks — counts dashboard (Summary tab) ────────────────────── */
+.apc-outstanding{padding:18px 32px 0}
+.apc-outstanding .apc-section-title{margin-bottom:12px;justify-content:space-between}
+.apc-viewall{display:inline-flex;align-items:center;gap:5px;font-family:var(--font-sans);font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--color-brand);background:none;border:none;cursor:pointer;padding:0}
+.apc-viewall svg{width:11px;height:11px;stroke:currentColor;fill:none}
+.apc-viewall:hover{color:var(--color-brand-hover)}
+.apc-countgrid{display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:720px}
+.apc-countcard{background:var(--color-surface-raised);border:1px solid var(--color-border-default);border-radius:12px;padding:6px 8px 8px;display:flex;flex-direction:column}
+.apc-countcard-head{font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--color-text-tertiary);padding:8px 8px 6px}
+.apc-countrow{display:flex;align-items:center;gap:9px;width:100%;padding:8px;border:none;background:none;cursor:pointer;border-radius:8px;font-family:var(--font-sans);text-align:left;transition:background var(--transition-fast)}
+.apc-countrow:hover{background:var(--color-surface-sunken)}
+.apc-countrow-name{flex:1;min-width:0;font-size:13px;font-weight:500;color:var(--color-text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.apc-countrow-num{font-family:var(--font-mono);font-size:14px;font-weight:700;color:var(--color-text-primary);flex-shrink:0}
+
+/* My-tasks quick filter (All tasks tab) */
+.apc-mytoggle{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-sans);font-size:12px;font-weight:600;color:var(--color-text-secondary);background:var(--color-surface-base);border:1px solid var(--color-border-strong);border-radius:9999px;padding:6px 12px;cursor:pointer;transition:background var(--transition-fast),border-color var(--transition-fast),color var(--transition-fast)}
+.apc-mytoggle:hover{border-color:var(--color-text-tertiary);color:var(--color-text-primary)}
+.apc-mytoggle.on{background:var(--color-brand);border-color:var(--color-brand);color:#fff}
+.apc-mytoggle-num{font-family:var(--font-mono);font-size:10.5px;font-weight:700;background:rgba(255,255,255,.22);border-radius:9999px;padding:1px 6px}
+.apc-mytoggle:not(.on) .apc-mytoggle-num{background:var(--color-surface-sunken);color:var(--color-text-secondary)}
+
+/* ── Balance overview — subledger ↔ GL reconciliation ──────────────────────── */
+.apc-balance{background:var(--color-surface-raised);border:1px solid var(--color-border-default);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;height:100%}
+.apc-balance-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 16px;border-bottom:1px solid var(--color-border-subtle)}
+.apc-balance-state{font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--sev);background:var(--sev-surface);border:1px solid var(--sev-border);border-radius:9999px;padding:2px 8px}
+.apc-balance-grouplink{display:inline-flex;align-items:center;gap:4px;font-family:var(--font-sans);font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--color-brand);background:none;border:none;cursor:pointer;padding:0}
+.apc-balance-grouplink svg{width:10px;height:10px;stroke:currentColor;fill:none}
+.apc-balance-grouplink:hover{color:var(--color-brand-hover)}
+.apc-balance-mask{font-family:var(--font-mono);font-size:11px;font-weight:500;color:var(--color-text-tertiary)}
+.apc-balance-foot-link{display:flex;align-items:center;justify-content:space-between;gap:12px}
+
+/* Bank card — rollup + exceptions only */
+.apc-bank-summary{display:flex;align-items:baseline;gap:10px;padding:11px 16px}
+.apc-bank-count{font-family:var(--font-display);font-size:22px;font-weight:800;letter-spacing:-.02em;color:var(--color-text-primary);line-height:1}
+.apc-bank-headline{font-size:12.5px;color:var(--color-text-secondary);line-height:1.35}
+.apc-bank-ex{display:flex;flex-direction:column;border-top:1px solid var(--color-border-subtle)}
+.apc-bank-exrow{display:flex;align-items:center;gap:9px;width:100%;padding:9px 16px;border:none;border-bottom:1px solid var(--color-border-subtle);background:none;cursor:pointer;font-family:var(--font-sans);text-align:left;transition:background var(--transition-fast)}
+.apc-bank-exrow:last-child{border-bottom:none}
+.apc-bank-exrow:hover{background:var(--color-surface-sunken)}
+.apc-bank-exname{font-size:13px;font-weight:600;color:var(--color-text-primary);white-space:nowrap}
+.apc-bank-exstate{flex:1;min-width:0;font-size:11.5px;font-weight:600;color:var(--sev);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.apc-bank-examt{font-family:var(--font-mono);font-size:12px;font-weight:600;color:var(--color-text-secondary);flex-shrink:0}
+.apc-balance-recompute{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;color:var(--color-text-tertiary);background:var(--color-surface-base);border:1px solid var(--color-border-strong);border-radius:8px;cursor:pointer;transition:border-color var(--transition-fast),color var(--transition-fast),transform var(--transition-fast);flex-shrink:0}
+.apc-balance-recompute:hover{border-color:var(--color-text-tertiary);color:var(--color-text-primary)}
+.apc-balance-recompute:active svg{transform:rotate(-90deg);transition:transform var(--transition-fast)}
+.apc-balance-table{width:100%;border-collapse:collapse}
+.apc-balance-table th{font-size:10px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--color-text-tertiary);text-align:left;padding:9px 16px 6px}
+.apc-balance-table td{padding:8px 16px;border-top:1px solid var(--color-border-subtle);font-size:13px}
+.apc-balance-table .apc-right{text-align:right}
+.apc-balance-acct{display:flex;align-items:center;gap:8px;font-weight:600;color:var(--color-text-primary);white-space:nowrap}
+.apc-balance-dot{width:8px;height:8px;border-radius:50%;background:var(--sev);flex-shrink:0}
+.apc-balance-num{font-family:var(--font-mono);font-size:12.5px;font-weight:600;color:var(--color-text-secondary)}
+.apc-balance-delta{font-weight:700;color:var(--sev)}
+.apc-balance-foot{padding:9px 16px;font-size:11px;color:var(--color-text-tertiary);background:var(--color-surface-base);border-top:1px solid var(--color-border-subtle)}

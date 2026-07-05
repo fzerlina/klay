@@ -5,19 +5,23 @@ import {
   AP_CLOSE_RECORDS,
   AP_CLOSE_PERIOD_LABEL,
   AP_CLOSE_NEXT_PERIOD_LABEL,
+  AP_CLOSE_TARGET_DATE,
+  AP_CLOSE_TARGET_LABEL,
   GATE_BY_ID,
   GATE_ACTION,
   GATE_EMPTY_LINE,
   AP_PERIODS,
   computeGates,
   computeApCloseSummary,
-  computeBillPostingProgress,
+  computeReconciliation,
+  computeBankRecon,
   computeInsights,
   computeClosedInsights,
   recordSeverity,
   formatRp,
 } from "../data/seed/apClose";
 import { ACCRUAL_CANDIDATES } from "../data/seed/accrualCandidates";
+import { daysSince } from "../lib/clock";
 import "./ap-close.css";
 
 // Accrual candidate lookup + derived PPh/net at a given (possibly adjusted) amount.
@@ -130,24 +134,6 @@ function RecordRow({ r, sideCol, emphasized, onAction, alt }) {
   );
 }
 
-// ─── Gate summary card ───────────────────────────────────────────────────────
-
-function GateCard({ gate, active, onClick }) {
-  return (
-    <button
-      type="button"
-      className={`apc-gatecard apc-sev-${gate.severity}${active ? " active" : ""}`}
-      onClick={onClick}
-    >
-      <span className="apc-gatecard-top">
-        <span className={`apc-gatecard-dot apc-sev-${gate.severity}`} />
-        <span className="apc-gatecard-label">{gate.label}</span>
-      </span>
-      <span className="apc-gatecard-count">{gate.count}</span>
-    </button>
-  );
-}
-
 // ─── Insight card ────────────────────────────────────────────────────────────
 
 function InsightSpark({ data, up }) {
@@ -183,6 +169,113 @@ function InsightCard({ insight, onAction }) {
   );
 }
 
+// ─── Balance overview — does everything reconcile? ────────────────────────────
+// Two sections in one glance: (1) subledger ↔ GL (Gate 3 — AP owns it: Accounts
+// Payable + Accrued Liabilities tie to their GL control accounts); (2) bank ↔
+// books (Gate 4 — AP consumes it from the bank-rec module: each account confirmed
+// against its statement, timing differences allowed). Combined pill is green only
+// when both are green. Recompute re-runs both.
+
+function RecomputeIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M12 7a5 5 0 1 1-1.5-3.5" />
+      <path d="M12 1.5V4H9.5" />
+    </svg>
+  );
+}
+
+// Gate 3 — subledger ↔ GL. AP owns it: Accounts Payable + Accrued Liabilities
+// each tie to their GL control account. Green when both deltas are within
+// materiality.
+function BalanceCard({ recon, onRecompute, checkedLabel }) {
+  const glRows = [
+    { key: "ap", name: "Accounts Payable", ...recon.a },
+    { key: "accr", name: "Accrued Liabilities", ...recon.b },
+  ];
+  return (
+    <div className="apc-balance">
+      <div className="apc-balance-head">
+        <span className={`apc-balance-state apc-sev-${recon.green ? "green" : "red"}`}>
+          {recon.green ? "Ties to GL" : "Delta to resolve"}
+        </span>
+        <button type="button" className="apc-balance-recompute" onClick={onRecompute} title={`Recompute · ${checkedLabel}`} aria-label="Recompute reconciliation">
+          <RecomputeIcon />
+        </button>
+      </div>
+      <table className="apc-balance-table">
+        <thead>
+          <tr>
+            <th>Account</th>
+            <th className="apc-right">Subledger</th>
+            <th className="apc-right">GL</th>
+            <th className="apc-right">Delta</th>
+          </tr>
+        </thead>
+        <tbody>
+          {glRows.map((r) => (
+            <tr key={r.key}>
+              <td className="apc-balance-acct">
+                <span className={`apc-balance-dot apc-sev-${r.state}`} />
+                {r.name}
+              </td>
+              <td className="apc-right apc-balance-num">{formatRp(r.subledgerBalance)}</td>
+              <td className="apc-right apc-balance-num">{formatRp(r.glBalance)}</td>
+              <td className={`apc-right apc-balance-num apc-balance-delta apc-sev-${r.state}`}>
+                {r.delta === 0 ? "Rp 0" : formatRp(r.delta)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="apc-balance-foot">Materiality Rp 0 · {checkedLabel}</div>
+    </div>
+  );
+}
+
+// Gate 4 — bank reconciliation. AP consumes it from the bank-rec module. With
+// many accounts we show a rollup + only the exceptions (timing / unreconciled);
+// fully-reconciled accounts stay invisible. Deep-links into the bank-rec module.
+function BankCard({ bank, onRecompute, checkedLabel, onOpen }) {
+  const headline = bank.unrec > 0
+    ? `${bank.unrec} of ${bank.total} account${bank.total === 1 ? "" : "s"} unreconciled`
+    : bank.timing > 0
+      ? `All reconciled · ${bank.timing} with timing difference${bank.timing === 1 ? "" : "s"}`
+      : "All accounts reconciled";
+  return (
+    <div className="apc-balance">
+      <div className="apc-balance-head">
+        <span className={`apc-balance-state apc-sev-${bank.green ? "green" : "red"}`}>
+          {bank.green ? "Reconciled" : "Action needed"}
+        </span>
+        <button type="button" className="apc-balance-recompute" onClick={onRecompute} title={`Recompute · ${checkedLabel}`} aria-label="Recompute bank reconciliation">
+          <RecomputeIcon />
+        </button>
+      </div>
+      <div className="apc-bank-summary">
+        <span className="apc-bank-count">{bank.reconciled}/{bank.total}</span>
+        <span className="apc-bank-headline">{headline}</span>
+      </div>
+      {bank.exceptions.length > 0 && (
+        <div className="apc-bank-ex">
+          {bank.exceptions.map((r) => (
+            <button key={r.id} type="button" className="apc-bank-exrow" onClick={onOpen} title="Open bank reconciliation">
+              <span className={`apc-balance-dot apc-sev-${r.sev}`} />
+              <span className="apc-bank-exname">{r.name} <span className="apc-balance-mask">{r.mask}</span></span>
+              <span className={`apc-bank-exstate apc-sev-${r.sev}`}>{r.stateLabel}</span>
+              <span className="apc-bank-examt">{r.delta === 0 ? "" : formatRp(Math.abs(r.delta))}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="apc-balance-foot apc-balance-foot-link">
+        <span>{checkedLabel}</span>
+        <button type="button" className="apc-balance-grouplink" onClick={onOpen}>Open bank reconciliation <Arrow /></button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Close confirmation dialog ───────────────────────────────────────────────
 
 function ConfirmDialog({ onCancel, onConfirm }) {
@@ -196,7 +289,7 @@ function ConfirmDialog({ onCancel, onConfirm }) {
       <div className="apc-modal" onClick={(e) => e.stopPropagation()}>
         <div className="apc-modal-title">Close AP for {AP_CLOSE_PERIOD_LABEL}?</div>
         <div className="apc-modal-body">
-          New bills will post to {AP_CLOSE_NEXT_PERIOD_LABEL}. All five gates are clear.
+          New bills will post to {AP_CLOSE_NEXT_PERIOD_LABEL}. Everything for this period is posted and reconciled.
         </div>
         <div className="apc-modal-foot">
           <button type="button" className="apc-btn-ghost" onClick={onCancel}>Cancel</button>
@@ -217,9 +310,9 @@ export default function ApCloseCommandCenterPage() {
   // preparers (AP Staff) handle the prep gates; viewers get the board read-only.
   const { user, hasLevel } = useCurrentUser();
   const canOperate = hasLevel("ap", "approve+post"); // FM/Admin — can declare close, book accruals
-  const isViewer = !hasLevel("ap", "transact");
 
-  const [tab, setTab] = useState("summary"); // "summary" | "mytasks"
+  const [tab, setTab] = useState("summary"); // "summary" | "alltasks"
+  const [myOnly, setMyOnly] = useState(false); // "My tasks" filter on the All tasks tab
 
   // Period switcher — April 2025 is the live close; earlier months are closed
   // (retrospective view). Closed months still show insights at the top.
@@ -258,7 +351,6 @@ export default function ApCloseCommandCenterPage() {
   // presenter reach the ready→closed payoff moment. Not part of the real flow.
   const [demoResolved, setDemoResolved] = useState(false);
 
-  const gatesRef = useRef(null);
   const [toast, setToast] = useState("");
   const toastTmr = useRef(null);
   function showToast(msg) {
@@ -287,8 +379,12 @@ export default function ApCloseCommandCenterPage() {
 
   const gates = useMemo(() => computeGates(records), [records]);
   const summary = useMemo(() => computeApCloseSummary(records), [records]);
-  const posting = useMemo(() => computeBillPostingProgress(), []);
+  const recon = useMemo(() => computeReconciliation(records), [records]);
+  const bank = useMemo(() => computeBankRecon(), []);
+  const daysToClose = -daysSince(AP_CLOSE_TARGET_DATE); // + = days remaining
   const insights = useMemo(() => computeInsights(records), [records]);
+  const [reconCheckedLabel, setReconCheckedLabel] = useState("Last reconciled 5 min ago");
+  const [bankCheckedLabel, setBankCheckedLabel] = useState("Bank feed synced 12 min ago");
 
   // ── Summary-tab filtering ───────────────────────────────────────────────
   // Distinct assignees present in the records — drives the PIC filter dropdown.
@@ -302,6 +398,7 @@ export default function ApCloseCommandCenterPage() {
 
   const summaryFiltered = useMemo(() => {
     let list = records;
+    if (myOnly) list = list.filter((r) => r.assignee?.id === user.id);
     if (activeGate) list = list.filter((r) => r.gate === activeGate);
     if (insightRecordIds) list = list.filter((r) => insightRecordIds.includes(r.id));
     if (picFilter !== "all") list = list.filter((r) => r.assignee?.id === picFilter);
@@ -317,9 +414,12 @@ export default function ApCloseCommandCenterPage() {
       );
     }
     return list;
-  }, [records, activeGate, insightRecordIds, picFilter, statusFilter, search]);
+  }, [records, myOnly, user.id, activeGate, insightRecordIds, picFilter, statusFilter, search]);
 
   const grouped = !activeGate && !insightRecordIds;
+  // When a narrowing filter is on, drop empty item-group rows (else My tasks /
+  // assignee views show a wall of empty gate headers).
+  const narrowing = myOnly || picFilter !== "all" || statusFilter !== "all" || !!search.trim();
   // The contextual 6th column: when grouped by PIC the row shows its gate;
   // otherwise (gate grouping, or flat filtered view) it shows the assignee.
   const rowSideCol = grouped && groupBy === "pic" ? "gate" : "pic";
@@ -344,30 +444,39 @@ export default function ApCloseCommandCenterPage() {
           return { ...g, severity, count: g.rows.filter((r) => !r.done).length };
         });
     }
-    return gates.map((g) => ({ ...g, kind: "gate", rows: summaryFiltered.filter((r) => r.gate === g.id) }));
-  }, [grouped, groupBy, gates, summaryFiltered]);
+    const gg = gates.map((g) => {
+      const rows = summaryFiltered.filter((r) => r.gate === g.id);
+      return { ...g, kind: "gate", rows, count: rows.filter((r) => !r.done).length };
+    });
+    return narrowing ? gg.filter((g) => g.rows.length > 0) : gg;
+  }, [grouped, groupBy, gates, summaryFiltered, narrowing]);
 
-  // ── My-tasks tab: records assigned to the current persona, grouped by gate ─
-  const myRecords = useMemo(() => records.filter((r) => r.assignee?.id === user.id), [records, user.id]);
-  const myGroups = useMemo(
-    () => gates.map((g) => ({ ...g, rows: myRecords.filter((r) => r.gate === g.id) })).filter((g) => g.rows.length > 0),
-    [gates, myRecords],
-  );
-  const myOpen = myRecords.filter((r) => !r.done).length;
-  const myGateCount = myGroups.length;
-  const myTasksSub = myOpen === 0
-    ? `No open close tasks assigned to you for ${periodLabel}`
-    : `${myOpen} open close ${myOpen === 1 ? "task" : "tasks"} assigned to you · ${myGateCount} gate${myGateCount === 1 ? "" : "s"}`;
+  // ── Summary dashboard — open-task counts by assignee (item-group counts come
+  //    from `gates`). Both drill into the All tasks tab pre-filtered.
+  const assigneeCounts = useMemo(() => {
+    const map = new Map();
+    for (const r of records) {
+      const key = r.assignee?.id || "unassigned";
+      if (!map.has(key)) map.set(key, { id: r.assignee?.id || null, name: r.assignee?.name || "Unassigned", initials: r.assignee?.initials || "—", open: 0 });
+      if (!r.done) map.get(key).open += 1;
+    }
+    return [...map.values()].sort((a, b) => b.open - a.open);
+  }, [records]);
+  const myOpen = useMemo(() => records.filter((r) => r.assignee?.id === user.id && !r.done).length, [records, user.id]);
 
   // ── Handlers ────────────────────────────────────────────────────────────
-  function onCardClick(gateId) {
-    setInsightRecordIds(null);
-    setActiveGate((cur) => (cur === gateId ? null : gateId));
-  }
   function onRowAction(r) {
     if (r.gate === "accr") { openAccrualDrawer(r.id); return; }
     const to = GATE_ACTION[r.gate]?.route(r);
     if (to) navigate(to);
+  }
+  // Jump from a Summary count into the All tasks tab, pre-filtered.
+  function goAllTasks({ gate = null, pic = "all", mine = false } = {}) {
+    setInsightRecordIds(null);
+    setActiveGate(gate);
+    setPicFilter(pic);
+    setMyOnly(mine);
+    setTab("alltasks");
   }
 
   // ── Accrual Intelligence drawer ─────────────────────────────────────────
@@ -396,19 +505,30 @@ export default function ApCloseCommandCenterPage() {
     if (action.kind === "route") navigate(action.to);
     else if (action.kind === "filterRecords") {
       setActiveGate(null);
+      setMyOnly(false);
       setInsightRecordIds(action.recordIds);
+      setTab("alltasks");
       showToast(action.toast || `Filtered to ${action.recordIds.length} record${action.recordIds.length === 1 ? "" : "s"}`);
     }
   }
-  function scrollToGates() {
-    gatesRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  function recomputeRecon() {
+    setReconCheckedLabel("Reconciled just now");
+    showToast(recon.green ? "Subledger ties to GL — reconciled" : "Reconciliation delta found — review balance overview");
+  }
+  function recomputeBank() {
+    setBankCheckedLabel("Bank feed synced just now");
+    showToast(bank.green
+      ? `${bank.reconciled} of ${bank.total} bank accounts reconciled`
+      : `${bank.unrec} bank account${bank.unrec === 1 ? "" : "s"} still unreconciled`);
   }
   function onCloseClick() {
     if (!summary.ready) {
-      // Quiet state — surface the blockers instead of closing.
+      // Not ready — take the FM to the blocking tasks in the All tasks tab.
       const firstBlocking = gates.find((g) => g.blockerCount > 0);
-      if (firstBlocking) { setInsightRecordIds(null); setActiveGate(firstBlocking.id); }
-      scrollToGates();
+      setInsightRecordIds(null);
+      setMyOnly(false);
+      setActiveGate(firstBlocking ? firstBlocking.id : null);
+      setTab("alltasks");
       return;
     }
     setConfirmOpen(true);
@@ -423,14 +543,16 @@ export default function ApCloseCommandCenterPage() {
     showToast(`${AP_CLOSE_PERIOD_LABEL} reopened`);
   }
 
-  // Header status pill.
-  const pill = (histClosed || (isCurrent && closed))
+  // Header status — Status / Target close / Days to close (Dual-Entry style).
+  const isClosedView = histClosed || (isCurrent && closed);
+  const status = isClosedView
     ? { cls: "closed", text: "Closed" }
     : summary.ready
       ? { cls: "green", text: "Ready to close" }
-      : summary.blockerCount > 0
-        ? { cls: "red", text: `${summary.blockerCount} blocker${summary.blockerCount === 1 ? "" : "s"}` }
-        : { cls: "amber", text: `${summary.pending} item${summary.pending === 1 ? "" : "s"} pending` };
+      : { cls: "amber", text: "In progress" };
+  const daysText = daysToClose > 0
+    ? `${daysToClose} days`
+    : daysToClose === 0 ? "Due today" : `${Math.abs(daysToClose)} days over`;
 
   return (
     <div className={`apc-page${closed ? " apc-closed" : ""}`}>
@@ -439,7 +561,7 @@ export default function ApCloseCommandCenterPage() {
         <div className="apc-head">
           <div className="apc-head-top">
             <div className="apc-head-titles">
-              <h1 className="apc-title">AP Close</h1>
+              <h1 className="apc-title">Close Command Center</h1>
               <div className="apc-period-wrap">
                 <select
                   className="apc-period-select"
@@ -451,12 +573,34 @@ export default function ApCloseCommandCenterPage() {
                   ))}
                 </select>
               </div>
-              <span className={`apc-pill apc-pill-${pill.cls}`}>
-                {pill.cls === "closed" && <LockIcon size={11} />}
-                {pill.text}
-              </span>
             </div>
             <div className="apc-head-controls">
+              <div className="apc-status-cluster">
+                <div className="apc-status-item">
+                  <span className="apc-status-lbl">Status</span>
+                  <span className={`apc-status-val apc-status-${status.cls}`}>
+                    {status.cls === "closed" ? <LockIcon size={11} /> : <span className={`apc-status-dot apc-sev-${status.cls}`} />}
+                    {status.text}
+                  </span>
+                </div>
+                {isClosedView ? (
+                  <div className="apc-status-item">
+                    <span className="apc-status-lbl">Closed on</span>
+                    <span className="apc-status-val">{histClosed ? period.closedOn : "Just now"}</span>
+                  </div>
+                ) : (
+                  <>
+                    <div className="apc-status-item">
+                      <span className="apc-status-lbl">Target close</span>
+                      <span className="apc-status-val">{AP_CLOSE_TARGET_LABEL}</span>
+                    </div>
+                    <div className="apc-status-item">
+                      <span className="apc-status-lbl">Days to close</span>
+                      <span className="apc-status-val">{daysText}</span>
+                    </div>
+                  </>
+                )}
+              </div>
               {canOperate && isCurrent && (
                 <label className={`apc-demo-toggle${demoResolved ? " on" : ""}`} title="Demo only — simulate all blockers resolved so you can preview the ready-to-close state">
                   <input type="checkbox" checked={demoResolved} onChange={(e) => { setDemoResolved(e.target.checked); if (closed) setClosed(false); }} />
@@ -472,9 +616,9 @@ export default function ApCloseCommandCenterPage() {
               <button type="button" className={`apc-tab${tab === "summary" ? " on" : ""}`} onClick={() => setTab("summary")}>
                 Summary
               </button>
-              <button type="button" className={`apc-tab${tab === "mytasks" ? " on" : ""}`} onClick={() => setTab("mytasks")}>
-                My tasks
-                {myOpen > 0 && <span className="apc-tab-badge">{myOpen}</span>}
+              <button type="button" className={`apc-tab${tab === "alltasks" ? " on" : ""}`} onClick={() => setTab("alltasks")}>
+                All tasks
+                {summary.open > 0 && <span className="apc-tab-badge">{summary.open}</span>}
               </button>
             </div>
           )}
@@ -497,214 +641,171 @@ export default function ApCloseCommandCenterPage() {
               <div className="apc-closed-recap-badge"><LockIcon size={13} /> Closed</div>
               <div className="apc-closed-recap-body">
                 <div className="apc-closed-recap-line"><strong>{periodLabel}</strong> was declared closed on {period.closedOn}.</div>
-                <div className="apc-closed-recap-sub">{period.daysToClose} days after period-end · {period.blockers} blockers cleared · all five gates green at close.</div>
+                <div className="apc-closed-recap-sub">{period.daysToClose} days after period-end · {period.blockers} blockers cleared · fully reconciled at close.</div>
               </div>
             </div>
           </>
         ) : tab === "summary" ? (
           <>
-            {/* Insights — the recurring-close value layer, kept at the top */}
-            {insights.length > 0 && (
-              <div className="apc-insights-section">
+            {/* Top row — Balance overview + insight cards, section labels above
+                each group at the same hierarchy. */}
+            <div className="apc-toprow">
+              <section className="apc-top-col apc-top-balance">
                 <div className="apc-section-title">
-                  <Spark size={13} /> Klay's read — this month vs last
+                  <span className={`apc-status-dot apc-sev-${recon.green ? "green" : "red"}`} /> Balance overview
                 </div>
-                <div className="apc-insights">
-                  {insights.map((ins) => (
-                    <InsightCard key={ins.id} insight={ins} onAction={onInsightAction} />
-                  ))}
+                <BalanceCard recon={recon} onRecompute={recomputeRecon} checkedLabel={reconCheckedLabel} />
+                <div className="apc-section-title apc-section-title-stacked">
+                  <span className={`apc-status-dot apc-sev-${bank.green ? "green" : "red"}`} /> Bank reconciliation
                 </div>
-              </div>
-            )}
-
-            {/* Close progress — one multi-colour bar of the OPEN close work by
-                type (the thing that must reach zero to close). Bill-posting is a
-                separate context line, not the bar, so it doesn't dominate the
-                view. Segments + legend items filter the table. */}
-            {(() => {
-              const order = ["bills", "exc", "doc", "lock", "accr"];
-              const og = order.map((id) => gates.find((g) => g.id === id)).filter(Boolean);
-              const openTotal = og.reduce((s, g) => s + g.count, 0);
-              return (
-                <div className="apc-progress" ref={gatesRef}>
-                  <div className="apc-progress-title">Close progress · {periodLabel}</div>
-                  <div className="apc-workbar">
-                    {openTotal === 0 ? (
-                      <div className="apc-workseg apc-seg-clear" style={{ flexGrow: 1 }} title="All close tasks cleared" />
-                    ) : (
-                      og.map((g) => g.count > 0 && (
-                        <button
-                          key={g.id}
-                          type="button"
-                          className={`apc-workseg apc-seg-${g.id}${activeGate === g.id ? " active" : ""}`}
-                          style={{ flexGrow: g.count }}
-                          onClick={() => onCardClick(g.id)}
-                          title={`${g.label}: ${g.count}`}
-                          aria-label={`${g.label}: ${g.count}`}
-                        />
-                      ))
-                    )}
+                <BankCard bank={bank} onRecompute={recomputeBank} checkedLabel={bankCheckedLabel} onOpen={() => navigate("/bank-reconciliation")} />
+              </section>
+              {insights.length > 0 && (
+                <section className="apc-top-col apc-top-insights">
+                  <div className="apc-section-title">
+                    <Spark size={13} /> Klay's read — this month vs last
                   </div>
-                  <div className="apc-progress-lbl">
-                    {openTotal === 0
-                      ? <>All close tasks cleared — {periodLabel} is ready to close</>
-                      : <><strong>{summary.open}</strong> open close {summary.open === 1 ? "task" : "tasks"} · <span className="apc-caption-blocking">{summary.blockerCount} blocking</span></>}
-                  </div>
-                  <div className="apc-progress-context">
-                    {posting.posted} of {posting.total} {periodLabel} bills posted to the GL
-                  </div>
-                  <div className="apc-worklegend">
-                    {og.map((g) => g.count > 0 && (
-                      <button
-                        key={g.id}
-                        type="button"
-                        className={`apc-legend-item${activeGate === g.id ? " active" : ""}`}
-                        onClick={() => onCardClick(g.id)}
-                        title={`Filter to ${g.label}`}
-                      >
-                        <span className={`apc-legend-dot apc-seg-${g.id}`} />
-                        {g.label}
-                        <span className="apc-legend-count">{g.count}</span>
-                      </button>
+                  <div className="apc-insights">
+                    {insights.map((ins) => (
+                      <InsightCard key={ins.id} insight={ins} onAction={onInsightAction} />
                     ))}
                   </div>
-                </div>
-              );
-            })()}
+                </section>
+              )}
+            </div>
 
-            {/* Table card */}
-            <div className="apc-tablecard">
-              <div className="apc-filterbar">
-                <div className="apc-search">
-                  <Spark size={13} />
-                  <input
-                    className="apc-search-input"
-                    placeholder="Search item, vendor, or ask Klay…"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                  />
-                </div>
-                <div className="apc-filter-metas">
-                  {(activeGate || insightRecordIds) && (
-                    <button type="button" className="apc-clear-filter" onClick={() => { setActiveGate(null); setInsightRecordIds(null); }}>
-                      Clear filter
+            {/* Outstanding tasks — counts by item group and by assignee; each
+                drills into the All tasks tab pre-filtered. */}
+            <div className="apc-outstanding">
+              <div className="apc-section-title">
+                Outstanding tasks
+                <button type="button" className="apc-viewall" onClick={() => goAllTasks()}>
+                  View all tasks <Arrow />
+                </button>
+              </div>
+              <div className="apc-countgrid">
+                <div className="apc-countcard">
+                  <div className="apc-countcard-head">By item group</div>
+                  {gates.map((g) => (
+                    <button key={g.id} type="button" className="apc-countrow" onClick={() => goAllTasks({ gate: g.id })}>
+                      <span className={`apc-gatecard-dot apc-sev-${g.severity}`} />
+                      <span className="apc-countrow-name">{g.label}</span>
+                      <span className="apc-countrow-num">{g.count}</span>
                     </button>
-                  )}
-                  <label className="apc-select">
-                    Assignee
-                    <select value={picFilter} onChange={(e) => setPicFilter(e.target.value)}>
-                      <option value="all">All</option>
-                      {assigneeOptions.map((a) => (
-                        <option key={a.id} value={a.id}>{a.name}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="apc-select">
-                    Status
-                    <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-                      <option value="all">All</option>
-                      <option value="needs">Blocking</option>
-                      <option value="statutory">Statutory deadline</option>
-                    </select>
-                  </label>
-                  <label className="apc-select">
-                    Group by
-                    <select value={groupBy} onChange={(e) => setGroupBy(e.target.value)}>
-                      <option value="gate">Item group</option>
-                      <option value="pic">PIC</option>
-                    </select>
-                  </label>
-                </div>
-              </div>
-
-              <div className="apc-colhead withpic">
-                <div>Item</div>
-                <div>Vendor / description</div>
-                <div className="apc-right">Amount</div>
-                <div>Status</div>
-                <div>Age</div>
-                <div>{rowSideCol === "gate" ? "Item group" : "Assignee"}</div>
-                <div />
-              </div>
-
-              {grouped ? (
-                <div>
-                  {summaryGroups.map((g) => (
-                    <div key={g.key || g.id} className="apc-group">
-                      <div className="apc-group-head">
-                        {g.kind === "pic"
-                          ? <Avatar initials={g.initials} />
-                          : <span className={`apc-gatecard-dot apc-sev-${g.severity}`} />}
-                        <span className="apc-group-name">{g.label}</span>
-                        <span className="apc-group-count">{g.count}</span>
-                      </div>
-                      {g.rows.length === 0 ? (
-                        <div className="apc-group-empty">{GATE_EMPTY_LINE[g.id]}</div>
-                      ) : (
-                        g.rows.map((r, i) => (
-                          <RecordRow key={r.id} r={r} sideCol={rowSideCol} onAction={onRowAction} alt={i % 2 === 1} />
-                        ))
-                      )}
-                    </div>
                   ))}
                 </div>
-              ) : (
-                <div>
-                  {summaryFiltered.length === 0 ? (
-                    <div className="apc-empty">No records match</div>
-                  ) : (
-                    summaryFiltered.map((r, i) => (
-                      <RecordRow key={r.id} r={r} sideCol="pic" onAction={onRowAction} alt={i % 2 === 1} />
-                    ))
-                  )}
+                <div className="apc-countcard">
+                  <div className="apc-countcard-head">By assignee</div>
+                  {assigneeCounts.map((a) => (
+                    <button key={a.id || "unassigned"} type="button" className="apc-countrow" onClick={() => goAllTasks({ pic: a.id || "all" })}>
+                      <Avatar initials={a.initials} />
+                      <span className="apc-countrow-name">{a.name}{a.id === user.id ? " · you" : ""}</span>
+                      <span className="apc-countrow-num">{a.open}</span>
+                    </button>
+                  ))}
                 </div>
-              )}
+              </div>
             </div>
           </>
         ) : (
-          /* ── My tasks tab ─────────────────────────────────────────── */
-          <div className="apc-tablecard apc-mytasks">
-            <div className="apc-table-caption">
-              <div className="apc-table-caption-title">My close tasks — {user.name}</div>
-              <div className="apc-table-caption-sub">{myTasksSub}</div>
+          /* ── All tasks tab — the full records table + My-tasks filter ─── */
+          <div className="apc-tablecard">
+            <div className="apc-filterbar">
+              <div className="apc-search">
+                <Spark size={13} />
+                <input
+                  className="apc-search-input"
+                  placeholder="Search item, vendor, or ask Klay…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+              <div className="apc-filter-metas">
+                <button type="button" className={`apc-mytoggle${myOnly ? " on" : ""}`} onClick={() => setMyOnly((v) => !v)}>
+                  My tasks{myOpen > 0 && <span className="apc-mytoggle-num">{myOpen}</span>}
+                </button>
+                {(activeGate || insightRecordIds || myOnly || picFilter !== "all" || statusFilter !== "all") && (
+                  <button type="button" className="apc-clear-filter" onClick={() => { setActiveGate(null); setInsightRecordIds(null); setMyOnly(false); setPicFilter("all"); setStatusFilter("all"); }}>
+                    Clear filter
+                  </button>
+                )}
+                <label className="apc-select">
+                  Assignee
+                  <select value={picFilter} onChange={(e) => setPicFilter(e.target.value)}>
+                    <option value="all">All</option>
+                    {assigneeOptions.map((a) => (
+                      <option key={a.id} value={a.id}>{a.name}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="apc-select">
+                  Status
+                  <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+                    <option value="all">All</option>
+                    <option value="needs">Blocking</option>
+                    <option value="statutory">Statutory deadline</option>
+                  </select>
+                </label>
+                <label className="apc-select">
+                  Group by
+                  <select value={groupBy} onChange={(e) => setGroupBy(e.target.value)}>
+                    <option value="gate">Item group</option>
+                    <option value="pic">PIC</option>
+                  </select>
+                </label>
+              </div>
             </div>
 
-            {myRecords.length === 0 ? (
-              <div className="apc-empty">
-                {isViewer
-                  ? "No close tasks are assigned to you — this board is read-only for your role."
-                  : `No close tasks are assigned to you for ${periodLabel}.`}
-              </div>
-            ) : (
-              <>
-                <div className="apc-colhead">
-                  <div>Item</div>
-                  <div>Vendor / description</div>
-                  <div className="apc-right">Amount</div>
-                  <div>Status</div>
-                  <div>Age</div>
-                  <div />
-                </div>
-                {myGroups.map((g) => (
-                  <div key={g.id} className="apc-group">
+            <div className="apc-colhead withpic">
+              <div>Item</div>
+              <div>Vendor / description</div>
+              <div className="apc-right">Amount</div>
+              <div>Status</div>
+              <div>Age</div>
+              <div>{rowSideCol === "gate" ? "Item group" : "Assignee"}</div>
+              <div />
+            </div>
+
+            {grouped ? (
+              <div>
+                {summaryGroups.length === 0 ? (
+                  <div className="apc-empty">No records match</div>
+                ) : summaryGroups.map((g) => (
+                  <div key={g.key || g.id} className="apc-group">
                     <div className="apc-group-head">
-                      <span className={`apc-gatecard-dot apc-sev-${g.severity}`} />
+                      {g.kind === "pic"
+                        ? <Avatar initials={g.initials} />
+                        : <span className={`apc-gatecard-dot apc-sev-${g.severity}`} />}
                       <span className="apc-group-name">{g.label}</span>
-                      <span className="apc-group-count">{g.rows.filter((r) => !r.done).length}</span>
+                      <span className="apc-group-count">{g.count}</span>
                     </div>
-                    {g.rows.map((r, i) => (
-                      <RecordRow key={r.id} r={r} emphasized={r.is_blocker} onAction={onRowAction} alt={i % 2 === 1} />
-                    ))}
+                    {g.rows.length === 0 ? (
+                      <div className="apc-group-empty">{GATE_EMPTY_LINE[g.id]}</div>
+                    ) : (
+                      g.rows.map((r, i) => (
+                        <RecordRow key={r.id} r={r} sideCol={rowSideCol} onAction={onRowAction} alt={i % 2 === 1} />
+                      ))
+                    )}
                   </div>
                 ))}
-              </>
+              </div>
+            ) : (
+              <div>
+                {summaryFiltered.length === 0 ? (
+                  <div className="apc-empty">No records match</div>
+                ) : (
+                  summaryFiltered.map((r, i) => (
+                    <RecordRow key={r.id} r={r} sideCol="pic" onAction={onRowAction} alt={i % 2 === 1} />
+                  ))
+                )}
+              </div>
             )}
           </div>
         )}
       </div>
 
-      {/* ── Sticky bottom bar — live Summary or a closed-month banner ─── */}
-      {(histClosed || (isCurrent && tab === "summary")) && (
+      {/* ── Sticky bottom bar — live period (any tab) or a closed-month banner ─ */}
+      {(histClosed || isCurrent) && (
         <div className={`apc-sticky${(histClosed || closed) ? " closed" : summary.ready ? " ready" : " blocked"}`}>
           <div className="apc-sticky-left">
             <LockIcon size={14} />
@@ -713,7 +814,7 @@ export default function ApCloseCommandCenterPage() {
             ) : closed ? (
               <span>AP closed for {periodLabel}</span>
             ) : summary.ready ? (
-              <span>All gates clear — {periodLabel} is ready to close</span>
+              <span>All clear — {periodLabel} is ready to close</span>
             ) : (
               <span>
                 {summary.blockerCount} blocker{summary.blockerCount === 1 ? "" : "s"} remaining — resolve exceptions to close
