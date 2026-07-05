@@ -52,6 +52,11 @@ export const AP_CLOSE_PERIOD = "2025-04";
 export const AP_CLOSE_PERIOD_LABEL = "April 2025";
 export const AP_CLOSE_NEXT_PERIOD_LABEL = "May";
 
+// Target close date for the live period — drives the header "target close" +
+// days-to-close countdown (against lib/clock TODAY = 2025-04-23 → 12 days).
+export const AP_CLOSE_TARGET_DATE = "2025-05-05";
+export const AP_CLOSE_TARGET_LABEL = "5 May 2025";
+
 // PIC is per-gate default config — set once, annual rotation — not per period.
 // These are the close-board team (distinct from transaction users); Hadi is the
 // Finance Manager (supervisor, owns no gate). Full names shown in the table.
@@ -303,6 +308,89 @@ export function computeBillPostingProgress(bills = BILLS) {
   return { posted: posted.length, total: inPeriod.length };
 }
 
+// ─── Gate 3 — Subledger vs GL reconciliation (3a AP Control + 3b Accrued Liab) ─
+// The AP module owns two subledgers, each reconciling to its own GL control
+// account (PRD lines 5810–5828):
+//   • 3a — normal posted, still-owed bills  ↔  GL Accounts Payable control
+//   • 3b — booked accrual records            ↔  GL Accrued Liabilities control
+// The subledger side is summed from REAL records (bills' remaining balance /
+// booked accrual amounts) so it can never drift from the rest of AP. The GL
+// control-account balances are mock figures that tie to the subledger by
+// construction, so both sub-checks reconcile (delta 0 = green) — the PRD's
+// healthy target state. To demo a red delta, add a non-zero offset to a GL
+// balance below (see GL_OFFSET).
+export const MATERIALITY_THRESHOLD = 0; // Rp — close_config.materiality_threshold (default Rp 0)
+
+// Mock GL drift, per sub-check. Set e.g. { a: 0, b: 4500000 } to show Gate 3b
+// red (an accrual that didn't reverse leaves a delta in Accrued Liabilities —
+// the classic 3b failure mode the PRD calls out). Both 0 = fully reconciled.
+const GL_OFFSET = { a: 0, b: 0 };
+
+function reconLine(id, label, account, glBalance, subledgerBalance, itemCount) {
+  const delta = glBalance - subledgerBalance;
+  const withinThreshold = Math.abs(delta) <= MATERIALITY_THRESHOLD;
+  return { id, label, account, glBalance, subledgerBalance, delta, itemCount, withinThreshold, state: withinThreshold ? "green" : "red" };
+}
+
+export function computeReconciliation(records = AP_CLOSE_RECORDS, bills = BILLS) {
+  // 3a — AP Control: posted bills still owed (remaining balance `sisa`).
+  const posted = bills.filter((b) => workflowStatus(b) === "POSTED");
+  const apSub = posted.reduce((s, b) => s + (b.sisa || 0), 0);
+  const a = reconLine("3a", "AP Control", "2-1200 Accounts Payable", apSub + GL_OFFSET.a, apSub, posted.length);
+
+  // 3b — Accrued Liabilities: booked (done) accrual records. Booking posts to
+  // the subledger and GL atomically, so the two move together (delta stays 0).
+  const booked = records.filter((r) => r.gate === "accr" && r.done && r.doneLabel === "Booked");
+  const accrSub = booked.reduce((s, r) => s + (r.amount || 0), 0);
+  const b = reconLine("3b", "Accrued Liabilities", "2-1300 Accrued Liabilities", accrSub + GL_OFFSET.b, accrSub, booked.length);
+
+  return { a, b, green: a.withinThreshold && b.withinThreshold, threshold: MATERIALITY_THRESHOLD };
+}
+
+// ─── Gate 4 — Bank reconciliation ─────────────────────────────────────────────
+// AP close CONSUMES this from the (separate) bank-rec module — it doesn't compute
+// it. Green when every account is FULLY_RECONCILED or RECONCILED_WITH_TIMING
+// (a recorded payment not yet cleared at the bank is a legitimate timing
+// difference, still green). Only UNRECONCILED blocks. With many accounts the
+// close board shows a rollup + only the exceptions — the full list lives in the
+// bank-rec module. Flip a `state` to "UNRECONCILED" to demo a red gate.
+export const BANK_ACCOUNTS = [
+  { id: "BCA-OPS", name: "BCA Operating", mask: "••4021", book: 4250000000, statement: 4250000000, state: "FULLY_RECONCILED", outstanding: 0 },
+  { id: "BCA-COL", name: "BCA Collections", mask: "••4022", book: 2110000000, statement: 2110000000, state: "FULLY_RECONCILED", outstanding: 0 },
+  { id: "MDR-PAY", name: "Mandiri Payroll", mask: "••8830", book: 1043000000, statement: 1180000000, state: "RECONCILED_WITH_TIMING", outstanding: 2 },
+  { id: "MDR-TAX", name: "Mandiri Tax", mask: "••8831", book: 640000000, statement: 640000000, state: "FULLY_RECONCILED", outstanding: 0 },
+  { id: "BNI-OPS", name: "BNI Operating", mask: "••2205", book: 880000000, statement: 880000000, state: "FULLY_RECONCILED", outstanding: 0 },
+  { id: "BRI-OPS", name: "BRI Operating", mask: "••7714", book: 1560000000, statement: 1560000000, state: "FULLY_RECONCILED", outstanding: 0 },
+  { id: "CIMB", name: "CIMB Niaga", mask: "••3390", book: 430000000, statement: 430000000, state: "FULLY_RECONCILED", outstanding: 0 },
+  { id: "PERM", name: "Permata Savings", mask: "••1180", book: 2750000000, statement: 2750000000, state: "FULLY_RECONCILED", outstanding: 0 },
+  { id: "BCA-USD", name: "BCA USD", mask: "••9002", book: 1892000000, statement: 1892000000, state: "FULLY_RECONCILED", outstanding: 0 },
+  { id: "DBS-SGD", name: "DBS SGD", mask: "••5541", book: 970000000, statement: 970000000, state: "FULLY_RECONCILED", outstanding: 0 },
+  { id: "PETTY", name: "Petty Cash Clearing", mask: "••0001", book: 35000000, statement: 35000000, state: "FULLY_RECONCILED", outstanding: 0 },
+];
+
+export function computeBankRecon(accounts = BANK_ACCOUNTS) {
+  const rows = accounts.map((a) => {
+    const delta = a.book - a.statement; // books vs bank
+    const gateGreen = a.state === "FULLY_RECONCILED" || a.state === "RECONCILED_WITH_TIMING";
+    const sev = a.state === "FULLY_RECONCILED" ? "green" : a.state === "RECONCILED_WITH_TIMING" ? "amber" : "red";
+    const stateLabel = a.state === "FULLY_RECONCILED"
+      ? "Reconciled"
+      : a.state === "RECONCILED_WITH_TIMING"
+        ? `${a.outstanding} payment${a.outstanding === 1 ? "" : "s"} in transit`
+        : "Unreconciled";
+    return { ...a, delta, sev, gateGreen, stateLabel };
+  });
+  const total = rows.length;
+  const timing = rows.filter((r) => r.state === "RECONCILED_WITH_TIMING").length;
+  const unrec = rows.filter((r) => r.state === "UNRECONCILED").length;
+  // Only accounts needing a glance surface on the close board (timing + unreconciled);
+  // fully-reconciled accounts stay invisible. Unreconciled first.
+  const exceptions = rows
+    .filter((r) => r.state !== "FULLY_RECONCILED")
+    .sort((a, b) => (a.state === "UNRECONCILED" ? -1 : 1) - (b.state === "UNRECONCILED" ? -1 : 1));
+  return { rows, exceptions, total, reconciled: total - unrec, timing, unrec, green: unrec === 0 };
+}
+
 // Per-PIC open-task counts, for the staff team-progress strip.
 export function computePicLoad(records = AP_CLOSE_RECORDS) {
   const load = {};
@@ -337,25 +425,7 @@ export function computeInsights(records = AP_CLOSE_RECORDS) {
     action: { kind: "filterRecords", label: "Review accruals", recordIds: ACCRUAL_CANDIDATES.map((c) => c.id), toast: "Showing this month's accruals" },
   });
 
-  // 2) Readiness trend — blockers this month vs the last few closes.
-  if (PERIOD_HISTORY.length >= 2) {
-    const cur = PERIOD_HISTORY[PERIOD_HISTORY.length - 1];
-    const prev = PERIOD_HISTORY[PERIOD_HISTORY.length - 2];
-    const better = cur.blockers_total < prev.blockers_total;
-    out.push({
-      id: "trend",
-      rank: 4,
-      label: "Blockers vs last month",
-      stat: `${cur.blockers_total} blockers`,
-      compare: `vs ${prev.blockers_total} in ${monthOnly(prev.period)}`,
-      explanation: `${monthOnly(cur.period)} generated ${cur.blockers_total} blockers so far — ${monthOnly(prev.period)} closed with ${prev.blockers_total}. ${better ? "Trending better." : "Trending worse."}`,
-      spark: PERIOD_HISTORY.map((p) => ({ label: monthOnly(p.period), value: p.blockers_total })),
-      trendUp: !better,
-      action: null,
-    });
-  }
-
-  // 3) Recurring offender — a vendor slipping the same way month after month.
+  // 2) Recurring offender — a vendor slipping the same way month after month.
   const offender = VENDOR_HISTORY.find(
     (v) => v.exception_type === "missing_faktur_pajak" && v.periods.length >= 2,
   );
@@ -370,7 +440,7 @@ export function computeInsights(records = AP_CLOSE_RECORDS) {
     });
   }
 
-  // 4) PPN credit at risk — statutory deadline (kept, lower priority than MoM).
+  // 3) PPN credit at risk — statutory deadline (kept, lower priority than MoM).
   const atRisk = records.filter((r) => r.statutory_days != null && r.statutory_days <= 30);
   if (atRisk.length > 0) {
     const sum = atRisk.reduce((s, r) => s + r.amount, 0);
@@ -384,7 +454,8 @@ export function computeInsights(records = AP_CLOSE_RECORDS) {
     });
   }
 
-  return out.sort((a, b) => b.rank - a.rank).slice(0, 3);
+  // Two insight cards sit beside the Balance overview box in the top row.
+  return out.sort((a, b) => b.rank - a.rank).slice(0, 2);
 }
 
 function monthOnly(period) {
