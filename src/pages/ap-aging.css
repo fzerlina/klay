@@ -7,6 +7,23 @@
 
 .apa-page{position:relative}
 
+/* ── Main tabs — Decision Queue / Aging Table (page-level) ─────────────── */
+.apa-tabs{display:flex;gap:20px;margin-top:18px;border-bottom:1px solid var(--color-border-default)}
+.apa-tab{font-family:var(--font-sans);font-size:14px;font-weight:600;color:var(--color-text-tertiary);background:none;border:none;padding:0 2px 11px;margin-bottom:-1px;cursor:pointer;border-bottom:2px solid transparent;display:inline-flex;align-items:center;gap:8px;transition:color var(--transition-fast),border-color var(--transition-fast)}
+.apa-tab:hover{color:var(--color-text-primary)}
+.apa-tab.on{color:var(--color-text-primary);border-bottom-color:var(--color-brand)}
+.apa-tab-count{font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--color-text-secondary);background:var(--color-surface-sunken);border:1px solid var(--color-border-default);border-radius:9999px;padding:1px 7px;min-width:20px;text-align:center}
+.apa-tab.on .apa-tab-count{color:var(--color-text-primary)}
+
+/* ── Aging Table search ───────────────────────────────────────────────── */
+.apa-search{display:flex;align-items:center;gap:8px;flex:1;min-width:200px;max-width:360px;background:var(--color-surface-base);border:1px solid var(--color-border-default);border-radius:8px;padding:7px 11px;color:var(--color-text-tertiary)}
+.apa-search:focus-within{border-color:var(--color-action);box-shadow:0 0 0 3px rgba(26,70,200,.08)}
+.apa-search svg{width:14px;height:14px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round}
+.apa-search-input{flex:1;min-width:0;border:none;outline:none;background:transparent;font-family:var(--font-sans);font-size:12.5px;color:var(--color-text-primary)}
+.apa-search-input::placeholder{color:var(--color-text-tertiary)}
+.apa-search-clear{border:none;background:none;cursor:pointer;color:var(--color-text-tertiary);font-size:16px;line-height:1;padding:0 2px}
+.apa-search-clear:hover{color:var(--color-text-primary)}
+
 /* ── Reconciliation badge (TP-01) — sits below page title ──────────────── */
 .apa-recon-badge{display:inline-flex;align-items:center;gap:9px;padding:5px 12px;border-radius:9999px;border:1px solid;font-size:11.5px;font-weight:600;letter-spacing:.005em;margin-top:10px;cursor:default}
 .apa-recon-badge svg{width:11px;height:11px;flex-shrink:0}
@@ -166,11 +183,21 @@
 .apa-at-vendor .apa-at-cell-strong{color:var(--color-text-primary);font-weight:700}
 .apa-at-vendor .apa-at-cell-accrual{color:var(--color-action);font-weight:600}
 
-.apa-at-expand{display:block;background:var(--color-surface-sunken)}
-.apa-at-expand .apa-at-inv{display:grid;grid-template-columns:1.4fr 110px 110px 100px 100px 90px 100px;gap:8px;align-items:center;padding:8px 18px 8px 40px;font-size:11.5px;color:var(--color-text-secondary);border-bottom:1px solid var(--color-border-subtle)}
-.apa-at-inv > div{font-family:var(--font-mono);font-size:11px}
-.apa-at-inv > div:first-child{font-family:var(--font-sans);color:var(--color-text-secondary)}
-.apa-at-inv > .apa-at-inv-amt{text-align:right;font-weight:600}
+.apa-at-expand{display:block;background:var(--color-surface-sunken);padding-bottom:4px}
+/* Invoice rows mirror the vendor grid exactly, so each bill's amount sits under
+   the same aging-bucket column as the header (Current / 1-30 / 31-60 / …). */
+.apa-at-expand .apa-at-inv{display:grid;grid-template-columns:minmax(220px,1.6fr) repeat(6,minmax(80px,1fr)) 110px 130px;gap:8px;align-items:center;padding:8px 18px;border-bottom:1px solid var(--color-border-subtle)}
+.apa-at-inv:last-child{border-bottom:none}
+.apa-at-inv > div{text-align:right;font-family:var(--font-mono);font-size:11.5px;color:var(--color-text-secondary)}
+.apa-at-inv .apa-at-cell-zero{color:var(--color-text-tertiary);opacity:.45}
+.apa-at-inv .apa-at-cell-accrual{color:var(--color-action);font-weight:600}
+.apa-at-inv .apa-at-cell-strong{color:var(--color-text-primary);font-weight:700}
+.apa-at-inv .amt-warn{color:var(--color-warning-text);font-weight:700}
+.apa-at-inv .amt-danger{color:var(--color-danger-text);font-weight:700}
+.apa-at-inv-label{text-align:left !important;font-family:var(--font-sans) !important;padding-left:30px;display:flex;flex-direction:column;gap:1px;min-width:0}
+.apa-at-inv-top{display:flex;align-items:center;gap:6px;min-width:0}
+.apa-at-inv-no{font-weight:600;color:var(--color-text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.apa-at-inv-meta{font-size:10.5px;color:var(--color-text-tertiary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .apa-at-chevron{width:12px;height:12px;color:var(--color-text-tertiary);transition:transform var(--transition-fast);flex-shrink:0;margin-right:2px}
 .apa-at-vendor.expanded .apa-at-chevron{transform:rotate(90deg);color:var(--color-action)}
 

@@ -250,6 +250,25 @@ function DecisionQueueRow({ line, selected, onToggleSelect, onClick, canSelect =
   );
 }
 
+// Colour a bucket amount by how overdue it is — keyed to Hadi's 30/60 check
+// (past 60 = red). Only the one populated cell per invoice row gets tinted.
+function bucketSev(key) {
+  if (key === "b1_30" || key === "b31_60") return "amt-warn";
+  if (key === "b61_90" || key === "b91_120" || key === "b_gt120") return "amt-danger";
+  return "";
+}
+
+// Small "due / overdue" meta under each invoice number, so the exact age is
+// legible alongside the bucket column it lands in.
+function invAgingMeta(inv) {
+  if (inv.is_accrual) return "Awaiting invoice";
+  const d = inv.daysOverdue;
+  const due = `Due ${formatDateEn(inv.dueDate)}`;
+  if (d > 0) return `${due} · ${d}d overdue`;
+  if (d === 0) return `${due} · due today`;
+  return `${due} · in ${Math.abs(d)}d`;
+}
+
 // ── Aging Table vendor row ─────────────────────────────────────────────────
 function AgingTableVendorRow({ row, expanded, onToggle, accrualHighlight }) {
   const buckets = row.buckets;
@@ -285,16 +304,25 @@ function AgingTableVendorRow({ row, expanded, onToggle, accrualHighlight }) {
         <div className="apa-at-expand">
           {row.invoices.map((inv) => (
             <div key={inv.id} className="apa-at-inv">
-              <div>
-                {inv.invNo}
-                {inv.is_accrual && <span className="apa-inv-accrual">ACCRUAL</span>}
+              <div className="apa-at-inv-label">
+                <span className="apa-at-inv-top">
+                  <span className="apa-at-inv-no">{inv.invNo}</span>
+                  {inv.is_accrual && <span className="apa-inv-accrual">ACCRUAL</span>}
+                </span>
+                <span className="apa-at-inv-meta">{invAgingMeta(inv)}</span>
               </div>
-              <div>{formatDateEn(inv.invoiceDate)}</div>
-              <div>{inv.is_accrual ? "—" : formatDateEn(inv.dueDate)}</div>
-              <div>{inv.is_accrual ? "current" : (AGE_BUCKETS.find((b) => b.key === inv.ageBucket)?.lbl)}</div>
-              <div>{inv.is_accrual ? "—" : inv.daysOverdue > 0 ? `${inv.daysOverdue}d late` : "—"}</div>
-              <div>{inv.workflow_status}</div>
-              <div className="apa-at-inv-amt">{formatRupiah(inv.remaining)}</div>
+              {AGE_BUCKETS.map((b) => {
+                const hit = !inv.is_accrual && inv.ageBucket === b.key;
+                return (
+                  <div key={b.key} className={hit ? bucketSev(b.key) : "apa-at-cell-zero"}>
+                    {hit ? formatRupiah(inv.remaining) : "—"}
+                  </div>
+                );
+              })}
+              <div className={inv.is_accrual ? "apa-at-cell-accrual" : "apa-at-cell-zero"}>
+                {inv.is_accrual ? formatRupiah(inv.remaining) : "—"}
+              </div>
+              <div className="apa-at-cell-strong">{formatRupiah(inv.remaining)}</div>
             </div>
           ))}
         </div>
@@ -396,6 +424,7 @@ export default function ApAgingPage() {
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [expandedVendor, setExpandedVendor] = useState(null);
   const [cardFilter, setCardFilter] = useState(null);  // null | "discounts" | "due7d" | "accruals"
+  const [tableSearch, setTableSearch] = useState("");  // Aging Table vendor/invoice search
 
   // Explicit table filters (separate from KPI-card quick filters). Multi-select
   // within a dimension = OR; across dimensions = AND. Dimensions shown depend on
@@ -472,6 +501,8 @@ export default function ApAgingPage() {
 
     const overdueRows = base.filter((l) => l.daysOverdue > 0);
     const over60Sum = sum(overdueRows.filter((l) => l.daysOverdue > 60));
+    // Bills in the 61–90 bucket — "nearing 90 days", Hadi's escalating concern.
+    const near90Rows = base.filter((l) => l.ageBucket === "b61_90");
 
     const dueRows = base.filter(isDue7);
     const returnedRows = base.filter((l) => l.workflow_status === "RETURNED");
@@ -498,6 +529,7 @@ export default function ApAgingPage() {
     return {
       discCount: discRows.length, discHot, discSavings,
       overdueCount: overdueRows.length, overdueSum: sum(overdueRows), over60Sum,
+      near90Count: near90Rows.length, near90Sum: sum(near90Rows),
       dueCount: dueRows.length, dueSum: sum(dueRows),
       returnedCount: returnedRows.length, returnedSum: sum(returnedRows),
       topV, concentrationPct, sixtyTotal,
@@ -511,8 +543,13 @@ export default function ApAgingPage() {
     if (filters.tier.size)   rows = rows.filter((r) => filters.tier.has(r.relationship_tier));
     if (filters.bucket.size) rows = rows.filter((r) => [...filters.bucket].some((bk) => (r.buckets[bk] || 0) > 0));
     if (filters.special.has("accrual")) rows = rows.filter((r) => r.accrual > 0);
+    const q = tableSearch.trim().toLowerCase();
+    if (q) rows = rows.filter((r) =>
+      r.vendorName.toLowerCase().includes(q) ||
+      (r.invoices || []).some((inv) => (inv.invNo || "").toLowerCase().includes(q)),
+    );
     return rows;
-  }, [allLines, filters]);
+  }, [allLines, filters, tableSearch]);
 
   // RETURNED pinned section
   const returnedRows = dqRows.filter((r) => r.workflow_status === "RETURNED");
@@ -587,20 +624,33 @@ export default function ApAgingPage() {
           </div>
         </div>
 
-        {/* ── Command center: payment tasks + AP-by-age + insights ─────── */}
+        {/* ── Main tabs — the two ways to work AP aging ────────────────── */}
+        <div className="apa-tabs">
+          <button type="button" className={`apa-tab${view === "queue" ? " on" : ""}`} onClick={() => setView("queue")}>
+            Decision Queue
+            <span className="apa-tab-count">{dqRows.length}</span>
+          </button>
+          <button type="button" className={`apa-tab${view === "table" ? " on" : ""}`} onClick={() => setView("table")}>
+            Aging Table
+            <span className="apa-tab-count">{pivot.length}</span>
+          </button>
+        </div>
+
+        {/* ── Command center — Decision Queue only: tasks + AP-by-age + insights ── */}
+        {view === "queue" && (
         <div className="bp-cc">
           <div className="bp-cc-band-head">
             <span className="bp-cc-eyebrow">{Sparkle} Your Tasks</span>
             <span className="bp-cc-asof">as of {formatDateEn(TODAY.toISOString().slice(0, 10))}</span>
           </div>
           <div className="bp-cc-taskband">
-            {cc.discCount > 0 && (
-              <button type="button" className="bp-t2" onClick={() => selectCard("discounts")}>
-                <span className="bp-t2-lbl">Capture discounts</span>
-                <span className="bp-t2-amt">{formatRupiah(cc.discSavings)}</span>
-                <span className="bp-t2-sub">{cc.discCount} bill{cc.discCount === 1 ? "" : "s"} · savings</span>
-                <span className={`bp-t2-tag${cc.discHot > 0 ? " hot" : ""}`}>{cc.discHot > 0 ? `${cc.discHot} expire ≤48h` : "this week"}</span>
-                <span className="bp-t2-cta">Pay now →</span>
+            {cc.near90Count > 0 && (
+              <button type="button" className="bp-t2" onClick={() => selectCard("age:b61_90")}>
+                <span className="bp-t2-lbl">Nearing 90 days</span>
+                <span className="bp-t2-amt">{formatRupiah(cc.near90Sum)}</span>
+                <span className="bp-t2-sub">{cc.near90Count} bill{cc.near90Count === 1 ? "" : "s"} · 61–90 days overdue</span>
+                <span className="bp-t2-tag hot">approaching 90d</span>
+                <span className="bp-t2-cta">Review →</span>
               </button>
             )}
             {cc.overdueCount > 0 && (
@@ -684,10 +734,11 @@ export default function ApAgingPage() {
             </div>
           </div>
         </div>
+        )}
       </div>
 
       {/* ── Discount-expiring banner (between head and table) ────────── */}
-      {showBanner && (
+      {showBanner && view === "queue" && (
         <div className="apa-discount-banner">
           <span className="apa-banner-icon">{I.alert}</span>
           <div className="apa-discount-banner-body">
@@ -704,27 +755,27 @@ export default function ApAgingPage() {
       {/* ── Table card (toggle + sort + table, all inside one card) ── */}
       <div className="lg-table-wrap">
         <div className="lg-card bp-card">
-          <div className="bp-tabs-row">
-            <button className={`bp-tab${view === "queue" ? " active" : ""}`} onClick={() => setView("queue")}>
-              Decision Queue
-              <span className="bp-tab-count">{dqRows.length}</span>
-            </button>
-            <button className={`bp-tab${view === "table" ? " active" : ""}`} onClick={() => setView("table")}>
-              Aging Table
-              <span className="bp-tab-count">{pivot.length}</span>
-            </button>
-          </div>
-
           <div className="lg-filter-row">
-            <div className="apa-sort-label">
-              {view === "queue" ? (
-                <>Sorted by <strong>urgency</strong>
-                  <span className="apa-info" title="Discount-expiring &gt; deep overdue &gt; shallow overdue &gt; current. Discount windows have a hard calendar deadline; missing one captures less cash.">?</span>
-                </>
-              ) : (
-                <>Vendor pivot · <strong>6 buckets</strong> + accrual column</>
-              )}
-            </div>
+            {view === "queue" && (
+              <div className="apa-sort-label">
+                Sorted by <strong>urgency</strong>
+                <span className="apa-info" title="Discount-expiring &gt; deep overdue &gt; shallow overdue &gt; current. Discount windows have a hard calendar deadline; missing one captures less cash.">?</span>
+              </div>
+            )}
+            {view === "table" && (
+              <div className="apa-search">
+                <svg viewBox="0 0 16 16" aria-hidden><circle cx="7" cy="7" r="5" /><path d="M11 11l3 3" /></svg>
+                <input
+                  className="apa-search-input"
+                  placeholder="Search vendor or invoice…"
+                  value={tableSearch}
+                  onChange={(e) => setTableSearch(e.target.value)}
+                />
+                {tableSearch && (
+                  <button type="button" className="apa-search-clear" onClick={() => setTableSearch("")} aria-label="Clear search">×</button>
+                )}
+              </div>
+            )}
             {cardFilter && (
               <div className="apa-active-filter">
                 <span className="apa-active-filter-dot" />
@@ -732,6 +783,8 @@ export default function ApAgingPage() {
                   cardFilter === "discounts" ? "Discounts expiring this week" :
                   cardFilter === "due7d"     ? "Due in next 7 days" :
                   cardFilter === "accruals"  ? "Accrued liabilities only" :
+                  cardFilter === "overdue"   ? "Overdue bills" :
+                  cardFilter?.startsWith("age:") ? `${AGE_BUCKETS.find((b) => b.key === cardFilter.slice(4))?.lbl} days overdue` :
                   ""
                 }</strong>
                 <button type="button" className="apa-active-filter-clear" onClick={() => setCardFilter(null)}>Clear</button>
@@ -841,10 +894,17 @@ export default function ApAgingPage() {
             </div>
 
             {pivot.length === 0 ? (
-              <EmptyState
-                title="No outstanding balances"
-                sub="All bills are settled. Snapshot is current as of the timestamp above."
-              />
+              tableSearch.trim() ? (
+                <EmptyState
+                  title="No vendors match"
+                  sub={`Nothing matches "${tableSearch.trim()}". Try a different vendor name or invoice number.`}
+                />
+              ) : (
+                <EmptyState
+                  title="No outstanding balances"
+                  sub="All bills are settled. Snapshot is current as of the timestamp above."
+                />
+              )
             ) : (
               <>
                 {pivot.map((row) => (
