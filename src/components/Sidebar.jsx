@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { NavLink } from "react-router-dom";
 import { useCurrentUser, PERSONAS } from "../state/CurrentUserContext";
 import { ROLES } from "../data/seed/roles";
-import { computeApCloseSummary } from "../data/seed/apClose";
+import { computeApCloseSummary, computeBillPostingProgress } from "../data/seed/apClose";
 
 function initials(name) {
   if (!name) return "?";
@@ -76,62 +76,37 @@ function PersonaSwitcher({ collapsed }) {
   );
 }
 
-// Representative demo gate counts (fresh load). Global = AP 2/5 + AR 4/5 + GL 2/3.
-const CLOSE_GLOBAL = { green: 8, total: 13 };
-const CLOSE_MODULE_GATES = {
-  ap: { green: 2, total: 5, label: "AP" },
-  ar: { green: 4, total: 5, label: "AR" },
-  gl: { green: 2, total: 3, label: "GL" },
-};
-
 // Close hero card pinned at the top of the sidebar (above the Overview section).
 // Reinforces Klay's 0-day-closing USP and gives a constant signal of where the
 // close stands without leaving any page. The framing is role-aware:
-//   • Close owners (FM/Admin, who can approve+post AP) supervise the whole
-//     period, so they see the gate scoreboard — "8 of 13 gates green".
-//   • Everyone else owns tasks, not gates. They see how many close tasks are
-//     still on their plate, derived from the open gates in the module(s) they
-//     operate (e.g. AP Staff: 3 of their 5 AP gates still open → "3 tasks left").
-//     Pure view-only personas have nothing assigned.
-// The Close Command Center page is the live source.
+//   • Close owners (FM/Admin, who can approve+post) see the period's readiness —
+//     "Ready to close" or "N blockers to clear".
+//   • Everyone else sees how many open close tasks remain.
+// The ring shows tangible progress (period bills posted to the GL). The Close
+// Command Center page (/close) is the live source.
 function CloseHeroCard({ collapsed }) {
   const { hasLevel } = useCurrentUser();
   const isCloseOwner = hasLevel("ap", "approve+post");
-  const operated = ["ap", "ar", "gl"].filter((m) => hasLevel(m, "transact"));
+  const s = computeApCloseSummary();
+  const posting = computeBillPostingProgress();
 
   const R = 13;
   const C = 2 * Math.PI * R;
-
-  let centerNum, arcFrac, subText;
-  if (isCloseOwner) {
-    // Owner view: gate scoreboard for the whole period.
-    const { green, total } = CLOSE_GLOBAL;
-    centerNum = green;
-    arcFrac = total ? green / total : 0;
-    subText = `${green} of ${total} gates green`;
-  } else {
-    // Operator/viewer view: their outstanding close tasks.
-    const assigned = operated.reduce((s, m) => s + CLOSE_MODULE_GATES[m].total, 0);
-    const done = operated.reduce((s, m) => s + CLOSE_MODULE_GATES[m].green, 0);
-    const remaining = assigned - done;
-    centerNum = remaining;
-    arcFrac = assigned ? done / assigned : 0;
-    subText = assigned === 0
-      ? "No close tasks for you"
-      : remaining === 0
-        ? "You're all caught up"
-        : `${remaining} task${remaining === 1 ? "" : "s"} left for you`;
-  }
-
+  const arcFrac = posting.total ? posting.posted / posting.total : 0;
   const arcLen = arcFrac * C;
   const pct = Math.round(arcFrac * 100);
+  const centerNum = s.blockerCount;
+  const subText = isCloseOwner
+    ? (s.ready ? "Ready to close" : `${s.blockerCount} blocker${s.blockerCount === 1 ? "" : "s"} to clear`)
+    : (s.open === 0 ? "You're all caught up" : `${s.open} open close task${s.open === 1 ? "" : "s"}`);
+
   return (
     <NavLink
       to="/close"
       title={collapsed ? `April Close · ${subText}` : undefined}
       className={({ isActive }) => `sb-close-hero${isActive ? " active" : ""}${collapsed ? " collapsed" : ""}`}
     >
-      <span className="sb-close-hero-ring" aria-label={`April Close — ${subText} (${pct}%)`}>
+      <span className="sb-close-hero-ring" aria-label={`April Close — ${subText} (${pct}% posted)`}>
         <svg viewBox="0 0 32 32">
           <circle cx="16" cy="16" r={R} fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth="3"/>
           {arcFrac > 0 && (
@@ -152,20 +127,6 @@ function CloseHeroCard({ collapsed }) {
         </span>
       )}
     </NavLink>
-  );
-}
-
-// Blocker indicator shown next to the "Close" nav item — a coloured dot + the
-// blocker count, derived from the same gate state as the /ap/close page
-// (computeApCloseSummary), so it's one source of truth.
-function ApCloseBadge() {
-  const s = computeApCloseSummary();
-  if (!s.blockerCount) return null;
-  return (
-    <span className="sb-close-badge" title={`${s.blockerCount} blocker${s.blockerCount === 1 ? "" : "s"} before ${s.periodLabel} can close`}>
-      <span className={`sb-close-badge-dot sev-${s.dot}`} />
-      {s.blockerCount}
-    </span>
   );
 }
 
@@ -200,14 +161,6 @@ const navSections = [
         to: "/vendors",
         module: "ap",
         icon: <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
-      },
-      {
-        label: "Close",
-        to: "/ap/close",
-        module: "ap",
-        accent: "close",
-        icon: <svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 14l2 2 4-4"/></svg>,
-        indicator: <ApCloseBadge />,
       },
     ],
   },
