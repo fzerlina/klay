@@ -6,11 +6,16 @@ import "./roles-users.css";
 import {
   ROLES,
   MODULES,
-  LEVELS,
-  PERMISSION_MATRIX,
+  ROLE_CAPS,
+  CAPABILITIES,
   evaluateSod,
   USERS as SEED_USERS,
 } from "../data/seed/roles";
+
+// Plain-language label for a capability id (verb or named cap).
+function capLabel(cap) {
+  return CAPABILITIES[cap]?.label || cap;
+}
 
 function initials(name) {
   if (!name) return "?";
@@ -244,7 +249,7 @@ function RoleDetailDrawer({ roleKey, userCount, onClose }) {
   const role = ROLES.find((r) => r.key === roleKey);
   if (!role) return null;
 
-  const perms = PERMISSION_MATRIX[role.key] || {};
+  const caps = ROLE_CAPS[role.key] || {};
 
   return (
     <>
@@ -289,14 +294,24 @@ function RoleDetailDrawer({ roleKey, userCount, onClose }) {
           </div>
 
           <div className="ba-section">
-            <div className="ba-section-title">Module permissions</div>
+            <div className="ba-section-title">Capabilities by module</div>
             <div className="rd-perm-list">
-              {MODULES.map((m) => {
-                const lvl = perms[m.key] || "none";
+              {MODULES.filter((m) => !m.internal).map((m) => {
+                const list = caps[m.key] || [];
                 return (
                   <div key={m.key} className="rd-perm-row">
                     <span className="rd-perm-mod">{m.label}</span>
-                    <span className={`ru-lvl ru-lvl-${lvl.replace("+", "")}`}>{LEVELS[lvl].label}</span>
+                    <span className="rd-perm-caps">
+                      {list.length === 0 ? (
+                        <span className="rd-perm-none">—</span>
+                      ) : (
+                        list.map((c) => (
+                          <span key={c} className="ru-role-chip" title={CAPABILITIES[c]?.desc || ""}>
+                            {capLabel(c)}
+                          </span>
+                        ))
+                      )}
+                    </span>
                   </div>
                 );
               })}
