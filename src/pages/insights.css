@@ -1,0 +1,42 @@
+/* ── Insights page ──────────────────────────────────────────────────────
+   Reuses the .hm-* page shell (home.css). .ins-* owns the insight-card grid.
+   Tone accents: neutral (slate), positive (green), warning (amber). */
+
+.ins-grid {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;
+}
+@media (max-width: 780px) { .ins-grid { grid-template-columns: 1fr; } }
+
+.ins-card {
+  position: relative; display: grid;
+  grid-template-columns: 3px 1fr; grid-template-rows: auto auto auto; gap: 6px 16px;
+  padding: 16px 18px 14px 0; text-align: left; cursor: pointer;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-default); border-radius: var(--radius-md);
+  font-family: var(--font-sans); transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+.ins-card:hover { border-color: #D8C39E; background: var(--color-action-wash, #FBF9F6); }
+
+.ins-rail { grid-column: 1; grid-row: 1 / -1; align-self: stretch; border-radius: 3px 0 0 3px; }
+.ins-card[data-tone="neutral"] .ins-rail { background: #5B7CA6; }
+.ins-card[data-tone="positive"] .ins-rail { background: var(--color-success-text, #2F7D4E); }
+.ins-card[data-tone="warning"] .ins-rail { background: #BA5A0E; }
+
+.ins-head { grid-column: 2; display: flex; flex-direction: column; gap: 2px; }
+.ins-headline {
+  font-family: var(--font-mono); font-size: 26px; font-weight: 700;
+  letter-spacing: -.03em; line-height: 1.05; color: var(--color-text-primary);
+}
+.ins-card[data-tone="positive"] .ins-headline { color: var(--color-success-text, #2F7D4E); }
+.ins-card[data-tone="warning"] .ins-headline { color: #BA5A0E; }
+.ins-label {
+  font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--color-text-tertiary);
+}
+.ins-detail {
+  grid-column: 2; font-size: 12.5px; line-height: 1.5; color: var(--color-text-secondary);
+}
+.ins-cta {
+  grid-column: 2; justify-self: start; margin-top: 2px;
+  font-size: 11px; font-weight: 700; color: #BA5A0E;
+}
