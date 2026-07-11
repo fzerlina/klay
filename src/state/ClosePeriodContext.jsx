@@ -33,9 +33,16 @@ export function ClosePeriodProvider({ children }) {
   // declarations advance the lock-through; reopens roll it back.
   const [closedThrough, setClosedThrough] = useState(AP_CLOSED_THROUGH);
   const [history, setHistory] = useState(() => [...CLOSE_HISTORY]);
+  // Accounting setting (Settings → Accounting → Posting periods). When ON (the
+  // expert-recommended default), a bill whose invoice period is already closed
+  // is automatically posted into the current open period — no manual "reassign"
+  // step. When OFF, the old manual-reassign behavior returns.
+  const [autoAssignLateBills, setAutoAssignLateBills] = useState(true);
 
   const value = useMemo(() => ({
     closedThrough,
+    autoAssignLateBills,
+    setAutoAssignLateBills,
     isLocked: (yyyyMmDd) => {
       if (!yyyyMmDd) return false;
       return yyyyMmDd.slice(0, 7) <= closedThrough;
@@ -68,7 +75,7 @@ export function ClosePeriodProvider({ children }) {
     history,
     // Helper for callers that need to know the next closable period.
     nextOpenPeriod: nextMonth(closedThrough),
-  }), [closedThrough, history]);
+  }), [closedThrough, history, autoAssignLateBills]);
 
   return <ClosePeriodContext.Provider value={value}>{children}</ClosePeriodContext.Provider>;
 }
@@ -80,6 +87,8 @@ export function useClosePeriod() {
     // tests — return a static fallback derived from the baseline.
     return {
       closedThrough: AP_CLOSED_THROUGH,
+      autoAssignLateBills: true,
+      setAutoAssignLateBills: () => {},
       isLocked: (yyyyMmDd) => yyyyMmDd && yyyyMmDd.slice(0, 7) <= AP_CLOSED_THROUGH,
       declareClose: () => {},
       reopen: () => {},

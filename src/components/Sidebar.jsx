@@ -233,6 +233,7 @@ const settingsSections = [
       { label: "Chart of accounts", to: "/chart-of-accounts" },
       { label: "Bank accounts", to: "/bank-accounts" },
       { label: "Dimensions", to: "/dimensions" },
+      { label: "Posting periods", to: "/posting-periods" },
       { label: "Tax codes" },
       { label: "Tax rates" },
       { label: "Fiscal year" },
