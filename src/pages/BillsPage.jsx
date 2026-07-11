@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { VENDORS as vendors } from "../data/seed/vendors";
 import { TODAY, daysSince } from "../lib/clock";
 import { formatRupiah, formatDateEn as formatDate } from "../lib/format";
@@ -971,6 +971,19 @@ export default function BillsPage() {
   const isTabActive  = (t) => filter.kind === "tab"  && filter.value === t;
   const isCardActive = (c) => c === "overdue" ? filter.value === "jatuhtempo" : (filter.kind === "card" && filter.value === c);
 
+  // Deep-link focus from the Home task hub: /bills?card=readyToPost / ?tab=review.
+  // Applied once on mount, then cleared so it neither re-fires nor persists.
+  const [focusParams, setFocusParams] = useSearchParams();
+  useEffect(() => {
+    const card = focusParams.get("card");
+    const tab = focusParams.get("tab");
+    if (!card && !tab) return;
+    if (card) selectCard(card);
+    else selectTab(tab);
+    setFocusParams({}, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ── Filter dispatchers for the rotating SUMMARY card CTA + the per-card CTAs ──
   function handleSummaryAction(insight) {
     if (!insight) return;
@@ -1096,55 +1109,8 @@ export default function BillsPage() {
               </button>
             </div>
           </div>
-
-          <div className="bp-cc">
-            {/* ── Your tasks — actionable boxes ─────────────────────────── */}
-            <div className="bp-cc-band-head">
-              <span className="bp-cc-eyebrow"><SparkleIcon size={12} /> Your Tasks</span>
-              <span className="bp-cc-asof">as of {todayLabel}</span>
-            </div>
-            <div className="bp-cc-taskband">
-              {canApproveBills && billStats.reviewCount > 0 && (
-                <button type="button" className="bp-t2" onClick={() => selectTab("review")}>
-                  <span className="bp-t2-lbl">Awaiting approval</span>
-                  <span className="bp-t2-amt">{formatRupiah(billStats.reviewSum)}</span>
-                  <span className="bp-t2-sub">{billStats.reviewCount} bill{billStats.reviewCount === 1 ? "" : "s"}</span>
-                  {closeBlocking.review > 0 && <span className="bp-t2-tag">{closeBlocking.review} blocking close</span>}
-                  <span className="bp-t2-cta">Review →</span>
-                </button>
-              )}
-              {canDraftBills && billStats.returnedCount > 0 && (
-                <button type="button" className="bp-t2" onClick={() => selectCard("returned")}>
-                  <span className="bp-t2-lbl">Fix returned bills</span>
-                  <span className="bp-t2-amt">{formatRupiah(billStats.returnedSum)}</span>
-                  <span className="bp-t2-sub">{billStats.returnedCount} bill{billStats.returnedCount === 1 ? "" : "s"}</span>
-                  <span className="bp-t2-tag">returned by FM</span>
-                  <span className="bp-t2-cta">Fix →</span>
-                </button>
-              )}
-              {canPostBills && billStats.verifiedReadyCount > 0 && (
-                <button type="button" className="bp-t2" onClick={() => selectCard("readyToPost")}>
-                  <span className="bp-t2-lbl">Ready to post</span>
-                  <span className="bp-t2-amt">{formatRupiah(billStats.verifiedReadySum)}</span>
-                  <span className="bp-t2-sub">{billStats.verifiedReadyCount} bill{billStats.verifiedReadyCount === 1 ? "" : "s"}</span>
-                  {closeBlocking.ready > 0 && <span className="bp-t2-tag">{closeBlocking.ready} blocking close</span>}
-                  <span className="bp-t2-cta">Post →</span>
-                </button>
-              )}
-              {canDraftBills && billStats.draftCount > 0 && (
-                <button type="button" className="bp-t2" onClick={() => selectTab("draft")}>
-                  <span className="bp-t2-lbl">Submit drafts</span>
-                  <span className="bp-t2-amt">{formatRupiah(billStats.draftSum)}</span>
-                  <span className="bp-t2-sub">{billStats.draftCount} draft{billStats.draftCount === 1 ? "" : "s"}</span>
-                  <span className="bp-t2-cta">Submit →</span>
-                </button>
-              )}
-            </div>
-
-            {/* AP Outstanding aging breakdown, Overdue/Paid views and the
-                overdue-payables Insights moved to AP Aging — the Bills page
-                focuses on getting bills to Posted; payment lives in AP Aging. */}
-          </div>
+          {/* Your Tasks moved to the dedicated /dashboard task hub; overdue-payables
+              Insights live on /insights. Bills focuses on the list itself. */}
         </div>
 
         {/* ── Table card ─────────────────────────────────────────────── */}

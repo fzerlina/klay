@@ -111,6 +111,10 @@ export function moduleForPath(pathname) {
 // reach. Settings is included last so Admin (no financial or report access) has
 // a home; Reports is the near-universal fallback.
 const LANDING_CANDIDATES = [
+  // Home task hub is ungated (module null → always reachable), so it's the
+  // universal landing for every persona (MoM 2026-07-10). Module-scoped pages
+  // remain as fallbacks for the NoAccess "Go to my workspace" link.
+  ["/dashboard", null],
   ["/journal-entry", "gl"],
   ["/bills", "ap"],
   ["/invoices", "ar"],

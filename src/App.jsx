@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import Layout, { NoAccess } from "./layout/Layout";
 import { CurrentUserProvider, useCurrentUser } from "./state/CurrentUserContext";
+import HomePage from "./pages/HomePage";
 import JournalEntryPage from "./pages/JournalEntryPage";
 import ChartOfAccountsPage from "./pages/ChartOfAccountsPage";
 import DimensionsPage from "./pages/DimensionsPage";
@@ -94,7 +95,7 @@ export default function App() {
             <Routes>
               <Route element={<Layout />}>
                 <Route index element={<RoleLanding />} />
-                <Route path="/dashboard" element={<UnderConstruction title="Dashboard" />} />
+                <Route path="/dashboard" element={<HomePage />} />
                 <Route path="/general-ledger" element={<GeneralLedgerPage />} />
                 <Route path="/journal-entry" element={<JournalEntryPage />} />
                 <Route path="/chart-of-accounts" element={<ChartOfAccountsPage />} />

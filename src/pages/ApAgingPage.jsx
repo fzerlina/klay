@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useCurrentUser } from "../state/CurrentUserContext";
 import { useVendors } from "../state/VendorsContext";
 import { usePayments, PAYMENT_STATUS_META } from "../state/PaymentsContext";
@@ -35,19 +35,6 @@ const QUEUE_MODE = {
   execute: { title: "Approved — ready to pay", sub: "Approved payments to execute, then mark as paid.", action: "Mark as paid", rowAction: "Mark paid", emptyTitle: "Nothing to pay right now", emptySub: "Approved payments ready to execute will appear here." },
   view:    { title: "Payments", sub: "Posted payables and their payment status.", action: null, rowAction: null, emptyTitle: "No posted payables", emptySub: "Posted bills awaiting payment will appear here." },
 };
-
-// Primary "Your Tasks" card per payment role.
-const PAY_TASK = {
-  request: { lbl: "Request payment", cta: "Request →", sub: "posted, ready to pay" },
-  approve: { lbl: "Payments to approve", cta: "Approve →", sub: "requested by AP Staff" },
-  execute: { lbl: "Pay approved", cta: "Pay →", sub: "approved — ready to execute" },
-};
-const Sparkle = (
-  <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M6 1.5l1.1 2.7L9.8 5l-2.7 0.8L6 8.5l-1.1-2.7L2.2 5l2.7-0.8L6 1.5z" />
-    <path d="M10 8.5l0.4 1L11.5 10l-1.1 0.4L10 11.5l-0.4-1.1L8.5 10l1.1-0.5L10 8.5z" />
-  </svg>
-);
 
 // ── Icons ──────────────────────────────────────────────────────────────────
 const I = {
@@ -480,6 +467,16 @@ export default function ApAgingPage() {
     else setView("queue");
   };
 
+  // Deep-link focus from the Home task hub: /ap-aging?card=discounts.
+  const [focusParams, setFocusParams] = useSearchParams();
+  useEffect(() => {
+    const card = focusParams.get("card");
+    if (!card) return;
+    selectCard(card);
+    setFocusParams({}, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Build all lines + snapshot from the LIVE bills, so a settled payment
   // (pay=paid, sisa=0) drops the bill out of the aging surfaces immediately.
   const allLines = useMemo(() => buildAgingLines(TODAY, bills), [bills]);
@@ -521,66 +518,6 @@ export default function ApAgingPage() {
     if (filters.special.has("discount")) rows = rows.filter((l) => l.has_terms);
     return rows;
   }, [allLines, cardFilter, filters, tierOf, payMode, statusOf]);
-
-  // ── Command-center figures — tasks, payment run, insights ────────────────
-  // `base` is the role's payment stage (unpaid / requested / approved), so the
-  // task metrics match the queue the persona is working. View-only sees all.
-  const stageOf = (l) => {
-    const ps = statusOf(l.id);
-    if (payMode === "request") return ps === "unpaid";
-    if (payMode === "approve") return ps === "requested";
-    if (payMode === "execute") return ps === "approved";
-    return true;
-  };
-  const cc = useMemo(() => {
-    const base = allLines.filter(isDecisionQueueRow).filter(stageOf);
-    const isDue7 = (l) => { const d = -daysSince(l.dueDate); return d >= 0 && d <= 7; };
-    const isDisc7 = (l) => {
-      const p = discountPillState(l);
-      return p && p.tone !== "muted" && p.tone !== "captured" && l.days_to_discount != null && l.days_to_discount <= 7;
-    };
-    const sum = (arr) => arr.reduce((s, l) => s + l.remaining, 0);
-
-    const discRows = base.filter(isDisc7);
-    const discHot = discRows.filter((l) => discountPillState(l)?.tone === "danger").length;
-    const discSavings = discRows.reduce((s, l) => s + (l.discount_amount_idr || 0), 0);
-
-    const overdueRows = base.filter((l) => l.daysOverdue > 0);
-    const over60Sum = sum(overdueRows.filter((l) => l.daysOverdue > 60));
-    // Bills in the 61–90 bucket — "nearing 90 days", Hadi's escalating concern.
-    const near90Rows = base.filter((l) => l.ageBucket === "b61_90");
-
-    const dueRows = base.filter(isDue7);
-
-    // Overdue concentration (60+ days), top vendors
-    const sixtyPlus = allLines.filter((l) => !l.is_accrual && l.workflow_status !== "DRAFT" && l.remaining > 0 && l.daysOverdue > 60);
-    const byVendor = new Map();
-    for (const l of sixtyPlus) {
-      const prev = byVendor.get(l.vendorId) || { name: l.vendorName, sum: 0 };
-      prev.sum += l.remaining;
-      byVendor.set(l.vendorId, prev);
-    }
-    const sixtyTotal = sum(sixtyPlus);
-    const topV = [...byVendor.values()].sort((a, b) => b.sum - a.sum).slice(0, 3);
-    const concentrationPct = sixtyTotal > 0 ? Math.round(topV.reduce((s, v) => s + v.sum, 0) / sixtyTotal * 100) : 0;
-
-    // Early-pay discounts available across all outstanding (confidence-gated by pill)
-    const discAvailable = allLines.reduce((s, l) => {
-      if (l.is_accrual || l.remaining <= 0) return s;
-      const p = discountPillState(l);
-      return p && p.tone !== "muted" && p.tone !== "captured" ? s + (l.discount_amount_idr || 0) : s;
-    }, 0);
-
-    return {
-      stageCount: base.length, stageSum: sum(base),
-      discCount: discRows.length, discHot, discSavings,
-      overdueCount: overdueRows.length, overdueSum: sum(overdueRows), over60Sum,
-      near90Count: near90Rows.length, near90Sum: sum(near90Rows),
-      dueCount: dueRows.length, dueSum: sum(dueRows),
-      topV, concentrationPct, sixtyTotal,
-      discAvailable, discAtRisk: snapshot.discountsThisWeekIdr,
-    };
-  }, [allLines, snapshot, payMode, statusOf]);
 
   // Aging Table — vendor pivot
   const pivot = useMemo(() => {
@@ -678,66 +615,11 @@ export default function ApAgingPage() {
           </button>
         </div>
 
-        {/* ── Command center — Decision Queue only: tasks + AP-by-age + insights ── */}
+        {/* ── AP Outstanding · by age (Decision Queue view). Your Tasks moved to
+             /dashboard; the overdue/discount Insights moved to /insights. ── */}
         {view === "queue" && (
         <div className="bp-cc">
-          <div className="bp-cc-band-head">
-            <span className="bp-cc-eyebrow">{Sparkle} Your Tasks</span>
-            <span className="bp-cc-asof">as of {formatDateEn(TODAY.toISOString().slice(0, 10))}</span>
-          </div>
-          <div className="bp-cc-taskband">
-            {/* Primary task = the payment stage this role owns. */}
-            {payMode !== "view" && cc.stageCount > 0 && (
-              <button type="button" className="bp-t2" onClick={() => setCardFilter(null)}>
-                <span className="bp-t2-lbl">{PAY_TASK[payMode].lbl}</span>
-                <span className="bp-t2-amt">{formatRupiah(cc.stageSum)}</span>
-                <span className="bp-t2-sub">{cc.stageCount} bill{cc.stageCount === 1 ? "" : "s"} · {PAY_TASK[payMode].sub}</span>
-                <span className="bp-t2-cta">{PAY_TASK[payMode].cta}</span>
-              </button>
-            )}
-            {/* AP Staff — capture expiring discounts before requesting. */}
-            {payMode === "request" && cc.discCount > 0 && (
-              <button type="button" className="bp-t2" onClick={() => selectCard("discounts")}>
-                <span className="bp-t2-lbl">Discounts expiring</span>
-                <span className="bp-t2-amt">{formatRupiah(cc.discSavings)}</span>
-                <span className="bp-t2-sub">{cc.discCount} bill{cc.discCount === 1 ? "" : "s"} · save if paid in time</span>
-                {cc.discHot > 0 && <span className="bp-t2-tag hot">{cc.discHot} closing</span>}
-                <span className="bp-t2-cta">Prioritize →</span>
-              </button>
-            )}
-            {/* Finance Staff — pay the overdue / due-soon first. */}
-            {(payMode === "execute" || payMode === "view") && cc.overdueCount > 0 && (
-              <button type="button" className="bp-t2" onClick={() => selectCard("overdue")}>
-                <span className="bp-t2-lbl">Settle overdue</span>
-                <span className="bp-t2-amt">{formatRupiah(cc.overdueSum)}</span>
-                <span className="bp-t2-sub">{cc.overdueCount} bill{cc.overdueCount === 1 ? "" : "s"}</span>
-                {cc.over60Sum > 0 && <span className="bp-t2-tag hot">{formatRupiah(cc.over60Sum)} past 60d</span>}
-                <span className="bp-t2-cta">Prioritize →</span>
-              </button>
-            )}
-            {payMode === "execute" && cc.dueCount > 0 && (
-              <button type="button" className="bp-t2" onClick={() => selectCard("due7d")}>
-                <span className="bp-t2-lbl">Fund due · 7 days</span>
-                <span className="bp-t2-amt">{formatRupiah(cc.dueSum)}</span>
-                <span className="bp-t2-sub">{cc.dueCount} bill{cc.dueCount === 1 ? "" : "s"}</span>
-                <span className="bp-t2-tag neu">for this run</span>
-                <span className="bp-t2-cta">Schedule →</span>
-              </button>
-            )}
-            {/* View-only — analytics. */}
-            {payMode === "view" && cc.near90Count > 0 && (
-              <button type="button" className="bp-t2" onClick={() => selectCard("age:b61_90")}>
-                <span className="bp-t2-lbl">Nearing 90 days</span>
-                <span className="bp-t2-amt">{formatRupiah(cc.near90Sum)}</span>
-                <span className="bp-t2-sub">{cc.near90Count} bill{cc.near90Count === 1 ? "" : "s"} · 61–90 days overdue</span>
-                <span className="bp-t2-tag hot">approaching 90d</span>
-                <span className="bp-t2-cta">Review →</span>
-              </button>
-            )}
-          </div>
-
-          <div className="bp-cc-split">
-            <div className="bp-cc-apo">
+          <div className="bp-cc-apo bp-cc-apo-solo">
               <div className="bp-cc-apo-head">
                 <div className="bp-cc-sec-lbl">AP Outstanding · by age</div>
                 <div className="bp-cc-apo-total">{formatRupiah(snapshot.apOutstanding)}</div>
@@ -760,32 +642,6 @@ export default function ApAgingPage() {
                 <span>DPO <b>{snapshot.dpoDays}d</b></span>
                 <span>Accrued <b>{formatRupiah(snapshot.accruedLiabilities)}</b></span>
               </div>
-            </div>
-
-            <div className="bp-cc-insights">
-              <div className="bp-cc-sec-lbl">{Sparkle} Insights</div>
-              {cc.topV.length > 0 && (
-                <div className="bp-cc-ins-row">
-                  <div className="bp-cc-ins-text">
-                    <strong className="lg-ai-strong">{cc.topV.length} vendor{cc.topV.length === 1 ? "" : "s"}</strong> hold{" "}
-                    <strong className="lg-ai-strong">{cc.concentrationPct}%</strong> of{" "}
-                    <strong className="lg-ai-strong">{formatRupiah(cc.sixtyTotal)}</strong> in 60+ day overdue.
-                  </div>
-                  <div className="bp-cc-ins-actions">
-                    <button type="button" className="bp-cc-ins-view" onClick={() => { setCardFilter(null); setView("table"); }}>View →</button>
-                  </div>
-                </div>
-              )}
-              <div className="bp-cc-ins-row">
-                <div className="bp-cc-ins-text">
-                  Early-pay discounts: <strong className="lg-ai-strong">{formatRupiah(cc.discAvailable)}</strong> available ·{" "}
-                  <strong className="lg-ai-danger">{formatRupiah(cc.discAtRisk)}</strong> expiring this week.
-                </div>
-                <div className="bp-cc-ins-actions">
-                  <button type="button" className="bp-cc-ins-view" onClick={() => selectCard("discounts")}>View →</button>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
         )}

@@ -1,0 +1,155 @@
+/* ── Home task hub ──────────────────────────────────────────────────────
+   The cross-module dashboard (MoM 2026-07-10). Reuses the .lg-* page shell;
+   .hm-* owns the hub-specific chrome. Severity tones: danger (blocking),
+   brand/terracotta (action), slate (advisory). */
+
+.hm-head { padding-bottom: 0; }
+.hm-head-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
+.hm-head-id { flex: 1; min-width: 0; }
+
+.hm-eyebrow {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+  color: #BA5A0E; margin-bottom: 10px;
+}
+.hm-eyebrow svg { stroke: currentColor; fill: none; }
+
+.hm-lede {
+  margin-top: 10px; max-width: 640px;
+  font-size: 14px; line-height: 1.6; color: var(--color-text-secondary);
+}
+.hm-lede strong { color: var(--color-text-primary); font-weight: 700; }
+
+/* Big running tally on the right of the header. */
+.hm-head-tally {
+  flex-shrink: 0; display: flex; flex-direction: column; align-items: flex-end;
+  padding-left: 24px; border-left: 1px solid var(--color-border-default);
+}
+.hm-head-tally[aria-hidden="true"] { opacity: .4; }
+.hm-tally-num {
+  font-family: var(--font-display); font-size: 44px; font-weight: 900;
+  line-height: 1; letter-spacing: -.03em; color: var(--color-text-primary);
+}
+.hm-tally-lbl {
+  margin-top: 4px; font-size: 10px; font-weight: 700; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--color-text-tertiary);
+}
+
+/* Severity strip — three clickable-feeling cells, hairline-divided. */
+.hm-sev-strip {
+  display: flex; margin: 20px 0 0; border-top: 1px solid var(--color-border-default);
+}
+.hm-sev-cell {
+  flex: 1 1 0; min-width: 0; display: flex; align-items: center; gap: 9px;
+  padding: 16px 20px; border-left: 1px solid var(--color-border-default);
+}
+.hm-sev-cell:first-child { border-left: none; padding-left: 0; }
+.hm-sev-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.hm-sev-num {
+  font-family: var(--font-mono); font-size: 22px; font-weight: 700;
+  letter-spacing: -.02em; color: var(--color-text-primary); line-height: 1;
+}
+.hm-sev-lbl {
+  font-size: 11px; font-weight: 600; color: var(--color-text-tertiary);
+  text-transform: uppercase; letter-spacing: .06em;
+}
+.hm-sev-cell[data-empty="true"] { opacity: .45; }
+.hm-sev-cell[data-tone="danger"]   .hm-sev-dot { background: var(--color-danger-text, #A32D2D); }
+.hm-sev-cell[data-tone="action"]   .hm-sev-dot { background: #BA5A0E; }
+.hm-sev-cell[data-tone="advisory"] .hm-sev-dot { background: #5B7CA6; }
+
+/* ── Body ─────────────────────────────────────────────────────────────── */
+.hm-body { padding: 24px 32px 48px; max-width: 1120px; }
+
+.hm-group { margin-bottom: 22px; }
+.hm-group-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.hm-group-title {
+  font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+.hm-group-count {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 18px;
+  height: 18px; padding: 0 6px; border-radius: 9px; font-family: var(--font-mono);
+  font-size: 11px; font-weight: 700; color: var(--color-text-secondary);
+  background: var(--color-surface-sunken);
+}
+.hm-group-open {
+  margin-left: auto; font-size: 11px; font-weight: 700; color: #BA5A0E;
+  text-decoration: none; white-space: nowrap; opacity: .85; transition: opacity var(--transition-fast);
+}
+.hm-group-open:hover { opacity: 1; }
+
+.hm-tasklist {
+  display: flex; flex-direction: column;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-default); border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+/* ── Task card ────────────────────────────────────────────────────────── */
+.hm-task {
+  position: relative; display: grid;
+  grid-template-columns: 3px 44px 1fr auto; align-items: center; gap: 14px;
+  padding: 14px 18px 14px 0; background: transparent; border: none;
+  border-top: 1px solid var(--color-border-subtle); cursor: pointer; text-align: left;
+  font-family: var(--font-sans); transition: background var(--transition-fast);
+}
+.hm-task:first-child { border-top: none; }
+.hm-task:hover { background: var(--color-action-wash, #FBF9F6); }
+
+.hm-task-rail { grid-column: 1; align-self: stretch; border-radius: 0; }
+.hm-task[data-sev="blocking"] .hm-task-rail { background: var(--color-danger-text, #A32D2D); }
+.hm-task[data-sev="action"]   .hm-task-rail { background: #BA5A0E; }
+.hm-task[data-sev="advisory"] .hm-task-rail { background: #5B7CA6; }
+
+.hm-task-count {
+  grid-column: 2; justify-self: center;
+  font-family: var(--font-mono); font-size: 20px; font-weight: 700;
+  letter-spacing: -.02em; color: var(--color-text-primary); line-height: 1;
+}
+
+.hm-task-body { grid-column: 3; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.hm-task-lbl-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.hm-task-lbl { font-size: 13.5px; font-weight: 700; color: var(--color-text-primary); }
+.hm-task-tag {
+  display: inline-flex; align-items: center; font-size: 9.5px; font-weight: 700;
+  letter-spacing: .02em; text-transform: uppercase; border-radius: 4px; padding: 2px 6px; line-height: 1.3;
+}
+.hm-task-tag[data-tone="danger"] { color: var(--color-danger-text, #A32D2D); background: var(--color-danger-surface, #FBEAEA); }
+.hm-task-tag[data-tone="warn"]   { color: #7A4E0A; background: #F4DCA6; }
+.hm-task-tag[data-tone="neutral"]{ color: var(--color-text-secondary); background: var(--color-surface-sunken); }
+.hm-task-sub { font-size: 11.5px; color: var(--color-text-tertiary); line-height: 1.4; }
+
+.hm-task-tail {
+  grid-column: 4; display: flex; align-items: center; gap: 18px;
+  padding-left: 6px; white-space: nowrap;
+}
+.hm-task-amt {
+  font-family: var(--font-mono); font-size: 13px; font-weight: 700;
+  color: var(--color-text-secondary); letter-spacing: -.01em;
+}
+.hm-task-cta { font-size: 11px; font-weight: 700; color: #BA5A0E; }
+
+/* ── Empty state ──────────────────────────────────────────────────────── */
+.hm-empty {
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  gap: 12px; padding: 64px 24px; color: var(--color-text-secondary);
+}
+.hm-empty-ico {
+  width: 48px; height: 48px; display: flex; align-items: center; justify-content: center;
+  border-radius: 50%; background: var(--color-success-surface, #E7F3EC); color: var(--color-success-text, #2F7D4E);
+}
+.hm-empty-ico svg { width: 24px; height: 24px; }
+.hm-empty-title { font-size: 17px; font-weight: 700; color: var(--color-text-primary); }
+.hm-empty-sub { font-size: 13px; line-height: 1.6; max-width: 440px; color: var(--color-text-tertiary); }
+
+/* ── Responsive ───────────────────────────────────────────────────────── */
+@media (max-width: 720px) {
+  .hm-head-top { flex-direction: column; }
+  .hm-head-tally { flex-direction: row; align-items: baseline; gap: 8px; padding-left: 0; border-left: none; }
+  .hm-sev-strip { flex-wrap: wrap; }
+  .hm-sev-cell { flex-basis: 100%; border-left: none; padding-left: 0; border-top: 1px solid var(--color-border-subtle); }
+  .hm-sev-cell:first-child { border-top: none; }
+  .hm-task { grid-template-columns: 3px 32px 1fr; }
+  .hm-task-tail { grid-column: 2 / 4; padding-left: 46px; justify-content: flex-start; }
+}

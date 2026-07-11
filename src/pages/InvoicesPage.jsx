@@ -1,13 +1,12 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { CUSTOMERS as customers } from "../data/seed/customers";
 import { useInvoices } from "../state/InvoicesContext";
 import { useCurrentUser } from "../state/CurrentUserContext";
 import { TODAY, daysSince } from "../lib/clock";
 import { formatRupiah, formatDate, initials } from "../lib/format";
 import AiChatDrawer from "./AiChatDrawer";
-import SummaryDrawer from "./SummaryDrawer";
-import { makeInvoicesAiContext, computeInvoiceTasks } from "./ai-invoices-context";
+import { makeInvoicesAiContext } from "./ai-invoices-context";
 import "./modules.css";
 import "./invoice-create.css";
 import "./invoices-ledger.css";
@@ -166,61 +165,6 @@ function SparkleIcon({ size = 11 }) {
       <path d="M6 1.5l1.1 2.7L9.8 5l-2.7 0.8L6 8.5l-1.1-2.7L2.2 5l2.7-0.8L6 1.5z" />
       <path d="M10 8.5l0.4 1L11.5 10l-1.1 0.4L10 11.5l-0.4-1.1L8.5 10l1.1-0.5L10 8.5z" />
     </svg>
-  );
-}
-
-function InvoiceTasksCard({ tasks, onOpenSummary, onAction, summaryActive, eyebrow = "Your Tasks" }) {
-  // Manual pager (no auto-rotate) — match Bills: the user reads each task at
-  // their own pace and steps through with the numbered pager.
-  const [idx, setIdx] = useState(0);
-  useEffect(() => { if (idx >= tasks.length) setIdx(0); }, [tasks.length, idx]);
-  const current = tasks[idx] || tasks[0];
-  const total = tasks.length;
-  const actionLabel = current?.cta || "View";
-  function prev() { setIdx((i) => (i - 1 + total) % total); }
-  function next() { setIdx((i) => (i + 1) % total); }
-  return (
-    <div className="bp-kpi-card bp-kpi-summary">
-      <div className="bp-kpi-summary-top">
-        <div className="bp-kpi-summary-eyebrow"><SparkleIcon size={12} /> {eyebrow.toUpperCase()}</div>
-        <button
-          type="button"
-          className={`bp-kpi-summary-seeall${summaryActive ? " active" : ""}`}
-          onClick={onOpenSummary}
-        >
-          See all
-        </button>
-      </div>
-      <div className="bp-kpi-summary-body">{current?.node}</div>
-      <div className="bp-kpi-summary-asof">as of {formatDate(TODAY.toISOString().slice(0, 10))}</div>
-      <div className="bp-kpi-summary-foot">
-        {total > 1 ? (
-          <div className="bp-kpi-summary-pager" aria-label="Task pager">
-            <button type="button" className="bp-kpi-summary-pager-chev" onClick={prev} aria-label="Previous task">
-              <svg viewBox="0 0 9 9" aria-hidden><path d="M6 2L3 4.5L6 7" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
-            </button>
-            {tasks.map((_, i) => (
-              <button
-                key={i}
-                type="button"
-                className={`bp-kpi-summary-pager-num${i === idx ? " on" : ""}`}
-                onClick={() => setIdx(i)}
-                aria-label={`Task ${i + 1}`}
-                aria-current={i === idx ? "true" : undefined}
-              >
-                {i + 1}
-              </button>
-            ))}
-            <button type="button" className="bp-kpi-summary-pager-chev" onClick={next} aria-label="Next task">
-              <svg viewBox="0 0 9 9" aria-hidden><path d="M3 2L6 4.5L3 7" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
-            </button>
-          </div>
-        ) : <span />}
-        <button type="button" className="bp-kpi-cta bp-kpi-cta-action" onClick={() => onAction(current)}>
-          {actionLabel} →
-        </button>
-      </div>
-    </div>
   );
 }
 
@@ -655,11 +599,6 @@ export default function InvoicesPage() {
   const { invoices, sendInvoice } = useInvoices();
   const { hasLevel } = useCurrentUser();
   const canTransact = hasLevel("ar", "transact");
-  const insightsRole = hasLevel("ar", "approve+post")
-    ? "operator"
-    : hasLevel("ar", "transact")
-    ? "preparer"
-    : "viewer";
 
   const [filter, setFilter] = useState({ kind: "tab", value: "semua" });
   // Sort + group choices override per-tab defaults when non-null
@@ -691,7 +630,6 @@ export default function InvoicesPage() {
   const [choiceOpen, setChoiceOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
   const [aiSeedQuestion, setAiSeedQuestion] = useState(null);
-  const [summaryOpen, setSummaryOpen] = useState(false);
 
   const [sendOpen, setSendOpen] = useState(false);
   const [sendEmail, setSendEmail] = useState("");
@@ -768,32 +706,11 @@ export default function InvoicesPage() {
     };
   }, [allRows, monthPfx]);
 
-  const tasks = useMemo(() => computeInvoiceTasks(allRows, insightsRole), [allRows, insightsRole]);
   const aiContext = useMemo(() => makeInvoicesAiContext(allRows), [allRows]);
 
   function askAi(question) {
-    setSummaryOpen(false);
     setAiSeedQuestion(question);
     setAiOpen(true);
-  }
-
-  // ── Deep-link a task to the relevant filtered view (mirror Bills) ───────
-  function handleTaskAction(task) {
-    if (!task) return;
-    clearChecks();
-    setKlayFilters({});
-    setFilterValues(emptyFilters);
-    switch (task.id) {
-      case "anomaly":     selectTab("anomaly"); break;
-      case "auto":        selectTab("auto"); break;
-      case "drafts":      selectTab("draft"); break;
-      case "cashflowIn":  selectTab("sent"); break;
-      case "overdueChase":
-      case "concentration":
-      case "avgDpd":
-      case "largest":     selectTab("jatuhtempo"); break;
-      default:            askAi(task.question);
-    }
   }
 
   // ── Step 1: corpus (pill / card filter only) ────────────────────────────
@@ -979,6 +896,18 @@ export default function InvoicesPage() {
     else setFilter({ kind: "card", value: c });
     clearChecks();
   }
+  // Deep-link focus from the Home task hub: /invoices?tab=draft.
+  const [focusParams, setFocusParams] = useSearchParams();
+  useEffect(() => {
+    const card = focusParams.get("card");
+    const tab = focusParams.get("tab");
+    if (!card && !tab) return;
+    if (card) selectCard(card);
+    else selectTab(tab);
+    setFocusParams({}, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const isTabActive  = (t) => filter.kind === "tab"  && filter.value === t;
   const isCardActive = (c) => {
     if (c === "overdue") return filter.value === "jatuhtempo";
@@ -1250,17 +1179,10 @@ export default function InvoicesPage() {
           </div>
         </div>
 
-        {/* KPI strip — Your Tasks queue + action-framed cells (mirror Bills) */}
+        {/* KPI strip — action-framed cells. Your Tasks moved to /dashboard;
+            AR insights moved to /insights. */}
         <div className="bp-kpi-wrap">
           <div className="bp-kpi-row">
-            <InvoiceTasksCard
-              tasks={tasks}
-              onOpenSummary={() => setSummaryOpen(true)}
-              onAction={handleTaskAction}
-              summaryActive={summaryOpen}
-              eyebrow={insightsRole === "viewer" ? "AR Insights" : "Your Tasks"}
-            />
-
             {canTransact && (
               <div className="bp-kpi-card">
                 <div className="bp-kpi-lbl">Ready to Send</div>
@@ -1814,22 +1736,11 @@ export default function InvoicesPage() {
 
       {toast && <div className="toast show">{toast}</div>}
 
-      {/* ── Klay AI drawers (Summary + Chat) ────────────────────────── */}
+      {/* ── Klay AI chat drawer ─────────────────────────────────────── */}
       <div
-        className={`ai-backdrop${aiOpen || summaryOpen ? " open" : ""}`}
-        onClick={() => { setAiOpen(false); setSummaryOpen(false); }}
-        aria-hidden={!(aiOpen || summaryOpen)}
-      />
-      <SummaryDrawer
-        open={summaryOpen}
-        insights={tasks}
-        onClose={() => setSummaryOpen(false)}
-        mode="tasks"
-        title={insightsRole === "viewer" ? "AR Insights" : "Your Tasks"}
-        ctaLabel="View"
-        contextLabel="Invoices"
-        onAsk={askAi}
-        onPick={(t) => { handleTaskAction(t); setSummaryOpen(false); }}
+        className={`ai-backdrop${aiOpen ? " open" : ""}`}
+        onClick={() => { setAiOpen(false); }}
+        aria-hidden={!aiOpen}
       />
       <AiChatDrawer
         open={aiOpen}
