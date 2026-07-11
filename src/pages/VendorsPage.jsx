@@ -6,6 +6,7 @@ import { useCurrentUser } from "../state/CurrentUserContext";
 import { CAT_LABELS, PPH_LABELS, ACCT_LABELS, DEFTAX_LABELS } from "../data/labels";
 import { TODAY, daysSince } from "../lib/clock";
 import { formatRupiah, formatDate, initials } from "../lib/format";
+import RelationshipTierControl from "../components/RelationshipTier";
 import AiChatDrawer from "./AiChatDrawer";
 import SummaryDrawer from "./SummaryDrawer";
 import { computeVendorsInsights, makeVendorsAiContext } from "./ai-vendors-context";
@@ -78,7 +79,7 @@ function VendorRow({ r, isChecked, onCheck, onClick, onKebab, isSelected, isAlt,
       <div className="lg-cell-customer">
         <span className={`lg-cell-customer-dot${dotTone ? " " + dotTone : ""}`} />
         <div className="lg-cell-customer-body">
-          <div className="lg-cell-customer-name">{r.name}</div>
+          <div className="lg-cell-customer-name">{r.name}<RelationshipTierControl vendorId={r.id} /></div>
           <div className="lg-cell-customer-addr">{r.contact} · {r.email}</div>
         </div>
       </div>
