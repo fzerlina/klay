@@ -1,6 +1,10 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCurrentUser } from "../state/CurrentUserContext";
+import { useVendors } from "../state/VendorsContext";
+import { usePayments, PAYMENT_STATUS_META } from "../state/PaymentsContext";
+import { useBills } from "../state/BillsContext";
+import RelationshipTierControl from "../components/RelationshipTier";
 import { TODAY, daysSince } from "../lib/clock";
 import { formatRupiah, formatDateEn } from "../lib/format";
 import { workflowStatus, DEMO_OVERRIDES, STATUS_LABEL } from "../lib/billStatus";
@@ -22,6 +26,22 @@ import "./ap-aging.css";
 
 // Age-bucket bar colours — green (current) → amber (1–90) → red (90+).
 const AGE_COLOR = { current: "#2E7D44", b1_30: "#C99A2E", b31_60: "#B8770F", b61_90: "#A8620C", b91_120: "#A32D2D", b_gt120: "#8C2420" };
+
+// The Decision Queue is role-scoped: each persona works the payment stage it
+// owns. Copy + the bulk action per mode.
+const QUEUE_MODE = {
+  request: { title: "Bills to pay", sub: "Posted bills ready to pay — request payment per bill, or select several.", action: "Request payment", rowAction: "Request", emptyTitle: "Nothing to request", emptySub: "Every posted bill already has a payment request in flight." },
+  approve: { title: "Payment requests to approve", sub: "AP Staff requested these payments — review and approve.", action: "Approve payment", rowAction: "Approve", emptyTitle: "No requests awaiting approval", emptySub: "Payment requests from AP Staff will appear here." },
+  execute: { title: "Approved — ready to pay", sub: "Approved payments to execute, then mark as paid.", action: "Mark as paid", rowAction: "Mark paid", emptyTitle: "Nothing to pay right now", emptySub: "Approved payments ready to execute will appear here." },
+  view:    { title: "Payments", sub: "Posted payables and their payment status.", action: null, rowAction: null, emptyTitle: "No posted payables", emptySub: "Posted bills awaiting payment will appear here." },
+};
+
+// Primary "Your Tasks" card per payment role.
+const PAY_TASK = {
+  request: { lbl: "Request payment", cta: "Request →", sub: "posted, ready to pay" },
+  approve: { lbl: "Payments to approve", cta: "Approve →", sub: "requested by AP Staff" },
+  execute: { lbl: "Pay approved", cta: "Pay →", sub: "approved — ready to execute" },
+};
 const Sparkle = (
   <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
     <path d="M6 1.5l1.1 2.7L9.8 5l-2.7 0.8L6 8.5l-1.1-2.7L2.2 5l2.7-0.8L6 1.5z" />
@@ -111,19 +131,6 @@ function DiscountPill({ line }) {
   );
 }
 
-// ── Relationship pill (TP-02) ──────────────────────────────────────────────
-const RELATIONSHIP_TOOLTIP = {
-  strategic: "Strategic vendor — relationship-sensitive. Late payment risks tightening terms, losing discounts, or pricing increases at renewal. Prioritize on-time payment.",
-  at_risk:   "At-Risk vendor — documented history of disputes, slow responses, or payment issues. Use as a signal when sequencing payments.",
-};
-function RelationshipPill({ tier }) {
-  if (tier === "standard") return null;
-  return (
-    <span className={`apa-rel-pill ${tier}`} title={RELATIONSHIP_TOOLTIP[tier]}>
-      {tier === "strategic" ? "Strategic" : "At-Risk"}
-    </span>
-  );
-}
 
 // ── Status pill — workflow_status with hover explanation (incl. TP-05) ────
 // Hover surfaces (a) what the status means, and (b) the TP-05 "why is this
@@ -204,12 +211,18 @@ function DueCell({ line }) {
   );
 }
 
+// Payment-status pill — the payment lifecycle stage (unpaid → requested →
+// approved → paid), the axis AP Aging works on now that every row is Posted.
+function PaymentPill({ status }) {
+  const meta = PAYMENT_STATUS_META[status] || PAYMENT_STATUS_META.unpaid;
+  return <span className={`apa-pay-pill tone-${meta.tone}`}>{meta.label}</span>;
+}
+
 // ── Decision Queue row ────────────────────────────────────────────────────
-function DecisionQueueRow({ line, selected, onToggleSelect, onClick, canSelect = true }) {
-  const isReturned = line.workflow_status === "RETURNED";
+function DecisionQueueRow({ line, paymentStatus, actionLabel, onAction, selected, onToggleSelect, onClick, canSelect = true }) {
   return (
     <div
-      className={`apa-dq-row${isReturned ? " returned" : ""}${selected ? " selected" : ""}`}
+      className={`apa-dq-row${selected ? " selected" : ""}`}
       onClick={onClick}
     >
       {canSelect ? (
@@ -228,7 +241,7 @@ function DecisionQueueRow({ line, selected, onToggleSelect, onClick, canSelect =
       <div className="apa-vendor-cell">
         <div className="apa-vendor-name">
           {line.vendorName}
-          <RelationshipPill tier={line.relationship_tier} />
+          <RelationshipTierControl vendorId={line.vendorId} editable={false} />
         </div>
       </div>
 
@@ -243,9 +256,15 @@ function DecisionQueueRow({ line, selected, onToggleSelect, onClick, canSelect =
 
       <DueCell line={line} />
 
-      <StatusCell line={line} />
+      <PaymentPill status={paymentStatus} />
 
       <div className="apa-money" style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>{line.net_days}d net</div>
+
+      {actionLabel && canSelect ? (
+        <button className="apa-row-action" onClick={(e) => { e.stopPropagation(); onAction(line.id); }}>{actionLabel}</button>
+      ) : (
+        <span aria-hidden />
+      )}
     </div>
   );
 }
@@ -285,7 +304,7 @@ function AgingTableVendorRow({ row, expanded, onToggle, accrualHighlight }) {
           <span className="apa-at-chevron">{I.chev}</span>
           <div className="apa-vendor-name">
             {row.vendorName}
-            <RelationshipPill tier={row.relationship_tier} />
+            <RelationshipTierControl vendorId={row.vendorId} />
             <span className="apa-vendor-count">{row.invoices.length} bill{row.invoices.length === 1 ? "" : "s"}</span>
           </div>
         </div>
@@ -417,11 +436,20 @@ export default function ApAgingPage() {
   // AP Aging is a read surface (PRD). The only write-initiating affordances are
   // the payment-request controls — gated to transact+ (AP Staff, FM, Admin).
   // View Only sees the full analytical surface but not these controls.
-  const { hasLevel } = useCurrentUser();
-  const canTransact = hasLevel("ap", "transact");
+  const { hasLevel, hasCapability, user } = useCurrentUser();
+  const { bills, updateBill } = useBills();
+  const { statusOf, requestPayment, approvePayment, markPaid } = usePayments();
+  // Role-scoped payment queue: each role works the stage it owns, keyed off the
+  // explicit payment capabilities (see roles.js → visible in User access
+  // settings). FM approves, AP Staff requests, Finance Staff executes.
+  const payMode = hasCapability("payment.approve") ? "approve"
+    : hasCapability("payment.request") ? "request"
+    : hasCapability("payment.execute") ? "execute"
+    : "view";
+  const canActOnQueue = payMode !== "view";
+  const { tierOf } = useVendors(); // live vendor-master tier (reflects edits)
   const [view, setView] = useState("queue");   // "queue" | "table"
   const [selected, setSelected] = useState(new Set());
-  const [bannerDismissed, setBannerDismissed] = useState(false);
   const [expandedVendor, setExpandedVendor] = useState(null);
   const [cardFilter, setCardFilter] = useState(null);  // null | "discounts" | "due7d" | "accruals"
   const [tableSearch, setTableSearch] = useState("");  // Aging Table vendor/invoice search
@@ -452,13 +480,22 @@ export default function ApAgingPage() {
     else setView("queue");
   };
 
-  // Build all lines + snapshot once per render (memoized for perf)
-  const allLines = useMemo(() => buildAgingLines(TODAY), []);
+  // Build all lines + snapshot from the LIVE bills, so a settled payment
+  // (pay=paid, sisa=0) drops the bill out of the aging surfaces immediately.
+  const allLines = useMemo(() => buildAgingLines(TODAY, bills), [bills]);
   const snapshot = useMemo(() => buildSnapshot(allLines), [allLines]);
 
   // Decision Queue rows — filtered + sorted, then narrowed by an active KPI filter
   const dqRows = useMemo(() => {
     let rows = allLines.filter(isDecisionQueueRow).sort(decisionQueueSort);
+    // Role-scoped payment stage: show only the bills this persona acts on.
+    rows = rows.filter((l) => {
+      const ps = statusOf(l.id);
+      if (payMode === "request") return ps === "unpaid";
+      if (payMode === "approve") return ps === "requested";
+      if (payMode === "execute") return ps === "approved";
+      return true; // view — everything
+    });
     if (cardFilter === "discounts") {
       rows = rows.filter((l) => {
         const p = discountPillState(l);
@@ -479,15 +516,24 @@ export default function ApAgingPage() {
     }
     // Explicit filters
     if (filters.status.size) rows = rows.filter((l) => filters.status.has(l.workflow_status));
-    if (filters.tier.size)   rows = rows.filter((l) => filters.tier.has(l.relationship_tier));
+    if (filters.tier.size)   rows = rows.filter((l) => filters.tier.has(tierOf(l.vendorId)));
     if (filters.bucket.size) rows = rows.filter((l) => filters.bucket.has(l.ageBucket));
     if (filters.special.has("discount")) rows = rows.filter((l) => l.has_terms);
     return rows;
-  }, [allLines, cardFilter, filters]);
+  }, [allLines, cardFilter, filters, tierOf, payMode, statusOf]);
 
   // ── Command-center figures — tasks, payment run, insights ────────────────
+  // `base` is the role's payment stage (unpaid / requested / approved), so the
+  // task metrics match the queue the persona is working. View-only sees all.
+  const stageOf = (l) => {
+    const ps = statusOf(l.id);
+    if (payMode === "request") return ps === "unpaid";
+    if (payMode === "approve") return ps === "requested";
+    if (payMode === "execute") return ps === "approved";
+    return true;
+  };
   const cc = useMemo(() => {
-    const base = allLines.filter(isDecisionQueueRow);
+    const base = allLines.filter(isDecisionQueueRow).filter(stageOf);
     const isDue7 = (l) => { const d = -daysSince(l.dueDate); return d >= 0 && d <= 7; };
     const isDisc7 = (l) => {
       const p = discountPillState(l);
@@ -505,7 +551,6 @@ export default function ApAgingPage() {
     const near90Rows = base.filter((l) => l.ageBucket === "b61_90");
 
     const dueRows = base.filter(isDue7);
-    const returnedRows = base.filter((l) => l.workflow_status === "RETURNED");
 
     // Overdue concentration (60+ days), top vendors
     const sixtyPlus = allLines.filter((l) => !l.is_accrual && l.workflow_status !== "DRAFT" && l.remaining > 0 && l.daysOverdue > 60);
@@ -527,20 +572,20 @@ export default function ApAgingPage() {
     }, 0);
 
     return {
+      stageCount: base.length, stageSum: sum(base),
       discCount: discRows.length, discHot, discSavings,
       overdueCount: overdueRows.length, overdueSum: sum(overdueRows), over60Sum,
       near90Count: near90Rows.length, near90Sum: sum(near90Rows),
       dueCount: dueRows.length, dueSum: sum(dueRows),
-      returnedCount: returnedRows.length, returnedSum: sum(returnedRows),
       topV, concentrationPct, sixtyTotal,
       discAvailable, discAtRisk: snapshot.discountsThisWeekIdr,
     };
-  }, [allLines, snapshot]);
+  }, [allLines, snapshot, payMode, statusOf]);
 
   // Aging Table — vendor pivot
   const pivot = useMemo(() => {
     let rows = buildVendorPivot(allLines.filter(isAgingTableRow));
-    if (filters.tier.size)   rows = rows.filter((r) => filters.tier.has(r.relationship_tier));
+    if (filters.tier.size)   rows = rows.filter((r) => filters.tier.has(tierOf(r.vendorId)));
     if (filters.bucket.size) rows = rows.filter((r) => [...filters.bucket].some((bk) => (r.buckets[bk] || 0) > 0));
     if (filters.special.has("accrual")) rows = rows.filter((r) => r.accrual > 0);
     const q = tableSearch.trim().toLowerCase();
@@ -549,11 +594,23 @@ export default function ApAgingPage() {
       (r.invoices || []).some((inv) => (inv.invNo || "").toLowerCase().includes(q)),
     );
     return rows;
-  }, [allLines, filters, tableSearch]);
+  }, [allLines, filters, tableSearch, tierOf]);
 
-  // RETURNED pinned section
-  const returnedRows = dqRows.filter((r) => r.workflow_status === "RETURNED");
-  const activeRows = dqRows.filter((r) => r.workflow_status !== "RETURNED");
+  // Run the role's payment action on a set of bill ids.
+  const runPaymentAction = (ids) => {
+    if (!ids.length) return;
+    if (payMode === "request") requestPayment(ids, user?.name || "AP Staff");
+    else if (payMode === "approve") approvePayment(ids, user?.name || "Finance Manager");
+    else if (payMode === "execute") {
+      markPaid(ids, user?.name || "Finance Staff");
+      // Executing the transfer settles the bill in the ledger.
+      for (const id of ids) {
+        updateBill(id, { pay: "paid", sisa: 0 }, { type: "paid", action: "Payment executed & marked paid", by: user?.name || "Finance Staff", date: TODAY.toISOString().slice(0, 10), time: "" });
+      }
+    }
+  };
+  const runQueueAction = () => { runPaymentAction([...selected]); setSelected(new Set()); };
+  const runRowAction = (id) => runPaymentAction([id]);
 
   // Selection helpers
   const toggleSelect = (id) => {
@@ -582,13 +639,6 @@ export default function ApAgingPage() {
     return sum;
   }, [selected, dqRows]);
 
-  // Banner — show when ≥1 invoice expires in <48h and not dismissed
-  const urgentDiscounts = dqRows.filter((r) => {
-    const p = discountPillState(r);
-    return p?.tone === "danger";
-  });
-  const showBanner = !bannerDismissed && urgentDiscounts.length > 0;
-
 
   // Grand totals for Aging Table footer
   const grandTotals = useMemo(() => {
@@ -615,12 +665,6 @@ export default function ApAgingPage() {
               {I.download}
               Export
             </button>
-            {canTransact && (
-              <button className="lg-btn-brand" onClick={() => navigate("/bills/new")}>
-                {I.bolt}
-                Create Payment
-              </button>
-            )}
           </div>
         </div>
 
@@ -628,11 +672,9 @@ export default function ApAgingPage() {
         <div className="apa-tabs">
           <button type="button" className={`apa-tab${view === "queue" ? " on" : ""}`} onClick={() => setView("queue")}>
             Decision Queue
-            <span className="apa-tab-count">{dqRows.length}</span>
           </button>
           <button type="button" className={`apa-tab${view === "table" ? " on" : ""}`} onClick={() => setView("table")}>
             Aging Table
-            <span className="apa-tab-count">{pivot.length}</span>
           </button>
         </div>
 
@@ -644,16 +686,27 @@ export default function ApAgingPage() {
             <span className="bp-cc-asof">as of {formatDateEn(TODAY.toISOString().slice(0, 10))}</span>
           </div>
           <div className="bp-cc-taskband">
-            {cc.near90Count > 0 && (
-              <button type="button" className="bp-t2" onClick={() => selectCard("age:b61_90")}>
-                <span className="bp-t2-lbl">Nearing 90 days</span>
-                <span className="bp-t2-amt">{formatRupiah(cc.near90Sum)}</span>
-                <span className="bp-t2-sub">{cc.near90Count} bill{cc.near90Count === 1 ? "" : "s"} · 61–90 days overdue</span>
-                <span className="bp-t2-tag hot">approaching 90d</span>
-                <span className="bp-t2-cta">Review →</span>
+            {/* Primary task = the payment stage this role owns. */}
+            {payMode !== "view" && cc.stageCount > 0 && (
+              <button type="button" className="bp-t2" onClick={() => setCardFilter(null)}>
+                <span className="bp-t2-lbl">{PAY_TASK[payMode].lbl}</span>
+                <span className="bp-t2-amt">{formatRupiah(cc.stageSum)}</span>
+                <span className="bp-t2-sub">{cc.stageCount} bill{cc.stageCount === 1 ? "" : "s"} · {PAY_TASK[payMode].sub}</span>
+                <span className="bp-t2-cta">{PAY_TASK[payMode].cta}</span>
               </button>
             )}
-            {cc.overdueCount > 0 && (
+            {/* AP Staff — capture expiring discounts before requesting. */}
+            {payMode === "request" && cc.discCount > 0 && (
+              <button type="button" className="bp-t2" onClick={() => selectCard("discounts")}>
+                <span className="bp-t2-lbl">Discounts expiring</span>
+                <span className="bp-t2-amt">{formatRupiah(cc.discSavings)}</span>
+                <span className="bp-t2-sub">{cc.discCount} bill{cc.discCount === 1 ? "" : "s"} · save if paid in time</span>
+                {cc.discHot > 0 && <span className="bp-t2-tag hot">{cc.discHot} closing</span>}
+                <span className="bp-t2-cta">Prioritize →</span>
+              </button>
+            )}
+            {/* Finance Staff — pay the overdue / due-soon first. */}
+            {(payMode === "execute" || payMode === "view") && cc.overdueCount > 0 && (
               <button type="button" className="bp-t2" onClick={() => selectCard("overdue")}>
                 <span className="bp-t2-lbl">Settle overdue</span>
                 <span className="bp-t2-amt">{formatRupiah(cc.overdueSum)}</span>
@@ -662,7 +715,7 @@ export default function ApAgingPage() {
                 <span className="bp-t2-cta">Prioritize →</span>
               </button>
             )}
-            {cc.dueCount > 0 && (
+            {payMode === "execute" && cc.dueCount > 0 && (
               <button type="button" className="bp-t2" onClick={() => selectCard("due7d")}>
                 <span className="bp-t2-lbl">Fund due · 7 days</span>
                 <span className="bp-t2-amt">{formatRupiah(cc.dueSum)}</span>
@@ -671,13 +724,14 @@ export default function ApAgingPage() {
                 <span className="bp-t2-cta">Schedule →</span>
               </button>
             )}
-            {cc.returnedCount > 0 && (
-              <button type="button" className="bp-t2" onClick={() => selectCard("returned")}>
-                <span className="bp-t2-lbl">Returned to fix</span>
-                <span className="bp-t2-amt">{formatRupiah(cc.returnedSum)}</span>
-                <span className="bp-t2-sub">{cc.returnedCount} bill{cc.returnedCount === 1 ? "" : "s"}</span>
-                <span className="bp-t2-tag neu">FM returned</span>
-                <span className="bp-t2-cta">Resolve →</span>
+            {/* View-only — analytics. */}
+            {payMode === "view" && cc.near90Count > 0 && (
+              <button type="button" className="bp-t2" onClick={() => selectCard("age:b61_90")}>
+                <span className="bp-t2-lbl">Nearing 90 days</span>
+                <span className="bp-t2-amt">{formatRupiah(cc.near90Sum)}</span>
+                <span className="bp-t2-sub">{cc.near90Count} bill{cc.near90Count === 1 ? "" : "s"} · 61–90 days overdue</span>
+                <span className="bp-t2-tag hot">approaching 90d</span>
+                <span className="bp-t2-cta">Review →</span>
               </button>
             )}
           </div>
@@ -736,21 +790,6 @@ export default function ApAgingPage() {
         </div>
         )}
       </div>
-
-      {/* ── Discount-expiring banner (between head and table) ────────── */}
-      {showBanner && view === "queue" && (
-        <div className="apa-discount-banner">
-          <span className="apa-banner-icon">{I.alert}</span>
-          <div className="apa-discount-banner-body">
-            <strong>{urgentDiscounts.length} discount{urgentDiscounts.length === 1 ? "" : "s"} expire in &lt; 48 hours.</strong>
-            {" "}Total savings at risk: <strong>{formatRupiah(urgentDiscounts.reduce((s, r) => s + r.discount_amount_idr, 0))}</strong>.
-            {" "}Surfaced in the Decision Queue below.
-          </div>
-          <button className="apa-discount-banner-dismiss" onClick={() => setBannerDismissed(true)} title="Dismiss">
-            {I.x}
-          </button>
-        </div>
-      )}
 
       {/* ── Table card (toggle + sort + table, all inside one card) ── */}
       <div className="lg-table-wrap">
@@ -815,13 +854,12 @@ export default function ApAgingPage() {
 
           {view === "queue" ? (
             <>
-              {returnedRows.length > 0 && (
+              <div className="apa-queue-mode">
+                <span className="apa-queue-mode-title">{QUEUE_MODE[payMode].title}</span>
+                <span className="apa-queue-mode-sub">{QUEUE_MODE[payMode].sub}</span>
+              </div>
+              {dqRows.length > 0 ? (
                 <>
-                  <div className="apa-pinned">
-                    {I.alert}
-                    <span>{returnedRows.length} bill{returnedRows.length === 1 ? "" : "s"} returned to you — review the comments and resubmit.</span>
-                    <span className="apa-pinned-count">{returnedRows.length}</span>
-                  </div>
                   <div className="apa-dq-header">
                     <div></div>
                     <div>Vendor</div>
@@ -829,54 +867,30 @@ export default function ApAgingPage() {
                     <div style={{ textAlign: "right" }}>Balance</div>
                     <div>Discount</div>
                     <div>Due</div>
-                    <div>Status</div>
+                    <div>Payment</div>
                     <div>Terms</div>
+                    <div></div>
                   </div>
-                  {returnedRows.map((line) => (
+                  {dqRows.map((line) => (
                     <DecisionQueueRow
                       key={line.id}
                       line={line}
+                      paymentStatus={statusOf(line.id)}
+                      actionLabel={QUEUE_MODE[payMode].rowAction}
+                      onAction={runRowAction}
                       selected={selected.has(line.id)}
                       onToggleSelect={toggleSelect}
                       onClick={() => navigate(`/bills/${line.id}`)}
-                      canSelect={canTransact}
+                      canSelect={canActOnQueue}
                     />
                   ))}
                 </>
-              )}
-
-              {activeRows.length > 0 ? (
-                <>
-                  {returnedRows.length === 0 && (
-                    <div className="apa-dq-header">
-                      <div></div>
-                      <div>Vendor</div>
-                      <div>Invoice</div>
-                      <div style={{ textAlign: "right" }}>Balance</div>
-                      <div>Discount</div>
-                      <div>Due</div>
-                      <div>Status</div>
-                      <div>Terms</div>
-                      <div></div>
-                    </div>
-                  )}
-                  {activeRows.map((line) => (
-                    <DecisionQueueRow
-                      key={line.id}
-                      line={line}
-                      selected={selected.has(line.id)}
-                      onToggleSelect={toggleSelect}
-                      onClick={() => navigate(`/bills/${line.id}`)}
-                      canSelect={canTransact}
-                    />
-                  ))}
-                </>
-              ) : returnedRows.length === 0 ? (
+              ) : (
                 <EmptyState
-                  title="Decision Queue is clear"
-                  sub="Nothing needs your attention today. Discounts, overdue bills, and pending review will appear here as they arrive."
+                  title={QUEUE_MODE[payMode].emptyTitle}
+                  sub={QUEUE_MODE[payMode].emptySub}
                 />
-              ) : null}
+              )}
             </>
           ) : (
             // ── Aging Table view ───────────────────────────────────────
@@ -938,7 +952,7 @@ export default function ApAgingPage() {
       </div>{/* /lg-scroll-container */}
 
       {/* ── Multi-select action bar ─────────────────────────────────── */}
-      {canTransact && selected.size > 0 && (
+      {canActOnQueue && QUEUE_MODE[payMode].action && selected.size > 0 && (
         <div className="apa-action-bar">
           <div className="apa-action-bar-info">
             <span className="apa-action-bar-count">{selected.size} selected</span>
@@ -954,9 +968,9 @@ export default function ApAgingPage() {
           </div>
           <div className="apa-action-bar-actions">
             <button className="apa-action-bar-btn" onClick={clearSelection}>Clear</button>
-            <button className="apa-action-bar-btn primary">
+            <button className="apa-action-bar-btn primary" onClick={runQueueAction}>
               {I.bolt}
-              Create Payment Request
+              {QUEUE_MODE[payMode].action}
             </button>
           </div>
         </div>

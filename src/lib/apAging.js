@@ -12,6 +12,7 @@
 
 import { BILLS } from "../data/seed/bills";
 import { VENDORS } from "../data/seed/vendors";
+import { seedTierFor } from "../data/seed/vendorTiers";
 import { TODAY, daysSince, parseDate } from "./clock";
 import { workflowStatus } from "./billStatus";
 
@@ -62,24 +63,12 @@ export function ageBucketOf(daysOverdue) {
 }
 
 // ── Relationship tier — Strategic / Standard / At-Risk ─────────────────────
-// Deterministic per vendor. Anchors (V001–V010) curated to make the demo
-// readable; the rest is seeded by id-hash so the same id gets the same tier.
-const TIER_OVERRIDES = {
-  V001: "strategic", // Supplier Elektronik — recurring high-value
-  V003: "strategic", // Jasa Logistik — monthly service contract
-  V005: "at_risk",   // Koperasi Tani — slow-paying, history of disputes
-  V008: "strategic", // Teksol Digital — software maintenance
-  V010: "strategic", // Asuransi Mitra Utama — annual cover
-  V012: "at_risk",   // Koperasi Jaya Niaga — inactive, disputes
-  V020: "at_risk",   // PT Agung Elektronik — large overdue concentration
-};
+// The tier is a VENDOR-MASTER attribute (PRD TP-02), not an AP-Aging concept.
+// This returns the seeded base value; live edits (from Vendor master or the
+// aging table) live on the vendor record in VendorsContext, which the page
+// overlays via tierOf(). Default: standard.
 export function relationshipTier(vendorId) {
-  if (TIER_OVERRIDES[vendorId]) return TIER_OVERRIDES[vendorId];
-  // Roughly 15% strategic, 15% at-risk, 70% standard
-  const r = rng(strHash("tier:" + vendorId))();
-  if (r < 0.15) return "strategic";
-  if (r < 0.30) return "at_risk";
-  return "standard";
+  return seedTierFor(vendorId);
 }
 
 // ── Discount terms — derived per-vendor, persistent at the bill level ──────
@@ -176,9 +165,9 @@ function buildAccrualRecords() {
 // ── Aging line — one row per outstanding bill ─────────────────────────────
 // Joins bill + vendor + derived fields. The Decision Queue and Aging Table
 // both consume this. Filter at the view layer.
-export function buildAgingLines(asOfDate) {
+export function buildAgingLines(asOfDate, bills = BILLS) {
   const accruals = buildAccrualRecords();
-  const allBills = [...BILLS, ...accruals];
+  const allBills = [...bills, ...accruals];
 
   return allBills.map((b) => {
     const v = VENDORS.find((x) => x.id === b.vendor) || null;
@@ -277,15 +266,15 @@ export function discountPillState(line) {
 }
 
 // ── Decision Queue filter ─────────────────────────────────────────────────
-// PRD baseline: workflow_status IN (PENDING_REVIEW, APPROVED, RETURNED). We
-// also include POSTED: this is a payment-intelligence surface, and a posted-
-// but-unpaid bill is a live payment decision (discount window / overdue) — so
-// it belongs in the queue. Accruals never enter (managed in AP Close).
+// AP Aging is the PAYMENT workspace: it shows only POSTED bills that are ready
+// to be paid (a posted, unpaid liability = a live payment decision — discount
+// window / overdue). Pre-posting bills (Draft / Pending Review / Returned /
+// Approved) live on the Bills page, not here; accruals are managed in AP Close.
 export function isDecisionQueueRow(line) {
   if (line.is_accrual) return false;
   if (line.on_hold) return false;
   if (line.remaining <= 0) return false;
-  return ["PENDING_REVIEW", "APPROVED", "RETURNED", "POSTED"].includes(line.workflow_status);
+  return line.workflow_status === "POSTED";
 }
 
 // ── Aging Table filter ────────────────────────────────────────────────────

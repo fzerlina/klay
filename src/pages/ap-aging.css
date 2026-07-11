@@ -77,8 +77,19 @@
 .apa-pinned-count{font-family:var(--font-mono);background:var(--color-warning-border);color:var(--color-warning-text);padding:1px 7px;border-radius:9999px;font-weight:800;font-size:10.5px}
 
 /* ── Decision Queue grid (9 cols, no avatar) ──────────────────────────── */
-.apa-dq-row,.apa-dq-header{display:grid;grid-template-columns:28px minmax(160px,1.6fr) minmax(90px,1fr) 110px 130px 110px 110px 70px;align-items:center;gap:10px;padding:11px 18px;font-size:12.5px;border-bottom:1px solid var(--color-border-subtle)}
+.apa-dq-row,.apa-dq-header{display:grid;grid-template-columns:28px minmax(150px,1.4fr) minmax(84px,0.9fr) 100px 118px 96px 98px 54px 96px;align-items:center;gap:10px;padding:11px 18px;font-size:12.5px;border-bottom:1px solid var(--color-border-subtle)}
 .apa-dq-header{background:var(--color-surface-sunken);font-family:var(--font-sans);font-size:9.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--color-text-tertiary);padding:9px 18px;border-bottom:.5px solid var(--color-border-default);border-top:.5px solid var(--color-border-default)}
+
+/* Role-scoped queue mode header */
+.apa-queue-mode{display:flex;align-items:baseline;gap:10px;padding:12px 18px 4px}
+.apa-queue-mode-title{font-size:13px;font-weight:700;color:var(--color-text-primary)}
+.apa-queue-mode-sub{font-size:11.5px;color:var(--color-text-tertiary)}
+/* Payment-status pill */
+.apa-pay-pill{display:inline-flex;align-items:center;padding:2px 9px;border-radius:9999px;font-size:10px;font-weight:700;letter-spacing:.02em;border:1px solid transparent;white-space:nowrap}
+.apa-pay-pill.tone-muted{background:var(--color-surface-sunken);color:var(--color-text-tertiary);border-color:var(--color-border-default)}
+.apa-pay-pill.tone-review{background:#FBF1E0;color:#BA7517;border-color:#EEDCBB}
+.apa-pay-pill.tone-action{background:#E9EEFB;color:#1A46C8;border-color:#CBD9F4}
+.apa-pay-pill.tone-success{background:var(--success-surface,#E5F2EA);color:var(--success-text,#1F6E3F);border-color:var(--success-border,#BFE0CB)}
 .apa-dq-row{cursor:pointer;transition:background var(--transition-fast)}
 .apa-dq-row:hover{background:var(--color-surface-sunken)}
 .apa-dq-row:last-child{border-bottom:none}
@@ -86,6 +97,9 @@
 .apa-dq-row.returned:hover{background:rgba(248,217,151,.45)}
 .apa-dq-row.selected{background:var(--color-action-wash)}
 .apa-dq-row.selected:hover{background:var(--color-action-subtle)}
+/* Per-row payment action (Request / Approve / Mark paid) */
+.apa-row-action{font-family:var(--font-sans);font-size:11px;font-weight:600;cursor:pointer;padding:5px 10px;border-radius:var(--radius-sm,6px);border:1px solid var(--color-action);color:var(--color-action);background:transparent;white-space:nowrap;justify-self:end;transition:background var(--transition-fast),color var(--transition-fast)}
+.apa-row-action:hover{background:var(--color-action);color:#fff}
 
 .apa-checkbox{width:16px;height:16px;border:1.5px solid var(--color-border-strong);border-radius:4px;background:var(--color-surface-raised);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:background var(--transition-fast),border-color var(--transition-fast)}
 .apa-checkbox.checked{background:var(--color-action);border-color:var(--color-action)}
@@ -232,5 +246,5 @@
 
 /* ── Responsive ───────────────────────────────────────────────────────── */
 @media (max-width: 900px){
-  .apa-dq-row,.apa-dq-header{grid-template-columns:28px 1.2fr 90px 100px 110px 90px 28px;gap:8px}
+  .apa-dq-row,.apa-dq-header{grid-template-columns:28px 1.1fr 80px 90px 104px 84px 88px 46px 84px;gap:8px}
 }

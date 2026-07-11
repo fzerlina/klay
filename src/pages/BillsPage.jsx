@@ -8,11 +8,13 @@ import {
   STATUS_LABEL,
   workflowStatus,
   statusCause,
+  isReturned,
   isApPeriodLocked,
   billPeriod,
   sourceChannelFor,
   urgencyScore,
 } from "../lib/billStatus";
+import { flagSummary } from "../lib/reviewWorkflow";
 import { useBills } from "../state/BillsContext";
 import { useClosePeriod } from "../state/ClosePeriodContext";
 import { useCurrentUser } from "../state/CurrentUserContext";
@@ -156,7 +158,26 @@ function BpAnomalyDot({ anomalies }) {
   return <span className={`bp-anom-dot sev-${top.severity}`} title={title} aria-label={title} />;
 }
 
-function LedgerRow({ r, bucket, isChecked, onCheck, onClick, onKebab, isSelected, isAlt, onIdHover, onIdLeave, onVendorHover, onVendorLeave, showAgingBar, showKebab = true, periodLocked = false }) {
+// Exception chip — the rules-engine BLOCKING + REVIEW flags (reviewWorkflow.js)
+// counted together as "exceptions" and surfaced on the row. Advisories are FYI
+// and not shown here. Red when any blocking flag is open, amber otherwise.
+function BillFlagChips({ summary }) {
+  if (!summary) return null;
+  const n = summary.openBlocking + summary.openReview;
+  if (n === 0) return null;
+  const tone = summary.openBlocking > 0 ? "blocking" : "review";
+  const title = summary.flags
+    .filter((f) => f.status === "open" && f.severity !== "ADVISORY")
+    .map((f) => `${f.severity}: ${f.label}`)
+    .join("\n");
+  return (
+    <span className="bp-flag-chips" title={title}>
+      <span className={`bp-exc-chip ${tone}`}>{n} exception{n === 1 ? "" : "s"}</span>
+    </span>
+  );
+}
+
+function LedgerRow({ r, bucket, flags, isChecked, onCheck, onClick, onKebab, isSelected, isAlt, onIdHover, onIdLeave, onVendorHover, onVendorLeave, showAgingBar, showKebab = true, periodLocked = false }) {
   const isOverdue = r.pay === "overdue" && r.daysOverdue > 0;
   const isPaid = r.pay === "paid";
   const ws = workflowStatus(r.raw);
@@ -207,14 +228,17 @@ function LedgerRow({ r, bucket, isChecked, onCheck, onClick, onKebab, isSelected
       <div className="bp-status-cell">
         <BpAnomalyDot anomalies={r.raw?.anomalies} />
         <div className="bp-status-cell-body">
-          <div className={`bp-status-label${statusToneClass ? " " + statusToneClass : ""}`}>{statusLabel}</div>
+          <div className="bp-status-label-row">
+            <div className={`bp-status-label${statusToneClass ? " " + statusToneClass : ""}`}>{statusLabel}</div>
+            {isReturned(r.raw) && <span className="bp-approval-tag returned" title="Returned by the Finance Manager — fix and resubmit">Returned</span>}
+            <BillFlagChips summary={flags} />
+          </div>
           {periodLocked && (
             <div className="bp-period-lock-badge" title="This bill's accounting period is closed — reassign it to the current open period before it can be posted.">
               <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden><rect x="2.5" y="5.5" width="7" height="5" rx="0.8"/><path d="M4.2 5.5V3.8a1.8 1.8 0 0 1 3.6 0v1.7"/></svg>
               Period locked
             </div>
           )}
-          {causeText && <div className="bp-status-cause">{causeText}</div>}
           {showAgingBar && isOverdue && bucket && (
             <div className="bp-status-aging">
               <div className="lg-cell-aging-track">
@@ -507,11 +531,30 @@ function BillsAiSearchPanel({ search, rows }) {
 
 export default function BillsPage() {
   const navigate = useNavigate();
-  const { hasLevel } = useCurrentUser();
+  const { hasLevel, hasCapability } = useCurrentUser();
   const canCreate = hasLevel("ap", "transact");
   const canApprove = hasLevel("ap", "approve+post");
+  // Capability-accurate task gating (roles.js): AP Staff drafts, FM approves,
+  // Accounting Manager + FM post. Used by the Your-Tasks band.
+  const canDraftBills = hasCapability("ap.transact");   // AP Staff
+  const canApproveBills = hasCapability("ap.approve");   // Finance Manager
+  const canPostBills = hasCapability("ap.post");         // Accounting Manager + FM
   const { bills } = useBills();
-  const { closedThrough } = useClosePeriod();
+  const { closedThrough, autoAssignLateBills } = useClosePeriod();
+
+  // Review-flag engine — per-bill severity summary (reviewWorkflow.js). Keyed by
+  // bill id. A bill has an "exception" when it carries an open blocking or review
+  // flag (advisory alone doesn't count) — the count surfaced on the table.
+  const flagMap = useMemo(() => {
+    const m = {};
+    for (const b of bills) m[b.id] = flagSummary(b, undefined, { autoAssignLateBills });
+    return m;
+  }, [bills, autoAssignLateBills]);
+  const hasException = (b) => {
+    const s = flagMap[b.id];
+    return !!s && s.openBlocking + s.openReview > 0;
+  };
+
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState({ kind: "tab", value: "semua" });
   const [anomalyFilter, setAnomalyFilter] = useState(false);
@@ -611,8 +654,9 @@ export default function BillsPage() {
     const perluDibayar = bills.filter((b) => b.approval === "approved" && b.pay !== "paid" && !isApPeriodLocked(billPeriod(b), closedThrough));
     const perluDibayarSum = perluDibayar.reduce((s, b) => s + b.sisa, 0);
     const reviewList = bills.filter((b) => workflowStatus(b) === "PENDING_REVIEW");
+    // Returned is now a Draft + label (not a status) — count via isReturned.
     const reviewSum = reviewList.reduce((s, b) => s + b.total, 0);
-    const returnedList = bills.filter((b) => workflowStatus(b) === "RETURNED");
+    const returnedList = bills.filter((b) => isReturned(b));
     const returnedSum = returnedList.reduce((s, b) => s + b.total, 0);
     const draftList = bills.filter((b) => b.approval === "draft");
     const draftSum = draftList.reduce((s, b) => s + b.total, 0);
@@ -709,17 +753,18 @@ export default function BillsPage() {
       draft:      byStatus("DRAFT"),
       jatuhtempo: bills.filter((b) => b.pay === "overdue" && workflowStatus(b) !== "EXCEPTION").length,
       lunas:      byStatus("PAID"),
-      exception:  byStatus("EXCEPTION"),
+      // Exceptions = bills with an open blocking/review flag (the rules engine).
+      exception:  bills.filter(hasException).length,
     };
-  }, [bills]);
+  }, [bills, flagMap]);
 
   const tabs = [
-    { k: "semua",      lbl: "All",        count: tabCounts.semua },
-    { k: "review",     lbl: "Review",     count: tabCounts.review },
-    { k: "approved",   lbl: "Approved",   count: tabCounts.approved },
-    { k: "posted",     lbl: "Posted",     count: tabCounts.posted },
-    { k: "draft",      lbl: "Draft",      count: tabCounts.draft },
-    { k: "exception",  lbl: "Exceptions", count: tabCounts.exception },
+    { k: "semua",      lbl: "All",         count: tabCounts.semua },
+    { k: "review",     lbl: "Review",      count: tabCounts.review },
+    { k: "approved",   lbl: "Approved",    count: tabCounts.approved },
+    { k: "posted",     lbl: "Posted",      count: tabCounts.posted },
+    { k: "draft",      lbl: "Draft",       count: tabCounts.draft },
+    { k: "exception",  lbl: "Exceptions",  count: tabCounts.exception },
   ];
 
   // ── Corpus ─────────────────────────────────────────────────────────────
@@ -735,12 +780,13 @@ export default function BillsPage() {
       else if (filter.value === "draft")     list = list.filter((b) => workflowStatus(b) === "DRAFT");
       else if (filter.value === "jatuhtempo")list = list.filter((b) => b.pay === "overdue" && workflowStatus(b) !== "EXCEPTION");
       else if (filter.value === "lunas")     list = list.filter((b) => workflowStatus(b) === "PAID");
-      else if (filter.value === "exception") list = list.filter((b) => workflowStatus(b) === "EXCEPTION");
+      else if (filter.value === "exception") list = list.filter(hasException);
     } else if (filter.kind === "card") {
       if (filter.value === "total")              list = list.filter((b) => b.pay !== "paid");
       else if (filter.value === "overdueMonth")  list = list.filter((b) => b.pay === "overdue" && b.due && b.due.startsWith(monthPfx));
       else if (filter.value === "thisMonth")     list = list.filter((b) => b.date && b.date.startsWith(monthPfx));
       else if (filter.value === "readyToPost")   list = list.filter((b) => workflowStatus(b) === "APPROVED" && !isApPeriodLocked(billPeriod(b), closedThrough));
+      else if (filter.value === "returned")      list = list.filter((b) => isReturned(b));
       else if (filter.value === "perluDibayar")  list = list.filter((b) => b.approval === "approved" && b.pay !== "paid");
       else if (filter.value === "dueIn7")        list = list.filter((b) => b.pay !== "paid" && b.approval === "approved" && b.due && b.due > todayKey && b.due <= in7Key);
       // AP Outstanding card filter — exclude drafts so it matches the KPI's
@@ -758,7 +804,7 @@ export default function BillsPage() {
       else if (filter.value === "apoNotYetDue")  list = list.filter((b) => b.pay !== "paid" && b.approval !== "draft" && !isApPeriodLocked(billPeriod(b), closedThrough) && (!b.due || b.due > in7Key));
     }
     return list;
-  }, [filter, monthPfx, bills, closedThrough]);
+  }, [filter, monthPfx, bills, closedThrough, flagMap]);
 
   const vendorsInCorpus = useMemo(() => {
     const counts = new Map();
@@ -1058,7 +1104,7 @@ export default function BillsPage() {
               <span className="bp-cc-asof">as of {todayLabel}</span>
             </div>
             <div className="bp-cc-taskband">
-              {canApprove && billStats.reviewCount > 0 && (
+              {canApproveBills && billStats.reviewCount > 0 && (
                 <button type="button" className="bp-t2" onClick={() => selectTab("review")}>
                   <span className="bp-t2-lbl">Awaiting approval</span>
                   <span className="bp-t2-amt">{formatRupiah(billStats.reviewSum)}</span>
@@ -1067,15 +1113,16 @@ export default function BillsPage() {
                   <span className="bp-t2-cta">Review →</span>
                 </button>
               )}
-              {(canApprove || canCreate) && billStats.returnedCount > 0 && (
-                <button type="button" className="bp-t2" onClick={() => selectTab("review")}>
-                  <span className="bp-t2-lbl">Returned — needs rework</span>
+              {canDraftBills && billStats.returnedCount > 0 && (
+                <button type="button" className="bp-t2" onClick={() => selectCard("returned")}>
+                  <span className="bp-t2-lbl">Fix returned bills</span>
                   <span className="bp-t2-amt">{formatRupiah(billStats.returnedSum)}</span>
                   <span className="bp-t2-sub">{billStats.returnedCount} bill{billStats.returnedCount === 1 ? "" : "s"}</span>
+                  <span className="bp-t2-tag">returned by FM</span>
                   <span className="bp-t2-cta">Fix →</span>
                 </button>
               )}
-              {canApprove && billStats.verifiedReadyCount > 0 && (
+              {canPostBills && billStats.verifiedReadyCount > 0 && (
                 <button type="button" className="bp-t2" onClick={() => selectCard("readyToPost")}>
                   <span className="bp-t2-lbl">Ready to post</span>
                   <span className="bp-t2-amt">{formatRupiah(billStats.verifiedReadySum)}</span>
@@ -1084,21 +1131,12 @@ export default function BillsPage() {
                   <span className="bp-t2-cta">Post →</span>
                 </button>
               )}
-              {!canApprove && canCreate && billStats.draftCount > 0 && (
+              {canDraftBills && billStats.draftCount > 0 && (
                 <button type="button" className="bp-t2" onClick={() => selectTab("draft")}>
                   <span className="bp-t2-lbl">Submit drafts</span>
                   <span className="bp-t2-amt">{formatRupiah(billStats.draftSum)}</span>
                   <span className="bp-t2-sub">{billStats.draftCount} draft{billStats.draftCount === 1 ? "" : "s"}</span>
                   <span className="bp-t2-cta">Submit →</span>
-                </button>
-              )}
-              {apo.locked.count > 0 && (
-                <button type="button" className="bp-t2" onClick={() => selectCard("apoLocked")}>
-                  <span className="bp-t2-lbl">Reassign to period</span>
-                  <span className="bp-t2-amt">{formatRupiah(apo.locked.sum)}</span>
-                  <span className="bp-t2-sub">{apo.locked.count} bill{apo.locked.count === 1 ? "" : "s"}</span>
-                  <span className="bp-t2-tag sep">other periods</span>
-                  <span className="bp-t2-cta">Reassign →</span>
                 </button>
               )}
             </div>
@@ -1239,6 +1277,7 @@ export default function BillsPage() {
                             <LedgerRow
                               r={r}
                               bucket={rowBucket}
+                              flags={flagMap[r.id]}
                               isChecked={checked.has(r.id)}
                               onCheck={toggleRow}
                               onClick={() => navigate(`/bills/${r.id}`)}
@@ -1250,7 +1289,7 @@ export default function BillsPage() {
                               onVendorLeave={onVendorLeave}
                               showAgingBar={onJatuhTempo}
                               showKebab={canCreate}
-                              periodLocked={isApPeriodLocked(billPeriod(r.raw), closedThrough) && ["PENDING_REVIEW", "RETURNED", "APPROVED"].includes(workflowStatus(r.raw))}
+                              periodLocked={!autoAssignLateBills && isApPeriodLocked(billPeriod(r.raw), closedThrough) && ["PENDING_REVIEW", "RETURNED", "APPROVED"].includes(workflowStatus(r.raw))}
                             />
                             {menuOpenFor === r.id && (
                               <div style={{ position: "absolute", right: 32, top: 32, zIndex: 5 }}>
@@ -1278,6 +1317,7 @@ export default function BillsPage() {
                         <LedgerRow
                           r={r}
                           bucket={bucket}
+                          flags={flagMap[r.id]}
                           isChecked={checked.has(r.id)}
                           onCheck={toggleRow}
                           onClick={() => navigate(`/bills/${r.id}`)}
@@ -1289,7 +1329,7 @@ export default function BillsPage() {
                           onVendorLeave={onVendorLeave}
                           showAgingBar={onJatuhTempo}
                           showKebab={canCreate}
-                          periodLocked={isApPeriodLocked(billPeriod(r.raw), closedThrough) && ["PENDING_REVIEW", "RETURNED", "APPROVED"].includes(workflowStatus(r.raw))}
+                          periodLocked={!autoAssignLateBills && isApPeriodLocked(billPeriod(r.raw), closedThrough) && ["PENDING_REVIEW", "RETURNED", "APPROVED"].includes(workflowStatus(r.raw))}
                         />
                         {menuOpenFor === r.id && (
                           <div style={{ position: "absolute", right: 32, top: 32, zIndex: 5 }}>

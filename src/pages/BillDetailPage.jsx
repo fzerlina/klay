@@ -2,6 +2,7 @@ import { useState, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { VENDORS } from "../data/seed/vendors";
 import { useBills } from "../state/BillsContext";
+import { usePayments, PAYMENT_STATUS_META } from "../state/PaymentsContext";
 import { useJournalEntries } from "../state/JournalEntriesContext";
 import { formatRupiah, formatDateEn, initials } from "../lib/format";
 import {
@@ -24,6 +25,7 @@ import {
   FIELD_LABELS,
 } from "../lib/billConfidence";
 import { previewJournalLines, buildJournalEntry } from "../lib/billJournalPreview";
+import { billFlags, canPost, SEVERITY } from "../lib/reviewWorkflow";
 import "./modules.css";
 import "./bill-detail.css";
 
@@ -41,7 +43,7 @@ const PAY_LABEL      = { paid: "Paid", unpaid: "Unpaid", overdue: "Overdue" };
 // receipts, comments) and need just the module's view level. Used by ActionBar.
 const AP_ACTION_LEVEL = {
   "Approve":           "approve+post",
-  "Post":              "approve+post",
+  "Post":              "post",
   "Record payment":    "approve+post",
   "Put on hold":       "approve+post",
   "Return to AP":      "approve+post",
@@ -444,63 +446,14 @@ function VendorContextPanel({ vendor }) {
 // stepper rather than as inline steps — they're "off the happy path."
 // RETURNED is shown inline when it's the current state, with the reason text.
 
-function StatusStepper({ bill, brief }) {
+function StatusStepper({ bill, paymentStage = "unpaid" }) {
   const ws = workflowStatus(bill);
   const ov = DEMO_OVERRIDES[bill.id] || {};
-  const cause = statusCause(bill);
 
-  // Branching states get a banner, no stepper. When the brief also has
-  // flagged fields, fold them into this same callout so the FM sees one
-  // unified "this bill is blocked because…" surface instead of two
-  // overlapping ones (exception banner + field-level brief).
-  const fieldsList = brief && brief.count > 0 ? brief.fields.slice(0, 4) : [];
-  const extraCount = brief && brief.count > 4 ? brief.count - 4 : 0;
-  if (ws === "EXCEPTION") {
-    return (
-      <div className="bd-banner bd-banner-exception">
-        <div className="bd-banner-icon" aria-hidden>⚠</div>
-        <div className="bd-banner-body">
-          <div className="bd-banner-lbl">Exception</div>
-          <div className="bd-banner-msg">{ov.exception?.reason || cause}</div>
-          {fieldsList.length > 0 && (
-            <ul className="bd-banner-fields">
-              {fieldsList.map((f, i) => (
-                <li key={i} className={`bd-brief-item bd-brief-item-${f.visual_state.toLowerCase()}`}>
-                  <span className="bd-brief-item-lbl">{f.label}</span>
-                  <span className="bd-brief-item-sep">—</span>
-                  <span className="bd-brief-item-reason">{f.reason}</span>
-                </li>
-              ))}
-              {extraCount > 0 && <li className="bd-brief-more">+ {extraCount} more</li>}
-            </ul>
-          )}
-        </div>
-      </div>
-    );
-  }
-  if (ws === "ON_HOLD") {
-    return (
-      <div className="bd-banner bd-banner-hold">
-        <div className="bd-banner-icon" aria-hidden>⏸</div>
-        <div className="bd-banner-body">
-          <div className="bd-banner-lbl">On Hold</div>
-          <div className="bd-banner-msg">{cause}</div>
-          {fieldsList.length > 0 && (
-            <ul className="bd-banner-fields">
-              {fieldsList.map((f, i) => (
-                <li key={i} className={`bd-brief-item bd-brief-item-${f.visual_state.toLowerCase()}`}>
-                  <span className="bd-brief-item-lbl">{f.label}</span>
-                  <span className="bd-brief-item-sep">—</span>
-                  <span className="bd-brief-item-reason">{f.reason}</span>
-                </li>
-              ))}
-              {extraCount > 0 && <li className="bd-brief-more">+ {extraCount} more</li>}
-            </ul>
-          )}
-        </div>
-      </div>
-    );
-  }
+  // EXCEPTION / ON_HOLD no longer get their own banner — the reason lives in the
+  // single "What needs your attention" list. The stepper still shows where the
+  // bill sits in its lifecycle (using its underlying approval state below).
+  const isBranchState = ws === "EXCEPTION" || ws === "ON_HOLD";
 
   // Two lifecycles. The pre-posting stepper (Draft → Pending Review → Approved
   // → Posted) stays in view through APPROVED ("ready to post") and only flips
@@ -512,17 +465,22 @@ function StatusStepper({ bill, brief }) {
   let returnedReason = null;
 
   if (isPostApproval) {
-    // Payment lifecycle. PARTIAL only fires when sisa is strictly between 0
-    // and total — none of the demo bills currently hit this, but the step
-    // renders so the lifecycle is visible end-to-end.
+    // Payment lifecycle: Unpaid → Requested → Approved → Partial → Paid. The
+    // active node is driven by the payment stage (PaymentsContext) plus the
+    // ledger balance. PARTIAL only fires when sisa is strictly between 0 and
+    // total (partial payments aren't wired yet, so it renders idle for now).
     steps = [
-      { key: "OPEN",    label: "Open" },
-      { key: "PARTIAL", label: "Partial" },
-      { key: "PAID",    label: "Paid" },
+      { key: "UNPAID",    label: "Unpaid" },
+      { key: "REQUESTED", label: "Requested" },
+      { key: "APPROVED",  label: "Approved" },
+      { key: "PARTIAL",   label: "Partial" },
+      { key: "PAID",      label: "Paid" },
     ];
-    if (bill.pay === "paid")                          activeKey = "PAID";
-    else if (bill.sisa > 0 && bill.sisa < bill.total) activeKey = "PARTIAL";
-    else                                              activeKey = "OPEN";
+    if (bill.pay === "paid" || paymentStage === "paid")   activeKey = "PAID";
+    else if (bill.sisa > 0 && bill.sisa < bill.total)     activeKey = "PARTIAL";
+    else if (paymentStage === "approved")                 activeKey = "APPROVED";
+    else if (paymentStage === "requested")                activeKey = "REQUESTED";
+    else                                                  activeKey = "UNPAID";
   } else {
     // Review lifecycle. RETURNED only appears as an inline step when the bill
     // is currently in that state; otherwise we skip it so the happy-path
@@ -535,7 +493,10 @@ function StatusStepper({ bill, brief }) {
       { key: "POSTED",         label: "Posted" },
     ];
     steps = ws === "RETURNED" ? baseSteps : baseSteps.filter((s) => s.key !== "RETURNED");
-    activeKey = ws;
+    // EXCEPTION / ON_HOLD aren't lifecycle steps — highlight the underlying
+    // approval stage instead so the stepper still reads correctly.
+    const approvalToStep = { draft: "DRAFT", review: "PENDING_REVIEW", approved: bill.je_number ? "POSTED" : "APPROVED" };
+    activeKey = isBranchState ? (approvalToStep[bill.approval] || "DRAFT") : ws;
     if (ws === "RETURNED") returnedReason = ov.returned?.reason;
   }
 
@@ -570,9 +531,6 @@ function StatusStepper({ bill, brief }) {
         <div className="bd-stepper-note">
           <span className="bd-stepper-note-lbl">FM returned:</span> {returnedReason}
         </div>
-      )}
-      {!returnedReason && cause && (
-        <div className="bd-stepper-cause">{cause}</div>
       )}
     </div>
   );
@@ -1023,7 +981,7 @@ function SourceFaktur({ bill, vendor }) {
 // it on period-lock status. SoD enforcement is deferred — see the
 // "demo: SoD not enforced" note on the left of the bar.
 
-function ActionBar({ bill, onAction, onSecondary, gateReason, periodLocked, lockedPeriodLabel, onReassign, perm, note }) {
+function ActionBar({ bill, onAction, onSecondary, gateReason, periodLocked, lockedPeriodLabel, onReassign, perm, note, paymentPrimaryLabel }) {
   if (!bill) return null;
   const ws = workflowStatus(bill);
   const ov = DEMO_OVERRIDES[bill.id] || {};
@@ -1068,7 +1026,7 @@ function ActionBar({ bill, onAction, onSecondary, gateReason, periodLocked, lock
     case "RETURNED":       primary = "Edit & resubmit";    secondaries = []; break;
     case "ON_HOLD":        primary = "Release hold";       secondaries = ["Edit", "Cancel bill"]; break;
     case "APPROVED":       primary = "Post";               secondaries = ["Revert to review", "Edit"]; break;
-    case "POSTED":         primary = "Record payment";     secondaries = ["View GL entry"]; break;
+    case "POSTED":         primary = paymentPrimaryLabel;   secondaries = ["View GL entry"]; break;
     case "PAID":           primary = null;                 secondaries = ["View receipt", "Revert to unpaid"]; break;
     case "EXCEPTION":      primary = exceptionPrimaryLabel; secondaries = ["Skip — mark for later"]; break;
     default:               primary = "Edit";               secondaries = [];
@@ -1134,6 +1092,84 @@ function ActionBar({ bill, onAction, onSecondary, gateReason, periodLocked, lock
         </div>
       </div>
     </>
+  );
+}
+
+// ─── Review checklist ────────────────────────────────────────────────────────
+// The rules-engine flags for this bill (reviewWorkflow.js) with their exit-
+// condition actions: "Yes, I have reviewed" acknowledges a REVIEW flag; the
+// FM-only "Override" clears an overridable BLOCKING flag (e.g. Tax Omitted with
+// an SKB on file). ADVISORY flags are context-only. A bill can't post until its
+// blocking flags are fixed (data corrected) or overridden.
+const SEV_META = {
+  BLOCKING: { label: "Blocking", cls: "blocking" },
+  REVIEW:   { label: "Review",   cls: "review" },
+  ADVISORY: { label: "Advisory", cls: "advisory" },
+};
+function ReviewChecklist({ items, okMessage, canReview, canOverride, onReviewed, onOverride, onConfirmField }) {
+  const rank = { BLOCKING: 0, REVIEW: 1, ADVISORY: 2 };
+  const sorted = [...(items || [])].sort((a, b) => rank[a.severity] - rank[b.severity]);
+  const openCount = sorted.filter((f) => f.status === "open" && f.severity !== SEVERITY.ADVISORY).length;
+
+  if (sorted.length === 0) {
+    if (!okMessage) return null;
+    return (
+      <div className="bd-review-checklist">
+        <div className="bd-rc-empty">
+          <span className="bd-rc-empty-ico" aria-hidden>
+            <svg viewBox="0 0 12 12"><polyline points="2.5 6 5 8.5 9.5 4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          </span>
+          {okMessage}
+        </div>
+      </div>
+    );
+  }
+
+  // Resolve the single action affordance per item — one consistent vocabulary
+  // whether the item is a rule-engine flag or a field-confidence gap.
+  const renderAction = (f) => {
+    if (f.status && f.status !== "open") {
+      return <span className="bd-rc-done">{f.status === "overridden" ? "Overridden" : "Reviewed ✓"}</span>;
+    }
+    if (f.severity === SEVERITY.ADVISORY) return <span className="bd-rc-info">FYI</span>;
+    if (f.source === "status") return <span className="bd-rc-info">Resolve below</span>;
+    if (f.source === "field") {
+      if (f.severity === SEVERITY.REVIEW) {
+        return canReview ? <button type="button" className="bd-rc-btn" onClick={() => onConfirmField(f.fields)}>Confirm</button> : null;
+      }
+      return <span className="bd-rc-blocked">Fix in Detail</span>; // RED field(s) — edit the value in the Detail tab
+    }
+    // rule flag
+    if (f.severity === SEVERITY.REVIEW) {
+      return canReview ? <button type="button" className="bd-rc-btn" onClick={() => onReviewed(f)}>Yes, I have reviewed</button> : null;
+    }
+    if (f.overridable && canOverride) {
+      return <button type="button" className="bd-rc-btn override" onClick={() => onOverride(f)}>Override</button>;
+    }
+    return <span className="bd-rc-blocked">Fix to clear</span>;
+  };
+
+  return (
+    <div className="bd-review-checklist">
+      <div className="bd-rc-head">
+        <span className="bd-rc-title">What needs your attention</span>
+        <span className="bd-rc-sub">{openCount === 0 ? "all clear" : `${openCount} to do`}</span>
+      </div>
+      {sorted.map((f) => {
+        const meta = SEV_META[f.severity];
+        const resolved = f.status && f.status !== "open";
+        return (
+          <div key={f.id} className={`bd-rc-item ${meta.cls}${resolved ? " resolved" : ""}`}>
+            <span className={`bd-rc-sev ${meta.cls}`}>{meta.label}</span>
+            <div className="bd-rc-body">
+              <div className="bd-rc-label">{f.label}</div>
+              <div className="bd-rc-msg">{f.message}</div>
+            </div>
+            <div className="bd-rc-actions">{renderAction(f)}</div>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -1256,9 +1292,10 @@ export default function BillDetailPage() {
   const navigate = useNavigate();
   const { id } = useParams();
   const { bills, updateBill } = useBills();
+  const { statusOf: paymentStatusOf, requestPayment, approvePayment, markPaid } = usePayments();
   const { addJournalEntry, peekNextJeNumber } = useJournalEntries();
-  const { closedThrough } = useClosePeriod();
-  const { hasLevel, level, user } = useCurrentUser();
+  const { closedThrough, autoAssignLateBills, nextOpenPeriod } = useClosePeriod();
+  const { hasLevel, hasCapability, level, user } = useCurrentUser();
   const [tab, setTab] = useState("detail");
   const [docView, setDocView] = useState("invoice");
   const [toast, setToast] = useState("");
@@ -1306,22 +1343,129 @@ export default function BillDetailPage() {
     };
   };
 
-  // Gate the Post button on any YELLOW/RED field. Faktur Pajak is now accurate
-  // (reads the faktur number actually on the bill), so a genuinely-missing
-  // faktur on a PKP vendor correctly blocks posting until the FM enters it
-  // inline — no longer a blanket exclusion.
-  const realBlockers = Object.values(fields).filter(
-    (f) => f.visual_state === "YELLOW" || f.visual_state === "RED",
-  );
-  const gateReason = realBlockers.length > 0
-    ? `${realBlockers.length} flagged field${realBlockers.length === 1 ? "" : "s"} need attention before posting`
+  const canReviewFlags = hasLevel("ap", "transact"); // AP Staff owns the fix/ack
+  const canOverrideFlags = hasCapability("ap.approve"); // FM override authority
+
+  // ── Payment CTA (posted bills) — mirrors AP Aging: role + payment-stage
+  // aware. Only the actor whose stage is current sees an action.
+  const paymentStage = paymentStatusOf(bill.id);
+  let paymentPrimaryLabel = null;
+  if (workflowStatus(bill) === "POSTED") {
+    if (hasCapability("payment.request") && paymentStage === "unpaid") paymentPrimaryLabel = "Request payment";
+    else if (hasCapability("payment.approve") && paymentStage === "requested") paymentPrimaryLabel = "Approve payment";
+    else if (hasCapability("payment.execute") && paymentStage === "approved") paymentPrimaryLabel = "Mark as paid";
+  }
+
+  // ── Unified "what needs your attention" list ────────────────────────────
+  // ONE to-do list, merging the review rules engine (reviewWorkflow.js) with the
+  // field-confidence gaps. Rule flags are authoritative for anything they cover
+  // (severity per the review flowchart); field-confidence items only fill fields
+  // no rule flag already speaks to, so nothing is listed twice.
+  const flags = billFlags(bill, vendor, { autoAssignLateBills });
+  const FLAG_FIELD_COVER = {
+    faktur_missing: ["faktur"],
+    price_anomaly: ["total", "poNo"],
+    tax_amount_mismatch: ["ppn", "total"],
+    tax_omitted: ["ppn"],
+    tax_mismatch_obligation: ["ppn"],
+    vendor_data: ["vendor"],
+  };
+  const coveredFields = new Set(flags.flatMap((f) => FLAG_FIELD_COVER[f.key] || []));
+  // Multiple fields flagged by the SAME underlying signal (e.g. one "OCR
+  // readings unreliable" anomaly hits PO No. + DPP + Total) collapse into a
+  // single item — "Check PO No., DPP & Total — <reason>" — instead of one row
+  // per field. Group by the shared reason text.
+  const joinLabels = (a) => (a.length <= 1 ? (a[0] || "") : `${a.slice(0, -1).join(", ")} & ${a[a.length - 1]}`);
+  const fieldGroups = new Map();
+  for (const f of ((brief && brief.fields) ? brief.fields : [])) {
+    if (coveredFields.has(f.field)) continue;
+    const key = f.reason || f.label;
+    if (!fieldGroups.has(key)) fieldGroups.set(key, []);
+    fieldGroups.get(key).push(f);
+  }
+  const fieldItems = [...fieldGroups.entries()].map(([reason, group]) => {
+    const names = group.map((g) => g.field);
+    const labels = group.map((g) => g.label);
+    const anyRed = group.some((g) => g.visual_state === "RED");
+    return {
+      id: `fields:${names.join("+")}`,
+      source: "field",
+      fields: names,
+      label: group.length > 1 ? `Check ${joinLabels(labels)}` : labels[0],
+      message: reason,
+      severity: anyRed ? SEVERITY.BLOCKING : SEVERITY.REVIEW,
+      status: "open",
+    };
+  });
+  // An ON_HOLD bill's hold reason becomes a review-list item (it's a real
+  // workflow state, not an anomaly). "Exception" is no longer a status — those
+  // bills' problems surface as ordinary review flags instead.
+  const wsState = workflowStatus(bill);
+  const ovState = DEMO_OVERRIDES[bill.id] || {};
+  const statusItems = [];
+  if (ovState.returned) {
+    statusItems.push({ id: "status:returned", source: "status", severity: SEVERITY.REVIEW, label: "Returned by FM", message: ovState.returned.reason ? `Returned — ${ovState.returned.reason}` : "Returned by the Finance Manager — fix and resubmit.", status: "open" });
+  }
+  if (wsState === "ON_HOLD") {
+    statusItems.push({ id: "status:hold", source: "status", severity: SEVERITY.REVIEW, label: "On hold", message: ovState.onHold?.reason ? `On hold — ${ovState.onHold.reason}` : statusCause(bill), status: "open" });
+  }
+  const attentionItems = [...statusItems, ...flags.map((f) => ({ ...f, source: "rule" })), ...fieldItems];
+
+  // Post gate: any OPEN blocking item (rule or field). Overridden rule flags drop
+  // out; RED field items clear when their value is fixed in the Detail form.
+  const openBlocking = attentionItems.filter((i) => i.severity === SEVERITY.BLOCKING && i.status !== "overridden");
+  const gateReason = openBlocking.length > 0
+    ? `${openBlocking.length} blocking item${openBlocking.length === 1 ? "" : "s"} to clear before posting`
     : null;
+  const attentionOk = attentionItems.length === 0 && bill.approval !== "approved" && !bill.je_number
+    ? "Everything looks good — nothing to review."
+    : null;
+
+  function onMarkReviewed(f) {
+    const ack = [...(bill.review_ack || [])];
+    if (!ack.includes(f.id)) ack.push(f.id);
+    updateBill(bill.id, { review_ack: ack }, {
+      type:   "reviewed",
+      action: `Reviewed: ${f.label}`,
+      by:     user?.name || "Reviewer",
+      ...nowAuditStamp(),
+    });
+    showToast(`Marked "${f.label}" as reviewed`);
+  }
+  function onOverrideFlag(f) {
+    const overrides = [...(bill.review_overrides || [])];
+    if (!overrides.some((o) => o.id === f.id)) {
+      overrides.push({ id: f.id, reason: f.label === "Tax Omitted" ? "SKB on file — FM override" : "FM override", by: user?.name || "Finance Manager", at: nowAuditStamp().date });
+    }
+    updateBill(bill.id, { review_overrides: overrides }, {
+      type:   "override",
+      action: `Overrode blocking flag: ${f.label}`,
+      by:     user?.name || "Finance Manager",
+      ...nowAuditStamp(),
+    });
+    showToast(`Overrode "${f.label}"`);
+  }
+  // Confirm a grouped field item — resolve every anomaly hitting any of its
+  // fields in ONE update (so a batched "Confirm" doesn't clobber itself).
+  function confirmFields(fieldNames) {
+    const resolved = new Set(bill.anomalies_resolved || []);
+    for (const fn of fieldNames) for (const idx of anomalyIndexesForField(bill, fn)) resolved.add(idx);
+    updateBill(bill.id, { anomalies_resolved: [...resolved] }, {
+      type:   "reviewed",
+      action: `Confirmed: ${fieldNames.map((fn) => FIELD_LABELS[fn] || fn).join(", ")}`,
+      by:     user?.name || "Reviewer",
+      ...nowAuditStamp(),
+    });
+    showToast(`Confirmed ${fieldNames.length} field${fieldNames.length === 1 ? "" : "s"}`);
+  }
 
   // Period-lock gate — read the dynamic closedThrough from ClosePeriodContext.
   // When the bill's accounting period is locked, the Post action is disabled
   // and a Reassign affordance lets the FM move the bill to the current open
   // period (the path of least resistance per the AP Close PRD).
-  const billPeriodLocked = isApPeriodLocked(billPeriod(bill), closedThrough);
+  // With auto-assign ON (default), late bills roll to the open period on their
+  // own — no manual reassign, so the lock never gates the FM here.
+  const billPeriodLocked = !autoAssignLateBills && isApPeriodLocked(billPeriod(bill), closedThrough);
   const lockedPeriodLabel = billPeriodLocked ? periodLabel(billPeriod(bill)) : null;
   function onReassignToCurrentPeriod() {
     // Reassign moves only the accounting `period` to the first day of the next
@@ -1390,14 +1534,24 @@ export default function BillDetailPage() {
         navigate("/bills");
         break;
       }
-      case "Record payment":
+      // Payment flow (mirrors AP Aging) — role + stage aware.
+      case "Request payment":
+        requestPayment([bill.id], user?.name || AP_USER);
+        showToast(`Payment requested for ${bill.id}`);
+        break;
+      case "Approve payment":
+        approvePayment([bill.id], user?.name || FM_USER);
+        showToast(`Payment approved for ${bill.id}`);
+        break;
+      case "Mark as paid":
+        markPaid([bill.id], user?.name || "Finance Staff");
         updateBill(bill.id, { pay: "paid", sisa: 0 }, {
           type:   "paid",
-          action: "Payment recorded",
-          by:     AP_USER,
+          action: "Payment executed & marked paid",
+          by:     user?.name || "Finance Staff",
           ...stamp,
         });
-        showToast(`Payment recorded for ${bill.id}`);
+        showToast(`${bill.id} marked paid`);
         break;
       default:
         // DEMO_OVERRIDES-driven actions (Release hold, Edit & resubmit, etc.)
@@ -1556,21 +1710,20 @@ export default function BillDetailPage() {
           <SourcePanel bill={bill} vendor={vendor} docView={docView} setDocView={setDocView} />
         </div>
 
-        {/* Right: review brief + status stepper + form. When the bill is in
-            EXCEPTION or ON_HOLD, the stepper-banner absorbs the brief's
-            field list (one merged callout, not two competing surfaces). */}
+        {/* Right: status stepper + ONE unified "what needs your attention"
+            checklist (rule flags + field-confidence gaps) + form. */}
         <div className="bd-form">
           <div className="bd-form-top">
-            {(() => {
-              const ws = workflowStatus(bill);
-              const merged = ws === "EXCEPTION" || ws === "ON_HOLD";
-              return (
-                <>
-                  {!merged && <ReviewBrief brief={brief} />}
-                  <StatusStepper bill={bill} brief={brief} />
-                </>
-              );
-            })()}
+            <StatusStepper bill={bill} paymentStage={paymentStage} />
+            <ReviewChecklist
+              items={attentionItems}
+              okMessage={attentionOk}
+              canReview={canReviewFlags}
+              canOverride={canOverrideFlags}
+              onReviewed={onMarkReviewed}
+              onOverride={onOverrideFlag}
+              onConfirmField={confirmFields}
+            />
           </div>
 
           <div className="drawer-tabs bd-tabs">
@@ -1642,21 +1795,41 @@ export default function BillDetailPage() {
                   />
                   <PlainRow
                     label="Accounting Period"
-                    value={
-                      billPeriod(bill) === (bill.date || "").slice(0, 7)
-                        ? periodLabel(billPeriod(bill))
-                        : (
+                    value={(() => {
+                      const invMonth = (bill.date || "").slice(0, 7);
+                      const stored = billPeriod(bill);
+                      if (stored !== invMonth) {
+                        // Manually reassigned to a different period.
+                        return (
                           <>
-                            {periodLabel(billPeriod(bill))}
-                            <span className="bd-period-reassigned"> · reassigned from {periodLabel((bill.date || "").slice(0, 7))}</span>
+                            {periodLabel(stored)}
+                            <span className="bd-period-reassigned"> · reassigned from {periodLabel(invMonth)}</span>
                           </>
-                        )
-                    }
+                        );
+                      }
+                      if (autoAssignLateBills && !bill.je_number && isApPeriodLocked(invMonth, closedThrough)) {
+                        // Late bill — auto-posted to the current open period.
+                        return (
+                          <>
+                            {periodLabel(nextOpenPeriod)}
+                            <span className="bd-period-reassigned"> · auto-assigned from {periodLabel(invMonth)} (period closed)</span>
+                          </>
+                        );
+                      }
+                      return periodLabel(stored);
+                    })()}
                   />
                   <FieldRow label="Due Date" value={formatDateEn(bill.due)} confidence={fields.due} />
                   <PlainRow label="Discount Due Date" value={bill.discountDueDate ? formatDateEn(bill.discountDueDate) : "—"} />
                   <PlainRow label="GRN Status" value={GRN_LABEL[bill.grn] || "—"} />
-                  <PlainRow label="Payment Status" value={PAY_LABEL[bill.pay]} />
+                  <PlainRow
+                    label="Payment Status"
+                    value={
+                      bill.pay === "paid" ? "Paid"
+                        : workflowStatus(bill) === "POSTED" ? (PAYMENT_STATUS_META[paymentStage]?.label || "Unpaid")
+                        : PAY_LABEL[bill.pay]
+                    }
+                  />
                   <SubRow
                     label="Bank Reconciliation Status"
                     value={RECON_LABEL[bill.bankReconStatus] || "—"}
@@ -1794,6 +1967,7 @@ export default function BillDetailPage() {
         onAction={onPrimary}
         onSecondary={onSecondary}
         perm={apActionPerm}
+        paymentPrimaryLabel={paymentPrimaryLabel}
         note={`Viewing as ${user.name} · ${apLevelLabel} on AP`}
       />
 

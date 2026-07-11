@@ -66,7 +66,12 @@ export function billPeriod(b) {
 // the DEMO_OVERRIDES table. Bills List + Bill Detail both render from this.
 export function workflowStatus(b) {
   const ov = DEMO_OVERRIDES[b.id];
-  if (ov?.state) return ov.state;
+  // Status = the journal lifecycle stage only (Draft / Pending Review / Approved
+  // / Posted / Paid). "Exception" and "Returned" are NOT statuses — they're
+  // labels reflecting review/approval outcomes. A returned bill is back with AP
+  // as a Draft (carrying a "Returned" label). ON_HOLD stays a real state.
+  if (ov?.state === "ON_HOLD") return "ON_HOLD";
+  if (ov?.returned) return "DRAFT";
   if (b.approval === "draft") return "DRAFT";
   if (b.approval === "review") return "PENDING_REVIEW";
   if (b.approval === "approved" && b.pay === "paid") return "PAID";
@@ -76,6 +81,15 @@ export function workflowStatus(b) {
   if (b.approval === "approved" && b.je_number) return "POSTED";
   if (b.approval === "approved") return "APPROVED";
   return "PENDING_REVIEW";
+}
+
+// "Returned" is an approval-workflow OUTCOME label, not a status. A returned
+// bill shows as Draft (back with AP) with this label appended.
+export function isReturned(b) {
+  return !!DEMO_OVERRIDES[b?.id]?.returned;
+}
+export function returnedReason(b) {
+  return DEMO_OVERRIDES[b?.id]?.returned?.reason || null;
 }
 
 // Short cause sentence shown under the status pill on the list row and under

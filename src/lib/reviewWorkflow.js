@@ -1,0 +1,294 @@
+// The AP review/approval RULES ENGINE — runs over non-posted bills and emits
+// flags at three severities, per Vina's flowchart (2026-07-11). See the memory
+// note "project-review-flag-engine" for the canonical spec.
+//
+//   BLOCKING  — stops posting (some overridable by the Finance Manager)
+//   REVIEW    — needs a human to acknowledge / fix; does NOT hard-block posting
+//   ADVISORY  — informational; never blocks
+//
+// The engine is PURE: computeBillFlags(bill) reads the bill + its vendor master
+// and returns a flat flag list. Resolution state (acknowledged / overridden)
+// lives on the bill record (review_ack / review_overrides), applied by the
+// selector helpers below so the UI can gate the Post action via canPost().
+//
+// Routing (Vina 2026-07-11): exceptions are primarily AP Staff's to fix — they
+// own the bill data. Accounting Manager sees the same items as oversight; the
+// Finance Manager approves and overrides BLOCKING flags. So every flag's
+// ownerRole is "ap_staff" except the structural Period-Locked block (FM).
+
+import { daysSince } from "./clock";
+import { workflowStatus, isApPeriodLocked, billPeriod } from "./billStatus";
+import { VENDORS } from "../data/seed/vendors";
+
+export const SEVERITY = { BLOCKING: "BLOCKING", REVIEW: "REVIEW", ADVISORY: "ADVISORY" };
+
+// Severity rank for sorting (most urgent first).
+export const SEVERITY_RANK = { BLOCKING: 0, REVIEW: 1, ADVISORY: 2 };
+
+// Tunables — in production these come from system_config (IA-tunable).
+const BIG_TXN_THRESHOLD = 500_000_000; // Rp — "Big Transaction" advisory
+const APPROVAL_STALLED_DAYS = 3; // days in PENDING_REVIEW before "Approval Stalled"
+const PPN_RATE_DEFAULT = 0.11;
+const FAKTUR_WINDOW_DAYS = 90; // ~3-month VAT input-credit window
+
+// Demo-only signals for checks the seed has no field for yet. Kept small and
+// explicit so the inbox shows a realistic spread without inventing data.
+const BANK_CHANGE_BILLS = new Set(["BILL021", "BILL032"]); // vendor bank changed
+const SKB_ON_FILE = new Set(["BILL033"]); // has a tax-exemption cert (SKB) → Tax Omitted overridable-clear
+
+export function getVendor(vendorId) {
+  return VENDORS.find((v) => v.id === vendorId) || null;
+}
+
+// Does this vendor's profile create a tax obligation (PPN and/or withholding)?
+function taxRequired(vendor) {
+  if (!vendor) return false;
+  return vendor.pkp === "PKP" || (vendor.pph && vendor.pph !== "none");
+}
+
+function anyTaxOnInvoice(bill) {
+  return (bill.ppn || 0) > 0 || (bill.pph23 || 0) > 0;
+}
+
+function isNonPosted(bill) {
+  if (bill.je_number) return false;
+  const ws = workflowStatus(bill);
+  return ws !== "POSTED" && ws !== "PAID";
+}
+
+// Build one flag object. `key` is stable per check so its id is stable per bill.
+function flag(bill, key, { label, severity, category, message, ownerRole = "ap_staff", overridable = false, side = false }) {
+  return {
+    id: `${bill.id}:${key}`,
+    key,
+    billId: bill.id,
+    label,
+    severity,
+    category,
+    message,
+    ownerRole,
+    blocking: severity === SEVERITY.BLOCKING,
+    overridable,
+    side, // a "separate from the sequence" branch (withholding/faktur windows) — never blocks
+  };
+}
+
+const has = (t, ...subs) => subs.some((s) => (t || "").toLowerCase().includes(s));
+
+// ── The engine ──────────────────────────────────────────────────────────────
+// Returns every flag the bill trips, in evaluation order. opts.autoAssignLateBills
+// (default true) reflects the Settings → Accounting toggle: when ON, a bill in a
+// closed period is auto-posted to the open period, so "Period Locked" never fires.
+export function computeBillFlags(bill, vendorArg, opts = {}) {
+  if (!bill || !isNonPosted(bill)) return [];
+  const { autoAssignLateBills = true } = opts;
+  const vendor = vendorArg || getVendor(bill.vendor);
+  const out = [];
+  const push = (...args) => out.push(flag(bill, ...args));
+
+  // 1) Vendor Checks ----------------------------------------------------------
+  // Required vendor-master field missing (a PKP vendor with no NPWP can't post).
+  if (vendor && vendor.pkp === "PKP" && !vendor.tax_id) {
+    push("vendor_data", {
+      label: "Complete Vendor Data", severity: SEVERITY.BLOCKING, category: "Vendor",
+      message: `${vendor.name} is PKP but has no NPWP on file — complete the vendor master before posting.`,
+    });
+  }
+  // New vendor — first invoice from this vendor.
+  if ((bill.anomalies || []).some((a) => has(a.description, "first invoice"))) {
+    push("vendor_new", {
+      label: "New Vendor", severity: SEVERITY.REVIEW, category: "Vendor",
+      message: "First invoice from this vendor — confirm the vendor is legitimate before it posts.",
+    });
+  }
+
+  // 2) Transaction Risk Checks ------------------------------------------------
+  if ((bill.total || 0) > BIG_TXN_THRESHOLD) {
+    push("big_txn", {
+      label: "Big Transaction", severity: SEVERITY.ADVISORY, category: "Transaction risk",
+      message: `Total Rp ${(bill.total).toLocaleString("id-ID")} exceeds the Rp ${BIG_TXN_THRESHOLD.toLocaleString("id-ID")} review threshold.`,
+    });
+  }
+  if ((bill.anomalies || []).some((a) => has(a.description, "higher than", "× higher", "x higher"))) {
+    push("price_anomaly", {
+      label: "Pricing Anomaly", severity: SEVERITY.REVIEW, category: "Transaction risk",
+      message: (bill.anomalies.find((a) => has(a.description, "higher")) || {}).description || "Price is out of line with this vendor's history.",
+    });
+  }
+  if ((bill.anomalies || []).some((a) => has(a.description, "duplicate"))) {
+    push("duplicate", {
+      label: "Transaction Duplicate", severity: SEVERITY.REVIEW, category: "Transaction risk",
+      message: (bill.anomalies.find((a) => has(a.description, "duplicate")) || {}).description || "Possible duplicate of another bill.",
+    });
+  }
+
+  // 3) Tax Obligation Checks --------------------------------------------------
+  const required = taxRequired(vendor);
+  const taxPresent = anyTaxOnInvoice(bill);
+  if (required && !taxPresent) {
+    // Tax expected but none on the invoice — blocking, but an SKB can override.
+    push("tax_omitted", {
+      label: "Tax Omitted", severity: SEVERITY.BLOCKING, category: "Tax",
+      overridable: true,
+      message: SKB_ON_FILE.has(bill.id)
+        ? "Tax expected but none on the invoice — an SKB (exemption cert) is on file; the FM can override to post."
+        : "Tax expected for this vendor but none is on the invoice. Fix the tax, or the FM overrides with an SKB.",
+    });
+  } else if (!required && taxPresent) {
+    // Vendor carries no tax obligation yet the invoice charges tax.
+    push("tax_mismatch_obligation", {
+      label: "Tax Mismatch", severity: SEVERITY.BLOCKING, category: "Tax",
+      message: `${vendor ? vendor.name : "This vendor"} has no tax obligation, but the invoice charges tax — verify before posting.`,
+    });
+  }
+
+  // 4) Tax Category / withholding-type check ----------------------------------
+  // Vendor expects withholding (PPh) but none was applied → soft review.
+  if (vendor && vendor.pph && vendor.pph !== "none" && (bill.pph23 || 0) === 0 && required) {
+    push("review_tax_type", {
+      label: "Review Tax", severity: SEVERITY.REVIEW, category: "Tax",
+      message: `${vendor.name} usually has PPh withholding, but none was applied — confirm the tax category.`,
+    });
+  }
+
+  // 5) Withholding deadline (separate branch — never blocks) -------------------
+  if (vendor && vendor.pph && vendor.pph !== "none" && (bill.pph23 || 0) > 0) {
+    const period = billPeriod(bill); // YYYY-MM
+    // PPh deposit deadline ≈ the 10th of the month after the bill period.
+    const [y, m] = period.split("-").map(Number);
+    if (y && m) {
+      const deadline = `${m === 12 ? y + 1 : y}-${String(m === 12 ? 1 : m + 1).padStart(2, "0")}-10`;
+      const dToDeadline = -daysSince(deadline); // positive = days remaining
+      if (dToDeadline < 0) {
+        push("wh_overdue", {
+          label: "Withholding overdue", severity: SEVERITY.ADVISORY, category: "Tax", side: true,
+          message: `PPh deposit deadline (${deadline}) has passed by ${Math.abs(dToDeadline)}d.`,
+        });
+      } else if (dToDeadline <= 30) {
+        push("wh_deadline", {
+          label: "Withholding deadline", severity: SEVERITY.ADVISORY, category: "Tax", side: true,
+          message: `PPh deposit due ${deadline} — ${dToDeadline}d left.`,
+        });
+      }
+    }
+  }
+
+  // 6) PPN faktur -------------------------------------------------------------
+  const fakturVal = bill.faktur_pajak || bill.fakturNo;
+  const fakturMissing = !fakturVal || fakturVal === "—";
+  if (vendor && vendor.pkp === "PKP" && (bill.ppn || 0) > 0 && fakturMissing) {
+    push("faktur_missing", {
+      label: "faktur missing", severity: SEVERITY.REVIEW, category: "Tax",
+      message: `${vendor.name} is PKP and the invoice has PPN, but no faktur pajak number is on the bill.`,
+    });
+    // faktur window (separate branch — never blocks)
+    const age = daysSince(bill.date);
+    if (age > FAKTUR_WINDOW_DAYS) {
+      push("faktur_forfeit", {
+        label: "VAT credit forfeited", severity: SEVERITY.ADVISORY, category: "Tax", side: true,
+        message: `Invoice is ${age}d old — past the ${FAKTUR_WINDOW_DAYS}d input-VAT credit window.`,
+      });
+    } else if (age > FAKTUR_WINDOW_DAYS - 30) {
+      push("faktur_critical", {
+        label: "faktur window critical", severity: SEVERITY.ADVISORY, category: "Tax", side: true,
+        message: `${FAKTUR_WINDOW_DAYS - age}d left to claim the input-VAT credit — enter the faktur soon.`,
+      });
+    }
+  }
+
+  // 7) Tax Amount Check -------------------------------------------------------
+  if ((bill.ppn || 0) > 0 && (bill.dpp || 0) > 0) {
+    const rate = bill.ppnRate || PPN_RATE_DEFAULT;
+    const expected = Math.round(bill.dpp * rate);
+    const drift = Math.abs((bill.ppn || 0) - expected);
+    if (drift > Math.max(1000, expected * 0.02)) {
+      push("tax_amount_mismatch", {
+        label: "Tax Amount Mismatch", severity: SEVERITY.BLOCKING, category: "Tax",
+        message: `PPN Rp ${(bill.ppn).toLocaleString("id-ID")} ≠ expected Rp ${expected.toLocaleString("id-ID")} (DPP × ${(rate * 100).toFixed(0)}%).`,
+      });
+    }
+  }
+
+  // 8) Additional flags (parallel) --------------------------------------------
+  const ws = workflowStatus(bill);
+  if (ws === "PENDING_REVIEW") {
+    const inQueue = Math.max(0, daysSince(bill.audit?.[0]?.date || bill.date));
+    if (inQueue > APPROVAL_STALLED_DAYS) {
+      push("approval_stalled", {
+        label: "Approval Stalled", severity: SEVERITY.ADVISORY, category: "Workflow",
+        message: `In review ${inQueue}d — past the ${APPROVAL_STALLED_DAYS}d target.`,
+      });
+    }
+  }
+  if (!autoAssignLateBills && isApPeriodLocked(billPeriod(bill))) {
+    push("period_locked", {
+      label: "Period Locked", severity: SEVERITY.BLOCKING, category: "Workflow",
+      ownerRole: "finance_manager", overridable: true,
+      message: `Bill period ${billPeriod(bill)} is closed — needs a reopen (FM) or reassignment to an open period.`,
+    });
+  }
+  if (BANK_CHANGE_BILLS.has(bill.id)) {
+    push("bank_change", {
+      label: "bank change", severity: SEVERITY.REVIEW, category: "Vendor",
+      message: "Vendor's bank account changed since the last payment — verify before paying.",
+    });
+  }
+  if (bill.poNo === "—" || bill.invNo === "—") {
+    push("missing_document", {
+      label: "missing document", severity: SEVERITY.REVIEW, category: "Documents",
+      message: "A source document (PO or invoice number) is missing — attach or enter it.",
+    });
+  }
+
+  return out;
+}
+
+// ── Resolution state + selectors ─────────────────────────────────────────────
+// review_ack: array of flag ids the owner acknowledged ("Yes, I have reviewed").
+// review_overrides: array of { id, reason, by, at } for FM-overridden BLOCKING flags.
+
+export function flagStatus(bill, f) {
+  if ((bill.review_overrides || []).some((o) => o.id === f.id)) return "overridden";
+  if ((bill.review_ack || []).includes(f.id)) return "reviewed";
+  return "open";
+}
+
+// Flags decorated with their current resolution status.
+export function billFlags(bill, vendorArg, opts) {
+  return computeBillFlags(bill, vendorArg, opts).map((f) => ({ ...f, status: flagStatus(bill, f) }));
+}
+
+// A bill can post when every BLOCKING flag is overridden. REVIEW/ADVISORY never
+// block (per the flowchart) — REVIEW is tracked for the queue, not gated.
+export function canPost(bill, vendorArg, opts) {
+  return computeBillFlags(bill, vendorArg, opts).every(
+    (f) => !f.blocking || flagStatus(bill, f) === "overridden",
+  );
+}
+
+// Counts by severity, honouring resolution (reviewed/overridden drop out of the
+// "open" tallies). Used by the Bills KPI strip + row chips.
+export function flagSummary(bill, vendorArg, opts) {
+  const flags = billFlags(bill, vendorArg, opts);
+  const open = flags.filter((f) => f.status === "open");
+  return {
+    total: flags.length,
+    openBlocking: open.filter((f) => f.severity === SEVERITY.BLOCKING).length,
+    openReview: open.filter((f) => f.severity === SEVERITY.REVIEW).length,
+    openAdvisory: open.filter((f) => f.severity === SEVERITY.ADVISORY).length,
+    open: open.length,
+    flags,
+    canPost: canPost(bill, vendorArg, opts),
+  };
+}
+
+// Does this bill belong in a given persona's review queue? AP Staff owns the
+// fixes; Accounting Manager sees the same items as oversight; FM sees the ones
+// needing approval/override. Used to scope the "My queue" filter.
+export function inQueueFor(roleKey, summary) {
+  if (summary.open === 0) return false;
+  if (roleKey === "finance_manager") return summary.openBlocking > 0 || summary.openReview > 0;
+  if (roleKey === "accounting_manager") return summary.open > 0;
+  // ap_staff (and everyone operational) — the primary fix queue
+  return summary.openBlocking > 0 || summary.openReview > 0;
+}

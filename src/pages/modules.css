@@ -649,6 +649,15 @@
 .bp-status-label.approved{color:#2D5A7F}
 .bp-status-label.muted{color:var(--color-text-tertiary)}
 .bp-status-cause{font-size:10.5px;color:var(--color-text-tertiary);line-height:1.35;margin-top:1px;font-style:italic;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Exception chip (reviewWorkflow.js) — blocking+review flags counted together */
+.bp-status-label-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.bp-flag-chips{display:inline-flex;align-items:center;gap:3px}
+.bp-exc-chip{height:16px;padding:0 7px;display:inline-flex;align-items:center;border-radius:var(--radius-full,999px);font-size:9.5px;font-weight:700;letter-spacing:.02em;line-height:1;border:1px solid transparent;white-space:nowrap}
+.bp-exc-chip.blocking{background:#FBE9E9;color:#A32D2D;border-color:#F0C9C9}
+.bp-exc-chip.review{background:#FBF1E0;color:#BA7517;border-color:#EEDCBB}
+/* Approval-outcome label (e.g. Returned) — appended to the status, not a status itself */
+.bp-approval-tag{height:16px;padding:0 7px;display:inline-flex;align-items:center;border-radius:var(--radius-full,999px);font-size:9.5px;font-weight:700;letter-spacing:.02em;line-height:1;border:1px solid transparent;white-space:nowrap}
+.bp-approval-tag.returned{background:#FBE9E9;color:#A32D2D;border-color:#F0C9C9}
 .bp-status-aging{margin-top:5px}
 
 /* Anomaly dot — kept inline in the Status cell */
