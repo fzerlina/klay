@@ -44,3 +44,38 @@
 .btn-add-bank{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-sans);font-size:12px;font-weight:500;color:var(--color-text-tertiary);background:transparent;border:1.5px dashed var(--color-border-default);border-radius:var(--radius-md);padding:10px 14px;cursor:pointer;transition:all var(--transition-fast);width:100%;justify-content:center}
 .btn-add-bank:hover{border-color:var(--color-action);color:var(--color-action);background:var(--ai-surface)}
 .btn-add-bank svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round}
+
+/* ── PRD rebuild: status, tiers, dedup, PPh recommendation ──────────────── */
+
+/* Draft status pill in the header */
+.vc-status{display:inline-flex;align-items:center;gap:6px;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:3px 10px;border-radius:100px;background:var(--color-warning-surface);color:var(--color-warning-text);border:1px solid var(--color-warning-border)}
+
+/* Small hint that a proposed field is confirmed later, before activation */
+.vc-fm-hint{font-size:10px;color:var(--color-action);margin-top:3px;font-weight:500;display:inline-flex;align-items:center;gap:4px}
+
+/* Finance-Manager-only locked section (Tier 3 bank on the AP-Staff create flow) */
+.vc-lock{display:flex;align-items:flex-start;gap:9px;padding:14px;background:var(--color-surface-sunken);border:1px dashed var(--color-border-default);border-radius:var(--radius-md);font-size:12px;color:var(--color-text-secondary);line-height:1.5}
+.vc-lock svg{width:15px;height:15px;stroke:var(--color-text-tertiary);fill:none;stroke-width:1.6;flex-shrink:0;margin-top:1px}
+.vc-lock strong{color:var(--color-text-primary);font-weight:600}
+
+/* NPWP deduplication brief (PRD Zone 2) */
+.vc-dedup{margin-top:10px;padding:12px 14px;background:var(--color-warning-surface);border:1px solid var(--color-warning-border);border-radius:var(--radius-md)}
+.vc-dedup-title{font-size:10px;font-weight:700;color:var(--color-warning-text);text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px;display:flex;align-items:center;gap:6px}
+.vc-dedup-body{font-size:12px;color:var(--color-text-secondary);line-height:1.5}
+.vc-dedup-body strong{color:var(--color-text-primary);font-weight:600}
+.vc-dedup-actions{display:flex;gap:8px;margin-top:11px;flex-wrap:wrap}
+.vc-dedup-btn{font-family:var(--font-sans);font-size:11px;font-weight:600;padding:6px 11px;border-radius:var(--radius-sm);cursor:pointer;border:1px solid var(--color-border-default);background:var(--color-surface-raised);color:var(--color-text-secondary);transition:all var(--transition-fast)}
+.vc-dedup-btn.primary{background:var(--color-action);color:#fff;border-color:var(--color-action)}
+.vc-dedup-btn:hover{border-color:var(--color-action)}
+
+/* PPh AI recommendation chip (PRD Zone 3) */
+.vc-pph-rec{margin-top:8px;padding:10px 12px;background:var(--ai-surface);border:1px solid var(--ai-border);border-radius:var(--radius-md);display:flex;align-items:flex-start;gap:10px}
+.vc-pph-rec-body{flex:1;min-width:0;font-size:11.5px;color:var(--color-text-secondary);line-height:1.5}
+.vc-pph-rec-lbl{font-size:10px;font-weight:700;color:var(--color-action);text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px;display:flex;align-items:center;gap:5px}
+.vc-pph-rec-btn{font-family:var(--font-sans);font-size:11px;font-weight:600;padding:6px 11px;border-radius:var(--radius-sm);cursor:pointer;background:var(--color-action);color:#fff;border:none;white-space:nowrap;flex-shrink:0;align-self:center}
+.vc-pph-rec-btn:disabled{opacity:.5;cursor:default}
+
+/* No-capability notice */
+.vc-noaccess{max-width:520px;margin:64px auto;text-align:center;padding:36px 32px;background:var(--color-surface-raised);border:1px solid var(--color-border-default);border-radius:var(--radius-lg)}
+.vc-noaccess h2{font-family:var(--font-display);font-size:20px;font-weight:800;color:var(--color-text-primary);margin:0 0 8px}
+.vc-noaccess p{font-size:13px;color:var(--color-text-secondary);line-height:1.55;margin:0 0 18px}
