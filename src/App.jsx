@@ -14,6 +14,7 @@ import InvoicesPage from "./pages/InvoicesPage";
 import InvoiceCreatePage from "./pages/InvoiceCreatePage";
 import VendorsPage from "./pages/VendorsPage";
 import VendorCreatePage from "./pages/VendorCreatePage";
+import VendorDetailPage from "./pages/VendorDetailPage";
 import CustomersPage from "./pages/CustomersPage";
 import CustomerCreatePage from "./pages/CustomerCreatePage";
 import GeneralLedgerPage from "./pages/GeneralLedgerPage";
@@ -111,6 +112,7 @@ export default function App() {
                 <Route path="/invoices/new" element={<InvoiceCreatePage />} />
                 <Route path="/vendors" element={<VendorsPage />} />
                 <Route path="/vendors/new" element={<RequireLevel module="ap" level="transact" action="add vendors"><VendorCreatePage /></RequireLevel>} />
+                <Route path="/vendors/:id" element={<VendorDetailPage />} />
                 <Route path="/customers" element={<CustomersPage />} />
                 <Route path="/customers/new" element={<CustomerCreatePage />} />
                 <Route path="/trial-balance" element={<TrialBalancePage />} />

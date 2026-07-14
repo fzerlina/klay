@@ -1,0 +1,131 @@
+/* ── VENDOR DETAIL PAGE ─────────────────────────────────────────────────── */
+.vd-page{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden;background:var(--color-surface-base)}
+.vd-scroll{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden}
+
+/* Top bar */
+.vd-top{display:flex;align-items:flex-start;gap:16px;padding:22px 32px 16px;background:var(--color-surface-base)}
+.vd-back{width:32px;height:32px;border-radius:var(--radius-sm);border:1px solid var(--color-border-default);background:var(--color-surface-raised);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0}
+.vd-back svg{width:16px;height:16px;stroke:var(--color-text-secondary);fill:none;stroke-width:1.8}
+.vd-back:hover{border-color:var(--color-action)}
+.vd-av{width:44px;height:44px;border-radius:12px;background:var(--color-surface-sunken);border:1px solid var(--color-border-default);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;color:var(--color-text-secondary);flex-shrink:0}
+.vd-headinfo{flex:1;min-width:0}
+.vd-title-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.vd-title{font-family:var(--font-display);font-size:24px;font-weight:800;letter-spacing:-.02em;color:var(--color-text-primary);line-height:1.1}
+.vd-sub{font-size:12px;color:var(--color-text-tertiary);margin-top:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.vd-actions{display:flex;align-items:center;gap:8px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end}
+
+/* Status pill + health chip */
+.vd-status{display:inline-flex;align-items:center;gap:6px;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:3px 10px;border-radius:100px;border:1px solid}
+.vd-status.pending{background:var(--color-warning-surface);color:var(--color-warning-text);border-color:var(--color-warning-border)}
+.vd-status.active{background:var(--color-success-surface,#E7F3EC);color:var(--color-success-text,#1B7A46);border-color:var(--color-success-border,#B8DCC6)}
+.vd-status.inactive{background:var(--color-surface-sunken);color:var(--color-text-tertiary);border-color:var(--color-border-default)}
+.vd-status.blocked{background:var(--color-danger-surface);color:var(--color-danger-text);border-color:var(--color-danger-border)}
+.vd-hchip{display:inline-flex;align-items:center;padding:2px 8px;border-radius:100px;font-size:9.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+.vd-hchip.review{background:var(--color-warning-surface);color:var(--color-warning-text);border:1px solid var(--color-warning-border)}
+.vd-hchip.flagged{background:var(--color-danger-surface);color:var(--color-danger-text);border:1px solid var(--color-danger-border)}
+
+/* Action buttons */
+.vd-btn{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-sans);font-size:12px;font-weight:600;padding:7px 13px;border-radius:var(--radius-sm);cursor:pointer;white-space:nowrap;border:1px solid var(--color-border-default);background:var(--color-surface-raised);color:var(--color-text-secondary);transition:all var(--transition-fast)}
+.vd-btn:hover{border-color:var(--color-action);color:var(--color-action)}
+.vd-btn svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.8}
+.vd-btn.primary{background:var(--color-action);color:#fff;border-color:var(--color-action)}
+.vd-btn.primary:hover{filter:brightness(.94);color:#fff}
+.vd-btn.danger{color:var(--color-danger-text);border-color:var(--color-danger-border)}
+.vd-btn.danger:hover{background:var(--color-danger-surface);color:var(--color-danger-text)}
+.vd-btn:disabled{opacity:.5;cursor:default}
+.vd-btn:disabled:hover{border-color:var(--color-danger-border);background:transparent}
+
+/* Confirmation modal (Deactivate / Block / Reject) */
+.vd-modal-overlay{position:fixed;inset:0;background:rgba(20,16,12,.42);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px}
+.vd-modal{background:var(--color-surface-raised);border:1px solid var(--color-border-default);border-radius:var(--radius-lg);padding:22px 22px 18px;width:100%;max-width:430px;box-shadow:0 16px 48px rgba(0,0,0,.2)}
+.vd-modal-title{font-family:var(--font-display);font-size:17px;font-weight:800;color:var(--color-text-primary);margin-bottom:8px}
+.vd-modal-body{font-size:12.5px;color:var(--color-text-secondary);line-height:1.55}
+.vd-modal-reason{width:100%;margin-top:12px;padding:9px 11px;border:1px solid var(--color-border-default);border-radius:var(--radius-sm);font-family:inherit;font-size:12px;resize:vertical;background:var(--color-surface-base)}
+.vd-modal-reason:focus{outline:none;border-color:var(--color-action)}
+.vd-modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+
+/* Health / status alert banner */
+.vd-alert{margin:0 32px;padding:12px 16px;border-radius:var(--radius-md);display:flex;align-items:flex-start;gap:10px;font-size:12.5px;line-height:1.5}
+.vd-alert svg{width:15px;height:15px;flex-shrink:0;margin-top:1px;fill:none;stroke-width:1.7;stroke:currentColor}
+.vd-alert.review{background:var(--color-warning-surface);border:1px solid var(--color-warning-border);color:var(--color-warning-text)}
+.vd-alert.flagged{background:var(--color-danger-surface);border:1px solid var(--color-danger-border);color:var(--color-danger-text)}
+.vd-alert.info{background:var(--color-surface-sunken);border:1px solid var(--color-border-default);color:var(--color-text-secondary)}
+.vd-alert strong{font-weight:700}
+
+/* Tabs */
+.vd-tabs{display:flex;gap:2px;padding:0 32px;border-bottom:1px solid var(--color-border-default);margin-top:16px}
+.vd-tab{padding:10px 14px;font-size:12.5px;font-weight:600;color:var(--color-text-tertiary);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;background:none;border-top:none;border-left:none;border-right:none;font-family:inherit}
+.vd-tab.active{color:var(--color-text-primary);border-bottom-color:var(--color-action)}
+.vd-tab-count{margin-left:6px;font-size:11px;opacity:.7}
+
+/* Body */
+.vd-body{padding:20px 32px 64px;max-width:1040px}
+.vd-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+@media(max-width:860px){.vd-grid{grid-template-columns:1fr}}
+.vd-card{background:var(--color-surface-raised);border:1px solid var(--color-border-default);border-radius:var(--radius-lg);padding:16px 18px}
+.vd-card.span2{grid-column:1 / -1}
+.vd-card-title{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--color-text-tertiary);margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.vd-row{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid var(--color-border-subtle);font-size:12.5px}
+.vd-row:last-child{border-bottom:none}
+.vd-row-lbl{color:var(--color-text-tertiary);flex-shrink:0}
+.vd-row-val{color:var(--color-text-primary);text-align:right;font-weight:500;min-width:0;word-break:break-word}
+.vd-row-val.mono{font-family:var(--font-mono)}
+.vd-row-val.dim{color:var(--color-text-tertiary);font-weight:400}
+
+/* Bank cards */
+.vd-bank{background:var(--color-surface-sunken);border:1px solid var(--color-border-default);border-radius:var(--radius-md);padding:12px 14px;margin-bottom:8px}
+.vd-bank:last-child{margin-bottom:0}
+.vd-bank-def{font-size:9px;font-weight:700;color:var(--color-action);letter-spacing:.06em;text-transform:uppercase;margin-bottom:5px}
+.vd-bank-name{font-size:12.5px;font-weight:600;color:var(--color-text-primary)}
+.vd-bank-acc{font-family:var(--font-mono);font-size:13px;font-weight:700;color:var(--color-text-primary);margin-top:3px;letter-spacing:.04em}
+.vd-bank-holder{font-size:11px;color:var(--color-text-tertiary);margin-top:3px}
+
+/* Health setter */
+.vd-health-set{display:inline-flex;gap:4px}
+.vd-health-set button{font-size:10.5px;font-weight:600;padding:3px 9px;border-radius:100px;border:1px solid var(--color-border-default);background:var(--color-surface-raised);color:var(--color-text-tertiary);cursor:pointer;font-family:inherit}
+.vd-health-set button.on.healthy{background:var(--color-success-surface,#E7F3EC);border-color:var(--color-success-border,#B8DCC6);color:var(--color-success-text,#1B7A46)}
+.vd-health-set button.on.review{background:var(--color-warning-surface);border-color:var(--color-warning-border);color:var(--color-warning-text)}
+.vd-health-set button.on.flagged{background:var(--color-danger-surface);border-color:var(--color-danger-border);color:var(--color-danger-text)}
+
+/* Health panel metrics */
+.vd-metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+@media(max-width:640px){.vd-metrics{grid-template-columns:1fr 1fr}}
+.vd-metric-lbl{font-size:10px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--color-text-tertiary)}
+.vd-metric-val{font-size:18px;font-weight:800;color:var(--color-text-primary);margin-top:3px;font-family:var(--font-mono)}
+.vd-metric-val.danger{color:var(--color-danger-text)}
+
+/* Transactions */
+.vd-tx-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px;gap:12px;flex-wrap:wrap}
+.vd-tx-out-lbl{font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--color-text-tertiary)}
+.vd-tx-out{font-size:22px;font-weight:800;color:var(--color-text-primary);font-family:var(--font-mono)}
+.vd-tx-tablewrap{overflow-x:auto}
+.vd-tx-table{width:100%;border-collapse:collapse;font-size:12.5px}
+.vd-tx-table th{text-align:left;font-size:9.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--color-text-tertiary);padding:8px 10px;border-bottom:1px solid var(--color-border-default);white-space:nowrap}
+.vd-tx-table td{padding:10px;border-bottom:1px solid var(--color-border-subtle);white-space:nowrap}
+.vd-tx-table td.num{text-align:right;font-family:var(--font-mono)}
+.vd-tx-row{cursor:pointer}
+.vd-tx-row:hover{background:var(--color-surface-sunken)}
+/* Tone badges — shared by Journal + Payment status columns */
+.vd-badge{display:inline-block;padding:2px 9px;border-radius:100px;font-size:10px;font-weight:700;white-space:nowrap}
+.vd-badge.success{background:var(--color-success-surface,#E7F3EC);color:var(--color-success-text,#1B7A46)}
+.vd-badge.review{background:var(--color-warning-surface);color:var(--color-warning-text)}
+.vd-badge.action{background:var(--color-action-wash,#E8EDFB);color:var(--color-action)}
+.vd-badge.muted{background:var(--color-surface-sunken);color:var(--color-text-tertiary)}
+
+/* Add-bank modal form */
+.vd-bank-form{margin-top:6px}
+.vd-bank-form label{display:block;font-size:10.5px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--color-text-tertiary);margin:11px 0 4px}
+.vd-bank-form input{width:100%;padding:8px 10px;border:1px solid var(--color-border-default);border-radius:var(--radius-sm);font-family:inherit;font-size:12.5px;background:var(--color-surface-base)}
+.vd-bank-form input:focus{outline:none;border-color:var(--color-action)}
+.vd-bank-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+
+/* Activity log */
+.vd-log{list-style:none;margin:0;padding:0}
+.vd-log-item{display:flex;gap:12px;padding:11px 0;border-bottom:1px solid var(--color-border-subtle)}
+.vd-log-item:last-child{border-bottom:none}
+.vd-log-dot{width:8px;height:8px;border-radius:50%;background:var(--color-action);margin-top:5px;flex-shrink:0}
+.vd-log-body{flex:1;min-width:0}
+.vd-log-action{font-size:12.5px;font-weight:600;color:var(--color-text-primary)}
+.vd-log-detail{font-size:12px;color:var(--color-text-secondary)}
+.vd-log-meta{font-size:11px;color:var(--color-text-tertiary);margin-top:2px}
+.vd-empty{padding:36px;text-align:center;color:var(--color-text-tertiary);font-size:12.5px}
