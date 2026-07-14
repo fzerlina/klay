@@ -16,6 +16,15 @@ export const PPH_LABELS = {
   pph21: 'Withholding Tax (PPh 21) — individuals',
 };
 
+// Compact PPh labels for table columns where the full description is too long.
+export const PPH_SHORT_LABELS = {
+  none: 'None',
+  pph23_2: 'PPh 23 · 2%',
+  pph23_15: 'PPh 23 · 15%',
+  pph4_final: 'PPh 4(2)',
+  pph21: 'PPh 21',
+};
+
 // Vendor "default account" labels — should mirror leaf accounts in seed/coa.js.
 // Kept here so the vendor dropdown stays a fixed shortlist; pages render
 // arbitrary account labels via COA_BY_CODE lookup.
