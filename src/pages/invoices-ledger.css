@@ -5,6 +5,8 @@
 
 /* ── EDITORIAL HEADER ─────────────────────────────────────────────────────── */
 .lg-head{padding:28px 32px 0;background:var(--color-surface-raised);border-bottom:1px solid var(--color-border-default);flex-shrink:0}
+/* Plain variant — title sits on the page background (no white band), with room below */
+.lg-head.lg-head-plain{background:transparent;border-bottom:none;padding-bottom:24px}
 .lg-head-top{display:flex;align-items:flex-start;justify-content:space-between;gap:24px}
 .lg-title{font-family:var(--font-display);font-size:32px;font-weight:900;letter-spacing:-.025em;line-height:1.05;color:var(--color-text-primary)}
 
@@ -118,11 +120,20 @@
 
 /* Ledger row — very subtle alternating fill on .alt; hover + selected take precedence */
 .lg-row{display:grid;grid-template-columns:30px 130px 100px 1fr 70px 110px 170px 180px 30px;padding:10px 32px;align-items:center;border-bottom:1px solid var(--color-border-subtle);background:var(--color-surface-raised);cursor:pointer;transition:background var(--transition-fast)}
-/* Vendors / Customers grid — master-data, no aging column */
-.lg-card.lg-table-vendor .lg-row,
-.lg-card.lg-table-vendor .lg-col-header,
+/* Customers grid — master-data, no aging column */
 .lg-card.lg-table-customer .lg-row,
 .lg-card.lg-table-customer .lg-col-header{grid-template-columns:30px 90px 1fr 130px 110px 140px 150px 100px 30px}
+/* Vendors grid — code · name(+health chip) · NPWP · terms · PPh · bank · last tx · category · kebab */
+.lg-card.lg-table-vendor .lg-row,
+.lg-card.lg-table-vendor .lg-col-header{grid-template-columns:84px 1fr 128px 66px 104px 140px 116px 92px 30px}
+/* Vendor name row — name truncates but the health chip / tier stay visible */
+.lg-table-vendor .lg-cell-customer-name{display:flex;align-items:center;min-width:0}
+.lg-table-vendor .lg-cell-customer-name .vh-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:0 1 auto;min-width:0}
+.lg-table-vendor .lg-cell-customer-name > :not(.vh-name){flex-shrink:0}
+/* Vendor health chip — sits beside the name; none when healthy */
+.vh-chip{display:inline-flex;align-items:center;margin-left:7px;padding:1px 7px;border-radius:100px;font-size:9px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;vertical-align:middle;white-space:nowrap}
+.vh-chip.review{background:var(--color-warning-surface);color:var(--color-warning-text);border:1px solid var(--color-warning-border)}
+.vh-chip.flagged{background:var(--color-danger-surface);color:var(--color-danger-text);border:1px solid var(--color-danger-border)}
 /* Bills table — adds the 'Original' currency column (PRD §Multi-Currency)
    between Status and Total · IDR so the FM can cross-check the IDR total
    against the vendor's source-currency invoice. SME feedback. */
