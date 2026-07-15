@@ -621,10 +621,6 @@
 .bp-source-icon.bp-source-recurring{color:#5B7A2E}
 .lg-cell-no-text{display:inline-block;vertical-align:middle}
 
-/* New 8-column grid for the Bills table — scoped to .bp-card so other lg-tables are untouched */
-.bp-card .lg-col-header,
-.bp-card .lg-row{grid-template-columns:30px 130px 120px 260px 120px 1fr 170px 30px}
-
 /* Urgency sort explainer ribbon — sits between the column header and the rows */
 .bp-sort-hint{display:flex;align-items:center;gap:8px;padding:8px 18px;font-family:var(--font-sans);font-size:11px;color:var(--color-text-tertiary);background:var(--color-surface-sunken);border-bottom:1px solid var(--color-border-subtle);line-height:1.4}
 .bp-sort-hint svg{width:12px;height:12px;color:var(--color-text-tertiary);flex-shrink:0}
@@ -655,9 +651,17 @@
 .bp-exc-chip{height:16px;padding:0 7px;display:inline-flex;align-items:center;border-radius:var(--radius-full,999px);font-size:9.5px;font-weight:700;letter-spacing:.02em;line-height:1;border:1px solid transparent;white-space:nowrap}
 .bp-exc-chip.blocking{background:#FBE9E9;color:#A32D2D;border-color:#F0C9C9}
 .bp-exc-chip.review{background:#FBF1E0;color:#BA7517;border-color:#EEDCBB}
-/* Approval-outcome label (e.g. Returned) — appended to the status, not a status itself */
-.bp-approval-tag{height:16px;padding:0 7px;display:inline-flex;align-items:center;border-radius:var(--radius-full,999px);font-size:9.5px;font-weight:700;letter-spacing:.02em;line-height:1;border:1px solid transparent;white-space:nowrap}
-.bp-approval-tag.returned{background:#FBE9E9;color:#A32D2D;border-color:#F0C9C9}
+/* Returned — FM bounced the bill back. A flag layered on top of the status
+   (the bill sits as Draft), not a status of its own. */
+.bp-exc-chip.returned{background:#FBE9E9;color:#A32D2D;border-color:#F0C9C9}
+/* Payment Status badge — the payment-request lifecycle (PaymentsContext),
+   shared with Vendors & AP Aging. Tones mirror PAYMENT_STATUS_META. */
+.lg-cell-pay{display:flex;align-items:center;min-width:0}
+.bp-pay-badge{display:inline-block;padding:2px 9px;border-radius:100px;font-size:10px;font-weight:700;white-space:nowrap;line-height:1.5}
+.bp-pay-badge.success{background:var(--color-success-surface,#E7F3EC);color:var(--color-success-text,#1B7A46)}
+.bp-pay-badge.review{background:var(--color-warning-surface);color:var(--color-warning-text)}
+.bp-pay-badge.action{background:var(--color-action-wash,#E8EDFB);color:var(--color-action)}
+.bp-pay-badge.muted{background:var(--color-surface-sunken);color:var(--color-text-tertiary)}
 .bp-status-aging{margin-top:5px}
 
 /* Anomaly dot — kept inline in the Status cell */

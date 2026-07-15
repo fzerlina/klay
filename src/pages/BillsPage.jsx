@@ -18,6 +18,7 @@ import { flagSummary } from "../lib/reviewWorkflow";
 import { useBills } from "../state/BillsContext";
 import { useClosePeriod } from "../state/ClosePeriodContext";
 import { useCurrentUser } from "../state/CurrentUserContext";
+import { usePayments, PAYMENT_STATUS_META } from "../state/PaymentsContext";
 import AiChatDrawer, { SparkleIcon as DrawerSparkle } from "./AiChatDrawer";
 import { computeBillsInsights, makeBillsAiContext } from "./ai-bills-context";
 import "./modules.css";
@@ -33,13 +34,7 @@ function fmtRp(n) {
 function toRow(b) {
   const v = vendors.find((x) => x.id === b.vendor);
   const dOver = daysSince(b.due);
-  // Currency contract: `b.total`/`b.sisa`/`b.dpp`/`b.ppn`/`b.pph23` are ALWAYS
-  // stored in IDR (the entity's functional currency / canonical books).
-  // For foreign-currency bills, `original_currency` + `original_total` carry
-  // the source-currency view that the vendor invoiced in — used only by the
-  // "Original" column on the Bills List for cross-checking against the
-  // vendor's source-currency document.
-  const originalCur = b.original_currency || "IDR";
+  // Amounts are always stored in IDR (the entity's functional currency).
   return {
     id: b.id,
     no: b.invNo === "—" || !b.invNo ? b.id : b.invNo,
@@ -49,9 +44,6 @@ function toRow(b) {
     due: formatDate(b.due),
     daysOverdue: dOver,
     total: b.total,                                                          // IDR
-    original: originalCur !== "IDR" && b.original_total != null
-      ? { code: originalCur, amount: b.original_total }
-      : null,
     sisa: b.sisa,
     approval: b.approval,
     pay: b.pay,
@@ -83,15 +75,6 @@ function formatMonthLabel(yyyymm) {
 }
 
 // ─── Components ─────────────────────────────────────────────────────────────
-
-function SparkleIcon({ size = 11 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M6 1.5l1.1 2.7L9.8 5l-2.7 0.8L6 8.5l-1.1-2.7L2.2 5l2.7-0.8L6 1.5z" />
-      <path d="M10 8.5l0.4 1L11.5 10l-1.1 0.4L10 11.5l-0.4-1.1L8.5 10l1.1-0.5L10 8.5z" />
-    </svg>
-  );
-}
 
 function SourceChannelIcon({ channel }) {
   const titleByChannel = {
@@ -177,19 +160,24 @@ function BillFlagChips({ summary }) {
   );
 }
 
-function LedgerRow({ r, bucket, flags, isChecked, onCheck, onClick, onKebab, isSelected, isAlt, onIdHover, onIdLeave, onVendorHover, onVendorLeave, showAgingBar, showKebab = true, periodLocked = false }) {
+function LedgerRow({ r, bucket, flags, isChecked, onCheck, onClick, onKebab, isSelected, isAlt, onIdHover, onIdLeave, onVendorHover, onVendorLeave, showAgingBar, showKebab = true, periodLocked = false, statusOf }) {
   const isOverdue = r.pay === "overdue" && r.daysOverdue > 0;
   const isPaid = r.pay === "paid";
   const ws = workflowStatus(r.raw);
   const causeText = statusCause(r.raw);
-  const statusLabel = STATUS_LABEL[ws] || ws;
+  // Journal (workflow) status. "Paid" is a payment fact, not a journal stage —
+  // a paid bill reads as "Posted" here; its Paid state shows in Payment Status.
+  const statusLabel = ws === "PAID" ? "Posted" : (STATUS_LABEL[ws] || ws);
+  // Payment status — the app-wide request lifecycle (PaymentsContext), same as
+  // Vendors & AP Aging: unpaid → requested → approved → paid.
+  const payKey = r.pay === "paid" ? "paid" : (statusOf ? statusOf(r.id) : "unpaid");
+  const payMeta = PAYMENT_STATUS_META[payKey] || PAYMENT_STATUS_META.unpaid;
   const pct = isOverdue && bucket
     ? Math.min(100, Math.max(8, ((r.daysOverdue - bucket.minDays) / ((bucket.maxDaysCap - bucket.minDays) || 30)) * 100))
     : 0;
   const statusToneClass =
     ws === "EXCEPTION" || ws === "RETURNED" ? "danger" :
     ws === "ON_HOLD" ? "warn" :
-    ws === "PAID" ? "success" :
     ws === "APPROVED" ? "approved" :
     ws === "DRAFT" ? "muted" :
     "";
@@ -230,7 +218,9 @@ function LedgerRow({ r, bucket, flags, isChecked, onCheck, onClick, onKebab, isS
         <div className="bp-status-cell-body">
           <div className="bp-status-label-row">
             <div className={`bp-status-label${statusToneClass ? " " + statusToneClass : ""}`}>{statusLabel}</div>
-            {isReturned(r.raw) && <span className="bp-approval-tag returned" title="Returned by the Finance Manager — fix and resubmit">Returned</span>}
+            <span className="bp-flag-chips">
+              {isReturned(r.raw) && <span className="bp-exc-chip returned" title="Returned by the Finance Manager — fix and resubmit">Returned</span>}
+            </span>
             <BillFlagChips summary={flags} />
           </div>
           {periodLocked && (
@@ -249,15 +239,8 @@ function LedgerRow({ r, bucket, flags, isChecked, onCheck, onClick, onKebab, isS
           )}
         </div>
       </div>
-      <div className="lg-cell-original">
-        {r.original ? (
-          <>
-            <span className="lg-cell-orig-code">{r.original.code}</span>
-            <span className="lg-cell-orig-amt">{fmtRp(r.original.amount)}</span>
-          </>
-        ) : (
-          <span className="lg-cell-orig-empty">—</span>
-        )}
+      <div className="lg-cell-pay">
+        <span className={`bp-pay-badge ${payMeta.tone}`}>{payMeta.label}</span>
       </div>
       <div className="lg-cell-total">
         <span className="lg-cell-total-rp">Rp</span>{fmtRp(r.total)}
@@ -325,14 +308,6 @@ const SORT_LABELS = {
   "vendor-desc":     "Vendor Z-A",
 };
 
-const GROUP_LABELS = {
-  "none":   "—",
-  "aging":  "Aging",
-  "vendor": "Vendor",
-  "bulan":  "Month",
-  "status": "Payment Status",
-};
-
 function useClickOutside(ref, onClose) {
   useEffect(() => {
     const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
@@ -358,36 +333,12 @@ function SortPopover({ value, onPick, onClose }) {
   );
 }
 
-function GroupPopover({ value, canAging, onPick, onClose }) {
-  const ref = useRef(null);
-  useClickOutside(ref, onClose);
-  const items = [
-    { k: "none",   lbl: "Not grouped" },
-    { k: "aging",  lbl: "Aging", disabled: !canAging },
-    { k: "vendor", lbl: "Vendor" },
-    { k: "bulan",  lbl: "Month (Bill Date)" },
-    { k: "status", lbl: "Payment Status" },
-  ];
-  return (
-    <div className="lg-popover" ref={ref}>
-      <div className="lg-popover-list">
-        {items.map((it) => (
-          <button key={it.k} className={`lg-popover-item${value === it.k ? " selected" : ""}`} disabled={it.disabled} onClick={() => !it.disabled && onPick(it.k)}>
-            {it.lbl}
-            {value === it.k && <svg className="lg-popover-check" viewBox="0 0 12 12"><polyline points="2 6 5 9 10 3"/></svg>}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function FilterPopover({ values, onChange, vendors: vendorList, anomalyOnly, onAnomalyToggle, anomalyCount, onClose }) {
+function FilterPopover({ values, onChange, vendors: vendorList, exceptionOnly, onExceptionToggle, exceptionCount, onClose }) {
   const ref = useRef(null);
   useClickOutside(ref, onClose);
   const [draft, setDraft] = useState(values);
   const [vendorSearch, setVendorSearch] = useState("");
-  const [draftAnomaly, setDraftAnomaly] = useState(!!anomalyOnly);
+  const [draftException, setDraftException] = useState(!!exceptionOnly);
 
   const update = (patch) => setDraft((d) => ({ ...d, ...patch }));
   const toggleVendor = (id) => setDraft((d) => {
@@ -396,17 +347,17 @@ function FilterPopover({ values, onChange, vendors: vendorList, anomalyOnly, onA
     return { ...d, vendors: next };
   });
   const filteredV = vendorList.filter((v) => !vendorSearch || v.name.toLowerCase().includes(vendorSearch.toLowerCase()));
-  const reset = () => { setDraft({ vendors: new Set(), minAmount: "", maxAmount: "", dateFrom: "", dateTo: "", dateField: "date", grn: "all" }); setDraftAnomaly(false); };
-  const apply = () => { onChange(draft); onAnomalyToggle(draftAnomaly); onClose(); };
+  const reset = () => { setDraft({ vendors: new Set(), minAmount: "", maxAmount: "", dateFrom: "", dateTo: "", dateField: "date" }); setDraftException(false); };
+  const apply = () => { onChange(draft); onExceptionToggle(draftException); onClose(); };
 
   return (
     <div className="lg-popover lg-filter-pop" ref={ref}>
       <div className="lg-filter-body">
         <div className="lg-filter-fld">
           <label className="bp-filter-anom-row">
-            <input type="checkbox" checked={draftAnomaly} onChange={(e) => setDraftAnomaly(e.target.checked)} />
-            <span className="bp-filter-anom-text">Only show bills with anomalies</span>
-            {anomalyCount > 0 && <span className="bp-filter-anom-count">{anomalyCount}</span>}
+            <input type="checkbox" checked={draftException} onChange={(e) => setDraftException(e.target.checked)} />
+            <span className="bp-filter-anom-text">Only show bills with exceptions</span>
+            {exceptionCount > 0 && <span className="bp-filter-anom-count">{exceptionCount}</span>}
           </label>
         </div>
         <div className="lg-filter-fld">
@@ -453,14 +404,6 @@ function FilterPopover({ values, onChange, vendors: vendorList, anomalyOnly, onA
           </div>
         </div>
 
-        <div className="lg-filter-fld">
-          <div className="lg-filter-fld-lbl">GRN Status</div>
-          <div className="lg-toggle-row">
-            {[["all", "All"], ["matched", "Matched"], ["pending", "Pending"], ["mismatch", "Mismatch"]].map(([k, lbl]) => (
-              <button key={k} className={`lg-toggle${draft.grn === k ? " on" : ""}`} onClick={() => update({ grn: k })}>{lbl}</button>
-            ))}
-          </div>
-        </div>
       </div>
       <div className="lg-filter-foot">
         <button className="lg-filter-reset" onClick={reset}>Reset</button>
@@ -541,6 +484,7 @@ export default function BillsPage() {
   const canPostBills = hasCapability("ap.post");         // Accounting Manager + FM
   const { bills } = useBills();
   const { closedThrough, autoAssignLateBills } = useClosePeriod();
+  const { statusOf } = usePayments();
 
   // Review-flag engine — per-bill severity summary (reviewWorkflow.js). Keyed by
   // bill id. A bill has an "exception" when it carries an open blocking or review
@@ -557,10 +501,10 @@ export default function BillsPage() {
 
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState({ kind: "tab", value: "semua" });
-  const [anomalyFilter, setAnomalyFilter] = useState(false);
+  const [exceptionFilter, setExceptionFilter] = useState(false);
   const [sortChoice, setSortChoice] = useState(null);
   const [groupChoice, setGroupChoice] = useState(null);
-  const emptyFilters = { vendors: new Set(), minAmount: "", maxAmount: "", dateFrom: "", dateTo: "", dateField: "date", grn: "all" };
+  const emptyFilters = { vendors: new Set(), minAmount: "", maxAmount: "", dateFrom: "", dateTo: "", dateField: "date" };
   const [filterValues, setFilterValues] = useState(emptyFilters);
 
   const [checked, setChecked] = useState(() => new Set());
@@ -568,7 +512,6 @@ export default function BillsPage() {
   const [collapsedGroups, setCollapsedGroups] = useState(() => new Set());
 
   const [sortPopOpen, setSortPopOpen] = useState(false);
-  const [groupPopOpen, setGroupPopOpen] = useState(false);
   const [filterPopOpen, setFilterPopOpen] = useState(false);
 
   const [aiOpen, setAiOpen] = useState(false);
@@ -720,21 +663,6 @@ export default function BillsPage() {
   // exposure. Action items live in the task band, not here.
   const insightItems = useMemo(() => insights.filter((it) => ["vendorConcentration", "largest"].includes(it.id)), [insights]);
 
-  // Close is a pure STATUS gate: a current-period bill blocks close until it
-  // reaches "posted" (approved + paid). Exceptions/anomalies don't form their
-  // own gate — they just keep a bill short of posted (the post step enforces a
-  // clean bill). So the blockers surface through the existing pipeline boxes
-  // (awaiting approval → ready to post); the counter is their sum.
-  const closeBlocking = useMemo(() => {
-    const inApr = (b) => b.date && b.date.startsWith(monthPfx);
-    // Only UN-POSTED bills block the close — once posted they're in the GL.
-    const review = bills.filter((b) => inApr(b) && workflowStatus(b) === "PENDING_REVIEW").length;
-    const ready = bills.filter((b) => inApr(b) && workflowStatus(b) === "APPROVED").length;
-    return { review, ready, total: review + ready };
-  }, [bills, monthPfx]);
-
-  const todayLabel = useMemo(() => formatDate(TODAY.toISOString().slice(0, 10)), []);
-  const monthLabel = useMemo(() => formatMonthLabel(monthPfx), [monthPfx]);
 
   function askAi(question) {
     setAiSeedQuestion(question);
@@ -746,8 +674,9 @@ export default function BillsPage() {
     const byStatus = (s) => bills.filter((b) => workflowStatus(b) === s).length;
     return {
       semua:      bills.length,
-      // Review tab includes PENDING_REVIEW + RETURNED (per PRD; pinned section disambiguates)
-      review:     byStatus("PENDING_REVIEW") + byStatus("RETURNED"),
+      // Pending Review tab = PENDING_REVIEW only. Returned bills are Drafts
+      // carrying a "Returned" flag, so they count under Draft, not here.
+      review:     byStatus("PENDING_REVIEW"),
       approved:   byStatus("APPROVED"),
       posted:     byStatus("POSTED"),
       draft:      byStatus("DRAFT"),
@@ -758,13 +687,16 @@ export default function BillsPage() {
     };
   }, [bills, flagMap]);
 
+  // Tabs are the scoped-down `workflow_status` set: Draft · Pending Review ·
+  // Approved, plus All. Neither Exceptions nor Returned are statuses — they're
+  // flags layered on top of a bill's status (rendered as row chips), so they
+  // get no tab. Posted bills live under All (Bills ends at Posted; the payment
+  // lifecycle is AP Aging's job).
   const tabs = [
-    { k: "semua",      lbl: "All",         count: tabCounts.semua },
-    { k: "review",     lbl: "Review",      count: tabCounts.review },
-    { k: "approved",   lbl: "Approved",    count: tabCounts.approved },
-    { k: "posted",     lbl: "Posted",      count: tabCounts.posted },
-    { k: "draft",      lbl: "Draft",       count: tabCounts.draft },
-    { k: "exception",  lbl: "Exceptions",  count: tabCounts.exception },
+    { k: "semua",      lbl: "All",             count: tabCounts.semua },
+    { k: "review",     lbl: "Pending Review",  count: tabCounts.review },
+    { k: "approved",   lbl: "Approved",        count: tabCounts.approved },
+    { k: "draft",      lbl: "Draft",           count: tabCounts.draft },
   ];
 
   // ── Corpus ─────────────────────────────────────────────────────────────
@@ -776,7 +708,7 @@ export default function BillsPage() {
     if (filter.kind === "tab") {
       if (filter.value === "approved")       list = list.filter((b) => workflowStatus(b) === "APPROVED");
       else if (filter.value === "posted")    list = list.filter((b) => workflowStatus(b) === "POSTED");
-      else if (filter.value === "review")    list = list.filter((b) => ["PENDING_REVIEW", "RETURNED"].includes(workflowStatus(b)));
+      else if (filter.value === "review")    list = list.filter((b) => workflowStatus(b) === "PENDING_REVIEW");
       else if (filter.value === "draft")     list = list.filter((b) => workflowStatus(b) === "DRAFT");
       else if (filter.value === "jatuhtempo")list = list.filter((b) => b.pay === "overdue" && workflowStatus(b) !== "EXCEPTION");
       else if (filter.value === "lunas")     list = list.filter((b) => workflowStatus(b) === "PAID");
@@ -824,7 +756,6 @@ export default function BillsPage() {
     filterValues.maxAmount !== "" ||
     filterValues.dateFrom !== "" ||
     filterValues.dateTo !== "" ||
-    filterValues.grn !== "all" ||
     sortChoice !== null ||
     groupChoice !== null
   ), [filterValues, sortChoice, groupChoice]);
@@ -834,7 +765,6 @@ export default function BillsPage() {
     if (filterValues.vendors.size > 0) n++;
     if (filterValues.minAmount !== "" || filterValues.maxAmount !== "") n++;
     if (filterValues.dateFrom !== "" || filterValues.dateTo !== "") n++;
-    if (filterValues.grn !== "all") n++;
     return n;
   }, [filterValues]);
 
@@ -848,29 +778,27 @@ export default function BillsPage() {
     if (max != null && !isNaN(max)) list = list.filter((b) => b.total <= max);
     if (filterValues.dateFrom) list = list.filter((b) => (b[filterValues.dateField] || "") >= filterValues.dateFrom);
     if (filterValues.dateTo)   list = list.filter((b) => (b[filterValues.dateField] || "") <= filterValues.dateTo);
-    if (filterValues.grn !== "all") list = list.filter((b) => b.grn === filterValues.grn);
-    if (anomalyFilter) list = list.filter((b) => Array.isArray(b.anomalies) && b.anomalies.length > 0);
+    if (exceptionFilter) list = list.filter(hasException);
 
+    // Search scope: bill/invoice ID, invoice no., vendor name, and line-item name.
     const q = search.toLowerCase().trim();
     if (q) list = list.filter((b) =>
       b.id.toLowerCase().includes(q) ||
       (b.invNo && b.invNo.toLowerCase().includes(q)) ||
       b.vendorName.toLowerCase().includes(q) ||
-      (b.poNo && b.poNo.toLowerCase().includes(q)),
+      (Array.isArray(b.items) && b.items.some((it) => (it.desc || "").toLowerCase().includes(q))),
     );
     return list.map(toRow);
-  }, [corpus, filterValues, search, anomalyFilter]);
+  }, [corpus, filterValues, search, exceptionFilter]);
 
-  const anomalyCountInCorpus = useMemo(
-    () => corpus.filter((b) => Array.isArray(b.anomalies) && b.anomalies.length > 0).length,
-    [corpus],
+  const exceptionCountInCorpus = useMemo(
+    () => corpus.filter(hasException).length,
+    [corpus, flagMap],
   );
 
 
   // ── Sort + Group ───────────────────────────────────────────────────────
   const onJatuhTempo = filter.kind === "tab" && filter.value === "jatuhtempo";
-  const onPaid      = filter.kind === "tab" && filter.value === "lunas";
-  const onDraft      = filter.kind === "tab" && filter.value === "draft";
 
   const effectiveSort  = sortChoice  || (onJatuhTempo ? "days-late-desc" : "urgency-desc");
   const effectiveGroup = groupChoice || (onJatuhTempo ? "aging" : "none");
@@ -988,7 +916,7 @@ export default function BillsPage() {
   function handleSummaryAction(insight) {
     if (!insight) return;
     clearChecks();
-    setAnomalyFilter(false);
+    setExceptionFilter(false);
     switch (insight.id) {
       case "readyToPost":
         setFilter({ kind: "card", value: "readyToPost" });
@@ -1080,24 +1008,12 @@ export default function BillsPage() {
     <div className="lg-page">
       <div className="lg-scroll-container">
         {/* ── Editorial header ──────────────────────────────────────── */}
-        <div className="lg-head">
+        <div className="lg-head lg-head-plain">
           <div className="lg-head-top">
             <div style={{ flex: 1, minWidth: 0 }}>
               <h1 className="lg-title">Bills</h1>
             </div>
             <div className="lg-head-actions">
-              <button
-                type="button"
-                className={`bp-close-pill${isCardActive("closeBlocking") ? " active" : ""}`}
-                onClick={() => selectCard("closeBlocking")}
-                title={`AP Close — ${monthLabel} · ${closeBlocking.total} bill${closeBlocking.total === 1 ? "" : "s"} blocking. Click to filter the list.`}
-              >
-                <span className="bp-close-pill-dot" />
-                <span className="bp-close-pill-lbl">CLOSE · {monthLabel.toUpperCase()}</span>
-                {closeBlocking.total > 0 && (
-                  <span className="bp-close-pill-badge">{closeBlocking.total} blocking</span>
-                )}
-              </button>
               <button
                 className="lg-btn-brand"
                 disabled={!canCreate}
@@ -1130,37 +1046,35 @@ export default function BillsPage() {
             </div>
 
             <div className="lg-filter-row">
-              <div className="bp-ai-search">
-                <span className="bp-ai-search-icon" aria-hidden><SparkleIcon size={13} /></span>
+              <div className="lg-search">
+                <svg viewBox="0 0 14 14"><circle cx="6" cy="6" r="3.5"/><path d="M9 9l3 3" strokeLinecap="round"/></svg>
                 <input
-                  className="bp-ai-search-input"
-                  placeholder="Search bill ID, vendor, invoice no., or ask Klay…"
+                  placeholder="Search bill ID, invoice no., vendor, or item…"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />
-                <span className="bp-ai-search-hint" aria-hidden>⌘K</span>
               </div>
               <div className="lg-filter-meta">
                 <div className="lg-meta-btn-wrap">
-                  <button className={`lg-meta-btn${activeFilterCount + (anomalyFilter ? 1 : 0) > 0 ? " active" : ""}`} onClick={() => { setFilterPopOpen(!filterPopOpen); setSortPopOpen(false); setGroupPopOpen(false); }}>
+                  <button className={`lg-meta-btn${activeFilterCount + (exceptionFilter ? 1 : 0) > 0 ? " active" : ""}`} onClick={() => { setFilterPopOpen(!filterPopOpen); setSortPopOpen(false); }}>
                     <svg viewBox="0 0 12 12"><path d="M2 3h8M3 6h6M4 9h4" strokeLinecap="round"/></svg>
                     Filter
-                    {activeFilterCount + (anomalyFilter ? 1 : 0) > 0 && <span className="lg-filter-badge">{activeFilterCount + (anomalyFilter ? 1 : 0)}</span>}
+                    {activeFilterCount + (exceptionFilter ? 1 : 0) > 0 && <span className="lg-filter-badge">{activeFilterCount + (exceptionFilter ? 1 : 0)}</span>}
                   </button>
                   {filterPopOpen && (
                     <FilterPopover
                       values={filterValues}
                       onChange={setFilterValues}
                       vendors={vendorsInCorpus}
-                      anomalyOnly={anomalyFilter}
-                      onAnomalyToggle={setAnomalyFilter}
-                      anomalyCount={anomalyCountInCorpus}
+                      exceptionOnly={exceptionFilter}
+                      onExceptionToggle={setExceptionFilter}
+                      exceptionCount={exceptionCountInCorpus}
                       onClose={() => setFilterPopOpen(false)}
                     />
                   )}
                 </div>
                 <div className="lg-meta-btn-wrap">
-                  <button className="lg-meta-btn" onClick={() => { setSortPopOpen(!sortPopOpen); setFilterPopOpen(false); setGroupPopOpen(false); }}>
+                  <button className="lg-meta-btn" onClick={() => { setSortPopOpen(!sortPopOpen); setFilterPopOpen(false); }}>
                     <span className="meta-lbl">Sort:</span>
                     <span className="meta-val">{SORT_LABELS[effectiveSort]}</span>
                   </button>
@@ -1175,15 +1089,6 @@ export default function BillsPage() {
                     <SortPopover value={effectiveSort} onPick={(v) => { setSortChoice(v); setSortPopOpen(false); }} onClose={() => setSortPopOpen(false)} />
                   )}
                 </div>
-                <div className="lg-meta-btn-wrap">
-                  <button className="lg-meta-btn" onClick={() => { setGroupPopOpen(!groupPopOpen); setSortPopOpen(false); setFilterPopOpen(false); }}>
-                    <span className="meta-lbl">Group:</span>
-                    <span className="meta-val">{GROUP_LABELS[effectiveGroup]}</span>
-                  </button>
-                  {groupPopOpen && (
-                    <GroupPopover value={effectiveGroup} canAging={!onPaid && !onDraft} onPick={(v) => { setGroupChoice(v); setGroupPopOpen(false); }} onClose={() => setGroupPopOpen(false)} />
-                  )}
-                </div>
                 {hasActiveFilters && <button className="lg-reset-all" onClick={resetAll}>Reset all</button>}
               </div>
             </div>
@@ -1196,20 +1101,11 @@ export default function BillsPage() {
               <div>Invoice Date</div>
               <div>Vendor</div>
               <div>Due Date</div>
-              <div>Status</div>
-              <div style={{ textAlign: "right" }}>Original</div>
+              <div>Journal Status</div>
+              <div>Payment Status</div>
               <div style={{ textAlign: "right" }}>Total · IDR</div>
               <div />
             </div>
-
-            {effectiveSort === "urgency-desc" && (
-              <div className="bp-sort-hint">
-                <svg viewBox="0 0 12 12" aria-hidden><circle cx="6" cy="6" r="5" fill="none" stroke="currentColor" strokeWidth="1.2"/><path d="M6 3.5v2.5M6 8.2v.4" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>
-                <span>
-                  Sorted by priority — <strong>blocked items</strong> first, then bills <strong>needing your review</strong>, then <strong>aging items</strong>, then the payment pipeline.
-                </span>
-              </div>
-            )}
 
             <div>
               {groups ? (
@@ -1255,6 +1151,7 @@ export default function BillsPage() {
                               onVendorLeave={onVendorLeave}
                               showAgingBar={onJatuhTempo}
                               showKebab={canCreate}
+                              statusOf={statusOf}
                               periodLocked={!autoAssignLateBills && isApPeriodLocked(billPeriod(r.raw), closedThrough) && ["PENDING_REVIEW", "RETURNED", "APPROVED"].includes(workflowStatus(r.raw))}
                             />
                             {menuOpenFor === r.id && (
@@ -1295,6 +1192,7 @@ export default function BillsPage() {
                           onVendorLeave={onVendorLeave}
                           showAgingBar={onJatuhTempo}
                           showKebab={canCreate}
+                          statusOf={statusOf}
                           periodLocked={!autoAssignLateBills && isApPeriodLocked(billPeriod(r.raw), closedThrough) && ["PENDING_REVIEW", "RETURNED", "APPROVED"].includes(workflowStatus(r.raw))}
                         />
                         {menuOpenFor === r.id && (
