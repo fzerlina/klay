@@ -239,6 +239,29 @@ export function computeBillFlags(bill, vendorArg, opts = {}) {
       message: "A source document (PO or invoice number) is missing — attach or enter it.",
     });
   }
+  // GRN (3-way match) mismatch — goods-receipt qty ≠ invoice. Treated as an
+  // exception (needs verification before posting), not a quiet signal.
+  if (bill.grn === "mismatch") {
+    push("grn_mismatch", {
+      label: "GRN Mismatch", severity: SEVERITY.REVIEW, category: "Transaction risk",
+      message: "Goods-receipt quantity doesn't match the invoice — verify the 3-way match before posting.",
+    });
+  }
+
+  // 9) Residual anomalies → ADVISORY -----------------------------------------
+  // The notable anomalies above are promoted to Review/Blocking (Pricing
+  // Anomaly, Transaction Duplicate, New Vendor). Anything left folds into the
+  // one exception model at the ADVISORY tier — never gates, not counted in the
+  // Exception tab/chip — so urgency and the row dot read a single source
+  // instead of a parallel `anomalies` array.
+  (bill.anomalies || []).forEach((a, i) => {
+    const d = a.description || "";
+    if (has(d, "first invoice") || has(d, "higher than", "× higher", "x higher") || has(d, "duplicate")) return;
+    push(`anomaly_${i}`, {
+      label: "Anomaly", severity: SEVERITY.ADVISORY, category: "Transaction risk",
+      message: d || "Unusual signal on this bill.",
+    });
+  });
 
   return out;
 }

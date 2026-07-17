@@ -672,7 +672,17 @@
 .bp-anom-dot.sev-low{background:var(--color-text-tertiary)}
 
 /* Row hover preview — just the source-document thumbnail and a single CTA. */
-.bp-row-preview{position:fixed;width:170px;display:flex;flex-direction:column;background:var(--color-surface-raised,#fff);border:1px solid var(--color-border-default);border-radius:var(--radius-md);box-shadow:0 12px 32px rgba(8,7,6,.18),0 2px 6px rgba(8,7,6,.08);z-index:60;animation:bpRowPreviewIn .12s ease-out;pointer-events:auto;overflow:hidden}
+.bp-row-preview{position:fixed;width:210px;display:flex;flex-direction:column;background:var(--color-surface-raised,#fff);border:1px solid var(--color-border-default);border-radius:var(--radius-md);box-shadow:0 12px 32px rgba(8,7,6,.18),0 2px 6px rgba(8,7,6,.08);z-index:60;animation:bpRowPreviewIn .12s ease-out;pointer-events:auto;overflow:hidden}
+/* Glanceable exceptions in the hover preview — bill ID + flag list so users
+   see what's flagged without opening Bill Detail (Slack feedback 2026-07). */
+.bp-row-preview-hd{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:9px 11px;border-bottom:1px solid var(--color-border-subtle)}
+.bp-row-preview-id{font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--color-text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bp-row-preview-clean{font-size:10px;font-weight:600;color:var(--color-text-tertiary);white-space:nowrap}
+.bp-row-preview-exc{list-style:none;margin:0;padding:8px 11px;display:flex;flex-direction:column;gap:5px;border-bottom:1px solid var(--color-border-subtle);background:#FCF8F2}
+.bp-row-preview-exc li{position:relative;padding-left:13px;font-size:11px;line-height:1.35;color:var(--color-text-secondary)}
+.bp-row-preview-exc li::before{content:"";position:absolute;left:0;top:5px;width:6px;height:6px;border-radius:50%}
+.bp-row-preview-exc li.blocking::before{background:#A32D2D}
+.bp-row-preview-exc li.review::before{background:#BA7517}
 @keyframes bpRowPreviewIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
 .bp-row-preview-thumb{display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,#F4ECDF 0%,#E8DECC 100%);padding:12px;border-bottom:1px solid var(--color-border-default)}
 .bp-row-preview-thumb svg{width:120px;height:150px;filter:drop-shadow(0 2px 6px rgba(8,7,6,.12))}

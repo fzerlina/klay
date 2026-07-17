@@ -34,6 +34,9 @@ function fmtRp(n) {
 function toRow(b) {
   const v = vendors.find((x) => x.id === b.vendor);
   const dOver = daysSince(b.due);
+  // Posting date — when the bill was committed to the GL, from the "posted"
+  // audit entry. Null until the bill is Posted.
+  const postedAt = (b.audit || []).find((a) => a.type === "posted")?.date;
   // Amounts are always stored in IDR (the entity's functional currency).
   return {
     id: b.id,
@@ -42,6 +45,7 @@ function toRow(b) {
     co: b.vendorName,
     addr: v?.address || "",
     due: formatDate(b.due),
+    postingDate: postedAt ? formatDate(postedAt) : null,
     daysOverdue: dOver,
     total: b.total,                                                          // IDR
     sisa: b.sisa,
@@ -115,8 +119,8 @@ function computeVendorTooltipStyle(t) {
 }
 
 function computePreviewStyle(preview) {
-  const PREVIEW_W = 170;
-  const PREVIEW_H = 220;
+  const PREVIEW_W = 210;
+  const PREVIEW_H = 300;
   const OFFSET = 14;
   const vw = typeof window !== "undefined" ? window.innerWidth : 1280;
   const vh = typeof window !== "undefined" ? window.innerHeight : 800;
@@ -238,6 +242,9 @@ function LedgerRow({ r, bucket, flags, isChecked, onCheck, onClick, onKebab, isS
             </div>
           )}
         </div>
+      </div>
+      <div className="lg-cell-posting bp-cell-date">
+        {r.postingDate ? <div>{r.postingDate}</div> : <span className="lg-cell-posting-empty">—</span>}
       </div>
       <div className="lg-cell-pay">
         <span className={`bp-pay-badge ${payMeta.tone}`}>{payMeta.label}</span>
@@ -680,22 +687,23 @@ export default function BillsPage() {
       approved:   byStatus("APPROVED"),
       posted:     byStatus("POSTED"),
       draft:      byStatus("DRAFT"),
+      onhold:     byStatus("ON_HOLD"),
       jatuhtempo: bills.filter((b) => b.pay === "overdue" && workflowStatus(b) !== "EXCEPTION").length,
       lunas:      byStatus("PAID"),
-      // Exceptions = bills with an open blocking/review flag (the rules engine).
-      exception:  bills.filter(hasException).length,
     };
   }, [bills, flagMap]);
 
-  // Tabs are the scoped-down `workflow_status` set: Draft · Pending Review ·
-  // Approved, plus All. Neither Exceptions nor Returned are statuses — they're
-  // flags layered on top of a bill's status (rendered as row chips), so they
-  // get no tab. Posted bills live under All (Bills ends at Posted; the payment
-  // lifecycle is AP Aging's job).
+  // Tabs are the workflow-status views: All · Pending Review · Approved ·
+  // Posted · On Hold · Draft. On Hold is a Journal Status type (a paused,
+  // non-posted bill); Returned is a Draft carrying a flag. Exceptions get NO
+  // tab — the urgency sort floats them to the top and the Bill ID hover lists
+  // them; the Filter has an "only exceptions" toggle.
   const tabs = [
     { k: "semua",      lbl: "All",             count: tabCounts.semua },
     { k: "review",     lbl: "Pending Review",  count: tabCounts.review },
     { k: "approved",   lbl: "Approved",        count: tabCounts.approved },
+    { k: "posted",     lbl: "Posted",          count: tabCounts.posted },
+    { k: "onhold",     lbl: "On Hold",         count: tabCounts.onhold },
     { k: "draft",      lbl: "Draft",           count: tabCounts.draft },
   ];
 
@@ -710,6 +718,7 @@ export default function BillsPage() {
       else if (filter.value === "posted")    list = list.filter((b) => workflowStatus(b) === "POSTED");
       else if (filter.value === "review")    list = list.filter((b) => workflowStatus(b) === "PENDING_REVIEW");
       else if (filter.value === "draft")     list = list.filter((b) => workflowStatus(b) === "DRAFT");
+      else if (filter.value === "onhold")    list = list.filter((b) => workflowStatus(b) === "ON_HOLD");
       else if (filter.value === "jatuhtempo")list = list.filter((b) => b.pay === "overdue" && workflowStatus(b) !== "EXCEPTION");
       else if (filter.value === "lunas")     list = list.filter((b) => workflowStatus(b) === "PAID");
       else if (filter.value === "exception") list = list.filter(hasException);
@@ -806,7 +815,7 @@ export default function BillsPage() {
   const sortedRows = useMemo(() => {
     const arr = [...filteredRows];
     switch (effectiveSort) {
-      case "urgency-desc": arr.sort((a, b) => urgencyScore(b.raw) - urgencyScore(a.raw)); break;
+      case "urgency-desc": arr.sort((a, b) => urgencyScore(b.raw, flagMap[b.id]) - urgencyScore(a.raw, flagMap[a.id])); break;
       case "days-late-desc": arr.sort((a, b) => b.daysOverdue - a.daysOverdue); break;
       case "date-desc":    arr.sort((a, b) => (b.raw.date || "").localeCompare(a.raw.date || "")); break;
       case "date-asc":     arr.sort((a, b) => (a.raw.date || "").localeCompare(b.raw.date || "")); break;
@@ -817,7 +826,7 @@ export default function BillsPage() {
       default: break;
     }
     return arr;
-  }, [filteredRows, effectiveSort]);
+  }, [filteredRows, effectiveSort, flagMap]);
 
   const groups = useMemo(() => {
     if (effectiveGroup === "none") return null;
@@ -1102,6 +1111,7 @@ export default function BillsPage() {
               <div>Vendor</div>
               <div>Due Date</div>
               <div>Journal Status</div>
+              <div>Posting Date</div>
               <div>Payment Status</div>
               <div style={{ textAlign: "right" }}>Total · IDR</div>
               <div />
@@ -1259,13 +1269,31 @@ export default function BillsPage() {
         contextLabel="Bills"
       />
 
-      {hoverPreview && (
+      {hoverPreview && (() => {
+        const s = flagMap[hoverPreview.row.id];
+        const exc = s ? s.flags.filter((f) => f.status === "open" && f.severity !== "ADVISORY") : [];
+        return (
         <div
           className="bp-row-preview"
           style={computePreviewStyle(hoverPreview)}
           onMouseEnter={onPreviewEnter}
           onMouseLeave={onPreviewLeave}
         >
+          {/* Glanceable exceptions — what's flagged on this bill, without opening
+              the Bill Detail page (team feedback, Slack thread 2026-07). */}
+          <div className="bp-row-preview-hd">
+            <span className="bp-row-preview-id">{hoverPreview.row.no}</span>
+            {exc.length > 0
+              ? <span className={`bp-exc-chip ${s.openBlocking > 0 ? "blocking" : "review"}`}>{exc.length} exception{exc.length === 1 ? "" : "s"}</span>
+              : <span className="bp-row-preview-clean">No exceptions</span>}
+          </div>
+          {exc.length > 0 && (
+            <ul className="bp-row-preview-exc">
+              {exc.map((f, i) => (
+                <li key={i} className={f.severity === "BLOCKING" ? "blocking" : "review"}>{f.label}</li>
+              ))}
+            </ul>
+          )}
           <div className="bp-row-preview-thumb" aria-hidden>
             <svg viewBox="0 0 120 150" preserveAspectRatio="xMidYMid meet">
               <rect x="6" y="6" width="108" height="138" rx="3" fill="#fff" stroke="#D8CFC2" strokeWidth="1"/>
@@ -1292,7 +1320,8 @@ export default function BillsPage() {
             Open document →
           </button>
         </div>
-      )}
+        );
+      })()}
 
       {vendorHover && (
         <div

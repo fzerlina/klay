@@ -147,54 +147,61 @@ export function sourceChannelFor(b) {
   return "upload";
 }
 
-// Urgency score — drives the list's default sort. Heaviest weight on states
-// that gate FM action (EXCEPTION, RETURNED), then age in PENDING_REVIEW with
-// flagged fields, then due-date pressure, then anomalies, then GRN mismatch.
-// In production this would be a pre-computed `urgency_score` column with
-// IA-tunable weights from `system_config.urgency_weights`.
-export function urgencyScore(b) {
+// Urgency score — drives the list's default sort (highest first). Exceptions
+// (rules-engine flags) DOMINATE: any open BLOCKING outranks any REVIEW-only,
+// and both outrank every clean bill — achieved with big tier constants so the
+// other signals only break ties WITHIN a tier. Exceptions exist only on
+// non-posted bills (the flag engine returns nothing once a bill is posted), so
+// posted/paid bills fall to the bottom. After the exception tier: workflow
+// state, time-in-review, due-date pressure, then a small advisory nudge.
+// Anomalies and GRN mismatch are no longer scored here directly — they're now
+// flags in the engine (advisory / review), so urgency reads ONE source: the
+// flag summary. In production this is a pre-computed column with IA-tunable
+// weights from system_config.
+const URGENCY_TIER_BLOCKING = 100000; // any open blocking flag
+const URGENCY_TIER_REVIEW = 50000;    // review-only (no blocking)
+export function urgencyScore(b, flags) {
   let s = 0;
   const ws = workflowStatus(b);
   const dpd = daysSince(b.due);
   const ov = DEMO_OVERRIDES[b.id] || {};
 
-  // 1) Workflow state — heaviest weight on states that gate FM action
-  switch (ws) {
-    case "EXCEPTION":      s += 150; break; // system blocked, FM must unstick
-    case "RETURNED":       s += 120; break; // bounced; needs FM follow-through
-    case "ON_HOLD":        s += 40;  break; // paused, may need a nudge
-    case "PENDING_REVIEW": s += 60;  break;
-    case "APPROVED":       s += 25;  break; // off the FM's plate already
-    case "DRAFT":          s += 15;  break;
-    case "PAID":           s += 0;   break;
+  // 1) Exception tier — the dominant signal. BLOCKING beats REVIEW-only beats
+  //    clean, absolutely; the flag count nudges ordering within a tier.
+  if (flags) {
+    if (flags.openBlocking > 0)    s += URGENCY_TIER_BLOCKING + flags.openBlocking * 100;
+    else if (flags.openReview > 0) s += URGENCY_TIER_REVIEW + flags.openReview * 100;
   }
 
-  // 2) PENDING_REVIEW age + opened-with-flags signal
+  // 2) Workflow state
+  switch (ws) {
+    case "ON_HOLD":        s += 30; break; // paused, may need a nudge
+    case "PENDING_REVIEW": s += 50; break;
+    case "APPROVED":       s += 20; break; // off the FM's plate already
+    case "DRAFT":          s += 10; break;
+    default:               break;          // POSTED / PAID — terminal for this list
+  }
+
+  // 3) Time in review + opened-with-flags signal (PENDING_REVIEW only)
   if (ws === "PENDING_REVIEW") {
     const inQueue = Math.max(0, daysSince(b.audit?.[0]?.date || b.date));
     if (inQueue >= 5) s += 40;
     else if (inQueue >= 3) s += 20;
     else if (inQueue >= 1) s += 8;
-    const flagged = ov.opened?.fieldsFlagged || 0;
-    s += flagged * 12;
+    s += (ov.opened?.fieldsFlagged || 0) * 8;
   }
 
-  // 3) Due-date pressure — applied to all non-terminal states
+  // 4) Due-date pressure — non-terminal, non-draft states
   if (ws !== "PAID" && ws !== "DRAFT") {
     if (dpd > 0)      s += Math.min(50, Math.round(dpd / 2)); // overdue (halved & capped)
     else if (dpd > -3) s += 25; // due in next 3 days
     else if (dpd > -7) s += 10; // due this week
   }
 
-  // 4) Anomaly signal — informational but worth ranking on
-  for (const a of (b.anomalies || [])) {
-    if (a.severity === "high")        s += 20;
-    else if (a.severity === "medium") s += 10;
-    else                              s += 3;
-  }
-
-  // 5) GRN mismatch — a quiet "needs a look" signal
-  if (b.grn === "mismatch") s += 8;
+  // 5) Advisory tier — a small nudge only; exceptions already dominate. Reads
+  //    the flag summary (openAdvisory), NOT the raw anomalies array — anomalies
+  //    now flow through the engine as advisory flags (one attention model).
+  if (flags) s += (flags.openAdvisory || 0) * 4;
 
   return s;
 }
