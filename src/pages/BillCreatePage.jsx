@@ -56,22 +56,6 @@ const CATEGORY_RANGES = {
   expense:   { codes: ["6-2300", "6-2400", "6-2500", "6-2600", "6-3200"], label: "6-2xxx to 6-3xxx (operating expenses)" },
 };
 
-// Currency dictionary — code → symbol + name. Demo coverage of the most
-// likely non-IDR currencies an Indonesian SMB would actually invoice in.
-// PRD §Multi-Currency: any ISO 4217 currency selectable; we just seed the
-// dropdown with the realistic ones.
-const CURRENCIES = [
-  { code: "IDR", symbol: "Rp",  name: "Indonesian Rupiah" },
-  { code: "USD", symbol: "$",   name: "US Dollar" },
-  { code: "SGD", symbol: "S$",  name: "Singapore Dollar" },
-  { code: "EUR", symbol: "€",   name: "Euro" },
-  { code: "JPY", symbol: "¥",   name: "Japanese Yen" },
-  { code: "CNY", symbol: "¥",   name: "Chinese Yuan" },
-  { code: "AUD", symbol: "A$",  name: "Australian Dollar" },
-  { code: "GBP", symbol: "£",   name: "British Pound" },
-];
-const CURRENCY_BY_CODE = Object.fromEntries(CURRENCIES.map((c) => [c.code, c]));
-
 function suggestAccount(description, vendor, allBills) {
   const desc = (description || "").toLowerCase().trim();
   const descWords = desc.split(/\s+/).filter((w) => w.length >= 4);
@@ -442,18 +426,6 @@ export default function BillCreatePage() {
   const [fakturPajak, setFakturPajak] = useState("");
   const [attachments, setAttachments] = useState([]);
 
-  // Discount — applies BEFORE tax computation per Indonesian practice.
-  // discountMode toggles between percentage and rupiah; the unused field
-  // is recomputed from the active one so the FM sees both forms.
-  const [discountMode, setDiscountMode] = useState("pct"); // "pct" | "rp"
-  const [discountValue, setDiscountValue] = useState(0);
-
-  // Multi-currency — PRD §Multi-Currency. Defaults to IDR. Non-IDR bills
-  // show an FX rate field; the GL preview always renders in IDR by
-  // multiplying form amounts by the rate.
-  const [currency, setCurrency] = useState("IDR");
-  const [fxRate, setFxRate] = useState(1);
-
   const vendor = useMemo(() => vendors.find((v) => v.id === vendorId), [vendors, vendorId]);
 
   function handleRequestCreateVendor(name) {
@@ -537,34 +509,20 @@ export default function BillCreatePage() {
     setScanning(false);
   }
 
-  // Totals.
-  //   subtotal = sum of line items in the bill's currency
-  //   discount = invoice-level discount (computed from pct or rp)
-  //   dpp      = subtotal − discount      (taxable base after discount)
-  //   ppn      = dpp × ppnRate            (output VAT charged by vendor)
-  //   pph      = dpp × pphRate            (income tax we withhold)
-  //   total    = dpp + ppn                (gross invoice — matches seed)
-  //   netPayable = total − pph            (what we actually transfer)
-  // Discount reduces DPP first per Indonesian VAT practice (PPN computes
-  // on the discounted base, not the gross).
+  // Totals (all IDR).
+  //   subtotal = sum of line items
+  //   dpp      = subtotal               (taxable base)
+  //   ppn      = dpp × ppnRate           (output VAT charged by vendor)
+  //   pph      = dpp × pphRate           (income tax we withhold)
+  //   total    = dpp + ppn               (gross invoice — matches seed)
+  //   netPayable = total − pph           (what we actually transfer)
   const subtotal = items.reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.price) || 0), 0);
-  const discount = Math.round(
-    discountMode === "pct" ? subtotal * ((Number(discountValue) || 0) / 100) : (Number(discountValue) || 0),
-  );
-  const dpp = Math.max(0, subtotal - discount);
+  const dpp = subtotal;
   const ppn = Math.round(dpp * ppnRate);
   const pphRate = PPH_OPTIONS.find((o) => o.v === pphChoice)?.rate || 0;
   const pph = Math.round(dpp * pphRate);
   const total = dpp + ppn;
   const netPayable = total - pph;
-  // Effective FX rate for IDR-equivalent display + GL preview (always
-  // posts in IDR regardless of invoice currency).
-  const effectiveFxRate = currency === "IDR" ? 1 : (Number(fxRate) || 0);
-  const totalIdr = total * effectiveFxRate;
-  const netPayableIdr = netPayable * effectiveFxRate;
-
-  // Selected currency record for symbol display.
-  const curr = CURRENCY_BY_CODE[currency] || CURRENCY_BY_CODE.IDR;
 
   // Items handlers — new rows pick up the Tier 1 suggestion when vendor
   // history exists; otherwise fall back to a generic expense bucket.
@@ -580,20 +538,13 @@ export default function BillCreatePage() {
   function delAttach(i)                { setAttachments((p) => p.filter((_, idx) => idx !== i)); }
 
   // GL preview — same generator as Bill Detail so the two pages always
-  // agree on what will post. Two transforms applied here before handing
-  // off to previewJournalLines():
-  //   • Discount is allocated PROPORTIONALLY across line items so each
-  //     expense DR shrinks pro-rata. Keeps the JE balanced without
-  //     introducing a contra-discount account.
-  //   • Multi-currency: every amount is multiplied by effectiveFxRate so
-  //     the GL preview always posts in IDR, regardless of invoice currency.
+  // agree on what will post.
   const previewBill = useMemo(() => {
-    const discountRatio = subtotal > 0 ? (dpp / subtotal) : 1;
     return {
-      total:  total * effectiveFxRate,
-      dpp:    dpp   * effectiveFxRate,
-      ppn:    ppn   * effectiveFxRate,
-      pph23:  pph   * effectiveFxRate,
+      total,
+      dpp,
+      ppn,
+      pph23: pph,
       vendorName: vendor?.name || "",
       items: items.map((it) => {
         const acct = EXPENSE_ACCOUNTS.find((a) => a.code === it.acct);
@@ -601,29 +552,23 @@ export default function BillCreatePage() {
         return {
           desc:     it.desc,
           qty:      it.qty,
-          price:    it.price * effectiveFxRate,
-          subtotal: sub * discountRatio * effectiveFxRate,
+          price:    it.price,
+          subtotal: sub,
           acct:     it.acct,
           acctName: acct?.name || "",
         };
       }),
     };
-  }, [subtotal, total, dpp, ppn, pph, effectiveFxRate, vendor, items]);
+  }, [total, dpp, ppn, pph, vendor, items]);
 
   const { lines: jeLines, totalDr, totalCr, balanced, anyFlag } = useMemo(
     () => previewJournalLines(previewBill, vendor),
     [previewBill, vendor],
   );
 
-  // Save. Storage contract: dpp/ppn/pph23/total/sisa are always in IDR (the
-  // entity's functional currency). For non-IDR invoices, original_total /
-  // original_sisa keep the source-currency view for display. This keeps
-  // every Bills List aggregation (footers, KPIs, GL preview) honest no
-  // matter the invoice currency.
+  // Save. All amounts are IDR (the entity's functional currency).
   function buildDraft(approval) {
     if (!vendor) return null;
-    const rate = effectiveFxRate || 1;
-    const toIdr = (n) => Math.round((Number(n) || 0) * rate);
     return {
       vendor:            vendor.id,
       vendorName:        vendor.name,
@@ -633,30 +578,20 @@ export default function BillCreatePage() {
       date,
       due,
       keterangan,
-      dpp:               toIdr(dpp),
-      ppn:               toIdr(ppn),
-      pph23:             toIdr(pph),
-      total:             toIdr(total),         // IDR gross (DPP + PPN)
-      sisa:              toIdr(netPayable),    // IDR net to vendor
+      dpp,
+      ppn,
+      pph23:             pph,
+      total,                                   // IDR gross (DPP + PPN)
+      sisa:              netPayable,           // IDR net to vendor
       approval,
       grn:               poNo ? "matched" : "pending",
       faktur_pajak:      fakturPajak || undefined,
-      // Discount (only persisted when > 0)
-      discount_amount:   discount > 0 ? toIdr(discount) : undefined,
-      discount_pct:      discount > 0 && discountMode === "pct" ? Number(discountValue) : undefined,
-      // Currency (PRD §Multi-Currency) — original_* fields kept for display
-      // and audit only when the invoice was in a non-IDR currency.
-      original_currency: currency,
-      fx_rate_used:      rate,
-      original_total:    currency !== "IDR" ? total : undefined,
-      original_sisa:     currency !== "IDR" ? netPayable : undefined,
       items: items.map((it) => {
         const acct = EXPENSE_ACCOUNTS.find((a) => a.code === it.acct);
-        const subOriginal = (Number(it.qty) || 0) * (Number(it.price) || 0);
+        const sub  = (Number(it.qty) || 0) * (Number(it.price) || 0);
         return {
           ...it,
-          price:    toIdr(it.price),
-          subtotal: toIdr(subOriginal),
+          subtotal: sub,
           acctName: acct?.name || "",
         };
       }),
@@ -707,7 +642,7 @@ export default function BillCreatePage() {
           </div>
           <div className="bd-head-total">
             <div className="bd-head-total-lbl">Total</div>
-            <div className="bd-head-total-val">{curr.symbol} {fmtNum(total)}</div>
+            <div className="bd-head-total-val">Rp {fmtNum(total)}</div>
           </div>
         </div>
       </div>
@@ -777,29 +712,6 @@ export default function BillCreatePage() {
                 <label>PO No.</label>
                 <input type="text" value={poNo} onChange={(e) => setPoNo(e.target.value)} placeholder="PO-…" style={{ fontFamily: "var(--font-mono)" }} />
               </div>
-            </div>
-            <div className="fg2">
-              <div className="form-fld">
-                <label>Currency</label>
-                <select value={currency} onChange={(e) => { setCurrency(e.target.value); if (e.target.value === "IDR") setFxRate(1); }}>
-                  {CURRENCIES.map((c) => (
-                    <option key={c.code} value={c.code}>{c.code} · {c.name}</option>
-                  ))}
-                </select>
-              </div>
-              {currency !== "IDR" && (
-                <div className="form-fld">
-                  <label>FX Rate to IDR</label>
-                  <input
-                    type="number"
-                    value={fxRate}
-                    onChange={(e) => setFxRate(parseFloat(e.target.value) || 0)}
-                    placeholder="15750"
-                    style={{ fontFamily: "var(--font-mono)" }}
-                  />
-                  <div className="bd-rule-note">Use the BI middle rate for the invoice date.</div>
-                </div>
-              )}
             </div>
           </div>
 
@@ -884,27 +796,7 @@ export default function BillCreatePage() {
                   <span className="t-row-val">{fmtNum(subtotal)}</span>
                 </div>
                 <div className="t-row">
-                  <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                    <span className="t-row-lbl">Discount</span>
-                    <input
-                      type="number"
-                      className="disc-input"
-                      value={discountValue}
-                      onChange={(e) => setDiscountValue(parseFloat(e.target.value) || 0)}
-                      min="0"
-                      style={{ fontFamily: "var(--font-mono)" }}
-                    />
-                    <div className="disc-toggle">
-                      <button type="button" className={discountMode === "pct" ? "on" : ""} onClick={() => setDiscountMode("pct")}>%</button>
-                      <button type="button" className={discountMode === "rp" ? "on" : ""} onClick={() => setDiscountMode("rp")}>{curr.symbol}</button>
-                    </div>
-                  </div>
-                  <span className="t-row-val" style={{ color: discount > 0 ? "var(--success-text)" : "var(--color-text-tertiary)" }}>
-                    {discount > 0 ? `− ${fmtNum(discount)}` : "—"}
-                  </span>
-                </div>
-                <div className="t-row">
-                  <span className="t-row-lbl">DPP (after discount)</span>
+                  <span className="t-row-lbl">DPP</span>
                   <span className="t-row-val">{fmtNum(dpp)}</span>
                 </div>
                 <div className="t-row">
@@ -919,15 +811,9 @@ export default function BillCreatePage() {
                   <span className="t-row-val" style={{ color: "var(--danger-text)" }}>+ {fmtNum(ppn)}</span>
                 </div>
                 <div className="t-row grand">
-                  <span className="t-row-lbl">Total ({currency})</span>
+                  <span className="t-row-lbl">Total</span>
                   <span className="t-row-val">{fmtNum(total)}</span>
                 </div>
-                {currency !== "IDR" && effectiveFxRate > 0 && (
-                  <div className="t-row" style={{ fontStyle: "italic", color: "var(--color-text-tertiary)" }}>
-                    <span className="t-row-lbl">≈ in IDR</span>
-                    <span className="t-row-val">Rp {fmtNum(Math.round(totalIdr))}</span>
-                  </div>
-                )}
               </div>
             )}
           </div>
@@ -998,14 +884,9 @@ export default function BillCreatePage() {
                   <div className="tax-line-lbl">Net Payable to vendor</div>
                   <div className="tax-line-body" style={{ textAlign: "right" }}>
                     <div style={{ fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 700 }}>
-                      {curr.symbol} {fmtNum(netPayable)}
+                      Rp {fmtNum(netPayable)}
                     </div>
-                    {currency !== "IDR" && effectiveFxRate > 0 && (
-                      <div className="bd-rule-note">≈ Rp {fmtNum(Math.round(netPayableIdr))} · Total minus PPh withheld.</div>
-                    )}
-                    {currency === "IDR" && (
-                      <div className="bd-rule-note">Total minus PPh withheld.</div>
-                    )}
+                    <div className="bd-rule-note">Total minus PPh withheld.</div>
                   </div>
                 </div>
               </>
@@ -1231,16 +1112,10 @@ export default function BillCreatePage() {
 
             <div className="a4-total">
               <div className="a4-tb">
-                {discount > 0 && (
-                  <>
-                    <div className="a4-tr"><span className="lbl">Subtotal</span><span className="val">{fmtNum(subtotal)}</span></div>
-                    <div className="a4-tr"><span className="lbl">Discount{discountMode === "pct" && discountValue ? ` (${discountValue}%)` : ""}</span><span className="val">− {fmtNum(discount)}</span></div>
-                  </>
-                )}
                 <div className="a4-tr"><span className="lbl">DPP</span><span className="val">{fmtNum(dpp)}</span></div>
                 <div className="a4-tr"><span className="lbl">PPN ({Math.round(ppnRate * 100)}%)</span><span className="val">{fmtNum(ppn)}</span></div>
                 {pph > 0 && <div className="a4-tr"><span className="lbl">PPh (withholding)</span><span className="val">− {fmtNum(pph)}</span></div>}
-                <div className="a4-tr grand"><span className="lbl">Total</span><span className="val">{curr.symbol} {fmtNum(total)}</span></div>
+                <div className="a4-tr grand"><span className="lbl">Total</span><span className="val">Rp {fmtNum(total)}</span></div>
               </div>
             </div>
 
